@@ -37,6 +37,40 @@ Object.assign(hMailAI, {
                      : `${detail} · miễn phí`;
   },
 
+  /**
+   * A button in the message's own action row, beside Trả lời and Chuyển tiếp.
+   * The assistant is about the message being read, so it belongs where the
+   * other things you do to that message are — not only on a ribbon tab that
+   * may not be the one you are looking at.
+   *
+   * The header is rebuilt as messages load, so this runs from the same poll
+   * that watches the selection and simply puts the button back when it is
+   * gone.
+   */
+  addHeaderButton(win) {
+    try {
+      const doc = typeof hMailInsight !== "undefined"
+        ? hMailInsight.messageDocument(win) : null;
+      if (!doc || doc.getElementById("hmail-ai-header-button")) {
+        return;
+      }
+      const bar = doc.getElementById("header-view-toolbar");
+      if (!bar) {
+        return;
+      }
+      const button = doc.createXULElement("toolbarbutton");
+      button.id = "hmail-ai-header-button";
+      button.className = "message-header-view-button toolbarbutton-1";
+      button.setAttribute("label", "hMail AI");
+      button.setAttribute("tooltiptext",
+        "Mở trợ lý AI cho thư này");
+      button.addEventListener("command", () => this.toggle(win));
+      // Before the reply buttons would push them off; the assistant is a
+      // secondary action, so it goes at the end of the row.
+      bar.appendChild(button);
+    } catch (e) {}
+  },
+
   init(win) {
     try {
       this.migrateConfig();
@@ -284,6 +318,32 @@ Object.assign(hMailAI, {
     card.id = "hmail-ai-insight";
 
     card.appendChild(el("div", "hmail-ai-insight-head", "Đọc nhanh tại chỗ"));
+
+    // A bounce answers a different question from an ordinary message, so it
+    // gets its own block at the top: why it came back and what to do.
+    if (result.bounce) {
+      const b = result.bounce;
+      const box = el("div",
+        `hmail-ai-bounce ${b.temporary ? "temporary" : "permanent"}`);
+      box.appendChild(el("div", "hmail-ai-bounce-title", b.title));
+      if (b.recipient) {
+        box.appendChild(el("div", "hmail-ai-bounce-line",
+                           `Không tới được: ${b.recipient}`));
+      }
+      box.appendChild(el("div", "hmail-ai-bounce-why", b.why));
+      box.appendChild(el("div", "hmail-ai-bounce-todo", `Nên làm: ${b.todo}`));
+      const codes = [b.basic || null, b.enhanced || null]
+        .filter(Boolean).join(" / ");
+      if (codes || b.serverSaid) {
+        const detail = el("details", "hmail-ai-bounce-detail");
+        detail.appendChild(el("summary", null,
+          codes ? `Máy chủ báo mã ${codes}` : "Nguyên văn máy chủ"));
+        detail.appendChild(el("div", "hmail-ai-bounce-raw", b.serverSaid ||
+                              "(không có mô tả)"));
+        box.appendChild(detail);
+      }
+      card.appendChild(box);
+    }
 
     if (result.summary.length) {
       const list = el("ul", "hmail-ai-list");
@@ -843,6 +903,7 @@ Object.assign(hMailAI, {
     let lastKey = null;
     win.setInterval(() => {
       this._watchSelection();
+      this.addHeaderButton(win);
       const hdr = this.selectedMessage(win);
       const key = hdr ? this.messageKey(hdr) : null;
       if (key !== lastKey) {

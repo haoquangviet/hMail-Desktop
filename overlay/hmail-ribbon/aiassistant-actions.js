@@ -171,7 +171,7 @@ Object.assign(hMailAI, {
             }
           };
           for (const root of MailServices.accounts
-                 .FindAccountForServer(folder.server).incomingServer
+                 .findAccountForServer(folder.server).incomingServer
                  .rootFolder.subFolders) {
             walk(root);
           }
@@ -246,7 +246,7 @@ Object.assign(hMailAI, {
           params.format = Ci.nsIMsgCompFormat.HTML;
           params.originalMsgURI = folder.getUriForMsg(hdr);
           params.identity = MailServices.accounts
-            .FindAccountForServer(folder.server)?.defaultIdentity;
+            .findAccountForServer(folder.server)?.defaultIdentity;
           MailServices.compose.OpenComposeWindowWithParams(null, params);
           return { ok: true,
                    done: "đã mở cửa sổ trả lời với nội dung soạn sẵn " +

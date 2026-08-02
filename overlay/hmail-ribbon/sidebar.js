@@ -39,7 +39,24 @@ var hMailSidebar = {
     if (doc.getElementById(this.ID)) {
       return;
     }
-    const tabmail = doc.getElementById("tabmail");
+    // In the 3-pane the panel sits beside the tabs. A message opened in its
+    // own window has no tabs, so the message browser is wrapped in a row and
+    // the panel goes beside it there.
+    let anchor = doc.getElementById("tabmail");
+    if (!anchor) {
+      const browser = doc.getElementById("messageBrowser");
+      const stack = browser?.parentNode?.localName === "stack"
+        ? browser.parentNode : browser;
+      if (stack?.parentNode) {
+        const row = doc.createXULElement("hbox");
+        row.id = "hmail-message-row";
+        row.setAttribute("flex", "1");
+        stack.parentNode.insertBefore(row, stack);
+        row.appendChild(stack);
+        anchor = stack;
+      }
+    }
+    const tabmail = anchor;
     if (!tabmail || !tabmail.parentNode) {
       return;
     }
