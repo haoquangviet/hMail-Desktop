@@ -1,0 +1,36 @@
+# Build workspace & outputs (never commit binaries)
+work/
+dist/
+*.log
+
+# Downloaded upstream artifacts & tools
+*.exe
+Thunderbird*Setup*
+*.mar
+build/tools/
+
+# Downloaded extension packages are fetched by build script
+overlay/distribution/extensions/*.xpi
+
+# Python
+__pycache__/
+*.pyc
+
+# OS noise
+Thumbs.db
+Desktop.ini
+
+# Local tool settings
+.claude/
+
+# macOS build workspace
+work-mac/
+
+# Signing credentials must never be committed
+*.p8
+*.p12
+*.dmg
+
+# Extension build cache/output
+extensions/*/.cache/
+extensions/*/dist/

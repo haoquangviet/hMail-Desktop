@@ -1,0 +1,2158 @@
+/* hMail Desktop UI — Outlook-style customization layer.
+ * Derived from Browmew/thunderbird-outlook-theme (MIT License) and
+ * FluentBird by Danny King (MIT License). hMail additions:
+ * MIT License, Copyright (c) 2026 HQV Software.
+ * (Upstream wallpaper feature removed for hMail.) */
+
+/* =====================================================
+   OUTLOOK-STYLE LAYOUT OVERRIDES
+   ===================================================== */
+
+/* --- Folder Pane --- */
+/* Outlook's folder list: tight rows, selected row filled with a soft accent
+   tint and a bar on the leading edge. */
+#folderTree .container {
+    min-height: 26px !important;
+    padding-block: 2px !important;
+    border-radius: 0 !important;
+}
+
+#folderTree li.selected > .container,
+#folderTree li[data-selected] > .container {
+    background-color: color-mix(in srgb, var(--hmail-accent) 14%, Canvas) !important;
+    box-shadow: inset 3px 0 0 0 var(--hmail-accent) !important;
+}
+
+#folderPaneHeaderBar {
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 10%, transparent) !important;
+}
+
+#folderTree li > .container > .name {
+    font-size: 0.95rem !important;
+    font-weight: 400 !important;
+}
+
+/* Account-level labels — slightly larger, kept from original */
+#folderTree li[data-server-type] > .container > .name {
+    font-size: 1.18rem !important;
+    font-weight: normal !important;
+}
+
+/* Keep folder icons original size */
+#folderTree li > .container > .icon {
+    width: 16px !important;
+    height: 16px !important;
+    mask-size: 16px 16px !important;
+    background-size: 16px 16px !important;
+    flex-shrink: 0 !important;
+}
+
+/* Unread count — original styling */
+.unread > .container > .unread-count {
+    font-size: 1.01rem !important;
+    font-weight: normal !important;
+}
+
+/* --- Thread/reply chain rows: teal left border only --- */
+#threadTree .card-layout.children .card-container {
+    border-left: 3px solid #6aadb5 !important;
+}
+
+/* (hMail keeps #threadPaneHeaderBar visible — it carries the folder name and
+   quick-filter controls, which the Outlook-style layout relies on.) */
+
+/* Sender name — truncate with ellipsis, leave room for date.
+ * Weight is deliberately normal here: only unread rows go bold, further down,
+ * the way Outlook does it. (Upstream bolded every row, read or not.) */
+.sender {
+    font-size: 1.02rem !important;
+    font-weight: 400 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+}
+
+/* Subject container — allow it to use full available width */
+.thread-card-subject-container {
+    font-size: 1.0rem !important;
+    margin-top: 2px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    padding-inline-end: 28px !important;
+    box-sizing: border-box !important;
+}
+
+.thread-card-subject-container .subject {
+    font-size: 1.0rem !important;
+    font-weight: 500 !important;
+}
+
+/* Preview snippet text */
+.thread-card-subject-container .thread-card-snippet {
+    font-size: 0.92rem !important;
+    opacity: 0.75 !important;
+    margin-top: 2px !important;
+}
+
+/* Date/time text */
+.date {
+    font-size: 0.88rem !important;
+    margin-top: 4px !important;
+    flex-shrink: 0 !important;
+}
+
+/* Gap between cards */
+.thread-card-dynamic-row {
+    row-gap: 2px !important;
+    padding-bottom: 2px !important;
+}
+
+/* --- Message Header (reading pane) --- */
+/* Bigger sender avatar like Outlook */
+.recipient-avatar {
+    height: 52px !important;
+    width: 52px !important;
+    font-size: 1.5rem !important;
+    border-radius: 50% !important;
+}
+
+/* Bigger sender name in reading pane */
+.recipient-multi-line-name {
+    font-size: 1.5rem !important;
+    font-weight: 600 !important;
+}
+
+/* Subject line in reading pane */
+#expandedsubjectBox {
+    font-size: 1.3rem !important;
+    font-weight: 600 !important;
+    margin-bottom: 4px !important;
+}
+
+/* To/Cc labels */
+#toHeading,
+#ccHeading,
+#reply-toHeading {
+    font-size: 0.95rem !important;
+}
+
+/* More padding in message header area */
+#messageHeader {
+    padding: 12px 16px !important;
+}
+
+/* Reading pane ~15% wider than email list */
+#messagepanebox {
+    flex: 1.15 !important;
+}
+
+#threadContentArea {
+    flex: 1 !important;
+}
+
+/* --- Spaces / Left Nav Icons --- */
+/* Bigger sidebar nav icons */
+#mailButton,
+#addressBookButton,
+#calendarButton,
+#tasksButton,
+#chatButton,
+#settingsButton {
+    width: 40px !important;
+    height: 40px !important;
+    background-size: 24px 24px !important;
+    margin-block: 2px !important;
+}
+
+/* --- Toolbar buttons (Reply, Forward, etc.) --- */
+.toolbarbutton-1 {
+    padding: 6px 10px !important;
+    border-radius: 5px !important;
+}
+
+.toolbarbutton-1 .toolbarbutton-icon {
+    width: 20px !important;
+    height: 20px !important;
+}
+
+.message-header-view-button .toolbarbutton-text {
+    font-size: 0.92rem !important;
+    padding: 6px 10px !important;
+}
+
+/* --- Quick filter bar --- */
+#threadPaneQuickFilterButton,
+#threadPaneDisplayButton,
+#displayButton {
+    width: 28px !important;
+    height: 28px !important;
+    background-size: 18px 18px !important;
+}
+
+/* --- Unread message highlighting --- */
+/* Blue left border on unread cards */
+tr[data-properties~="unread"] .card-container {
+    border-left: 3px solid #2b84d8 !important;
+    padding-inline-start: 47px !important;
+    min-height: 68px !important;
+}
+
+/* Ensure subject/snippet row is always visible on unread */
+tr[data-properties~="unread"] .thread-card-subject-container {
+    display: block !important;
+    visibility: visible !important;
+    overflow: hidden !important;
+}
+
+/* Bolder sender name on unread */
+tr[data-properties~="unread"] .sender {
+    color: #1060a8 !important;
+    font-weight: 700 !important;
+}
+
+/* Bolder subject on unread */
+tr[data-properties~="unread"] .subject {
+    font-weight: 600 !important;
+}
+
+/* --- Date group headers (Today, Yesterday, Last 7 Days, etc.) --- */
+/* Group headers are dummy rows in the card view */
+#threadTree tr[data-properties~="dummy"] .card-container {
+    background-color: #1a1a1a !important;
+    border-radius: 0 !important;
+    border-left: none !important;
+    box-shadow: none !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    display: flex !important;
+}
+
+#threadTree tr[data-properties~="dummy"] .thread-card-column {
+    justify-content: center !important;
+    display: flex !important;
+}
+
+#threadTree tr[data-properties~="dummy"] .thread-card-dynamic-row {
+    align-items: center !important;
+    display: flex !important;
+}
+
+#threadTree tr[data-properties~="dummy"] .subject {
+    font-size: 1.12rem !important;
+    font-weight: 700 !important;
+    color: #cfd3da !important;
+    display: block !important;
+}
+
+/* =====================================================
+   OPTIONAL: TRASH ICON ON EMAIL CARDS (visual only)
+   Change --trash-icon to 1 to enable, 0 to disable.
+   Note: this is decorative — CSS cannot click/delete.
+   ===================================================== */
+:root {
+    --trash-icon: 0; /* 0 = off  |  1 = on */
+}
+
+/* Card needs to be a positioning context for ::after */
+.card-container {
+    position: relative !important;
+}
+
+/* Trash icon rendered as a pseudo-element */
+.card-container::after {
+    content: "";
+    position: absolute;
+    inset-inline-end: 38px;
+    bottom: 9px;
+    width: 14px;
+    height: 14px;
+    background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%23888' d='M5 1a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1h2.5a.5.5 0 0 1 0 1H13v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3h-.5a.5.5 0 0 1 0-1H5zm1 0v1h4V1H6zm-2 2v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3H4zm2 2a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-1 0v-5A.5.5 0 0 1 6 5zm4 0a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-1 0v-5A.5.5 0 0 1 10 5z'/></svg>");
+    background-repeat: no-repeat;
+    background-size: contain;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    pointer-events: none; /* purely decorative — does not intercept clicks */
+}
+
+/* Show on row hover, selection, or current row — scaled by the toggle */
+tr:hover .card-container::after,
+tr[data-properties~="current"] .card-container::after,
+tr[selected="true"] .card-container::after {
+    opacity: calc(0.72 * var(--trash-icon));
+}
+
+/* =====================================================
+   hMAIL DESKTOP OVERRIDES (MIT — HQV Software)
+   ===================================================== */
+
+/* --- Outlook accent color --- */
+:root {
+    --hmail-accent: #0F6CBD;
+    --hmail-accent-hover: #115EA3;
+    --hmail-accent-active: #0C5394;
+    --hmail-accent-soft: #E5F1FB;
+
+    --selected-item-color: var(--hmail-accent) !important;
+    --selected-item-text-color: #ffffff !important;
+    --focus-outline-color: var(--hmail-accent) !important;
+    --button-primary-background-color: var(--hmail-accent) !important;
+    --button-primary-hover-background-color: var(--hmail-accent-hover) !important;
+    --button-primary-active-background-color: var(--hmail-accent-active) !important;
+}
+
+/* =====================================================
+   MESSAGE LIST — Outlook's read/unread distinction
+   Read:   sender normal weight, subject normal, muted
+   Unread: blue bar at the left, bold sender, blue subject
+   ===================================================== */
+
+/* Read rows: nothing bold anywhere. */
+#threadTree tr:not([data-properties~="unread"]) .sender,
+#threadTree tr:not([data-properties~="unread"]) .subject,
+#threadTree tr:not([data-properties~="unread"]) .date {
+    font-weight: 400 !important;
+    color: inherit !important;
+}
+
+#threadTree tr:not([data-properties~="unread"]) .card-container {
+    border-left: 3px solid transparent !important;
+}
+
+/* Unread rows. */
+tr[data-properties~="unread"] .card-container {
+    border-left-color: var(--hmail-accent) !important;
+}
+
+tr[data-properties~="unread"] .sender {
+    color: inherit !important;
+    font-weight: 700 !important;
+}
+
+tr[data-properties~="unread"] .subject {
+    color: var(--hmail-accent) !important;
+    font-weight: 600 !important;
+}
+
+/* Preview snippet stays quiet in both states. */
+#threadTree .thread-card-snippet {
+    font-weight: 400 !important;
+    opacity: 0.7 !important;
+}
+
+/* Outlook's row rhythm: sender / subject / preview, date top-right, and a
+   thin divider instead of card gaps. */
+#threadTree .card-container {
+    padding-block: 7px !important;
+    padding-inline: 12px 10px !important;
+    border-radius: 0 !important;
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 8%, transparent) !important;
+    box-shadow: none !important;
+}
+
+#threadTree .date {
+    font-size: 0.82rem !important;
+    opacity: 0.65 !important;
+}
+
+#threadTree .subject {
+    font-size: 0.95rem !important;
+}
+
+/* Selected row: Outlook fills it with a soft accent tint. */
+#threadTree tr[selected] .card-container,
+#threadTree tr[data-properties~="selected"] .card-container {
+    background-color: color-mix(in srgb, var(--hmail-accent) 12%, Canvas) !important;
+}
+
+/* --- Left nav rail (spaces toolbar), Outlook-style --- */
+#spacesToolbar {
+    background-color: color-mix(in srgb, var(--hmail-accent) 4%, Canvas) !important;
+    border-inline-end: 1px solid color-mix(in srgb, CanvasText 12%, transparent) !important;
+    padding-block-start: 4px !important;
+}
+
+#spacesToolbar .spaces-toolbar-button {
+    border-radius: 6px !important;
+    position: relative !important;
+}
+
+#spacesToolbar .spaces-toolbar-button:hover {
+    background-color: var(--hmail-accent-soft) !important;
+}
+
+#spacesToolbar .spaces-toolbar-button.current {
+    background-color: var(--hmail-accent-soft) !important;
+}
+
+#spacesToolbar .spaces-toolbar-button.current::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: -6px;
+    inset-block: 8px;
+    width: 3px;
+    border-radius: 2px;
+    background-color: var(--hmail-accent);
+}
+
+/* =====================================================
+   OUTLOOK-STYLE RIBBON
+   Injected by hmail-ribbon/ribbon.js. Structure:
+     #hmail-ribbon
+       .hmail-ribbon-tabs   > .hmail-ribbon-tab
+       .hmail-ribbon-panes  > .hmail-ribbon-pane
+                                > .hmail-ribbon-group
+                                    > .hmail-ribbon-group-items > button
+                                    > .hmail-ribbon-group-label
+   ===================================================== */
+
+/* The ribbon sets [hidden] on tabs that have no commands of their own
+   (settings, add-ons, web content). Author `display` beats the UA rule for
+   [hidden], so hiding has to be spelled out. */
+#hmail-ribbon[hidden] {
+    display: none !important;
+}
+
+.hmail-ribbon-tab[hidden] {
+    display: none !important;
+}
+
+#hmail-ribbon {
+    display: flex;
+    flex-direction: column;
+    background-color: Canvas;
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+    font-size: 0.86rem;
+    /* The spaces toolbar overlays the left edge; keep the ribbon clear of it,
+       the same way Thunderbird's own toolbars do. */
+    margin-inline-start: var(--spaces-total-width, 50px);
+}
+
+/* --- tab strip --- */
+.hmail-ribbon-tabs {
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+    padding-inline: 10px;
+    padding-block-start: 3px;
+    background-color: color-mix(in srgb, var(--hmail-accent) 4%, Canvas);
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 10%, transparent);
+}
+
+/* Chrome stylesheets style bare <button> elements, so every visual property
+   here has to win explicitly. */
+.hmail-ribbon-tab {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    border: none !important;
+    border-bottom: 2px solid transparent !important;
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    color: inherit !important;
+    font: inherit !important;
+    padding: 6px 14px 7px !important;
+    margin: 0 !important;
+    min-width: 0 !important;
+    border-radius: 4px 4px 0 0 !important;
+    cursor: pointer !important;
+    white-space: nowrap !important;
+}
+
+.hmail-ribbon-tab:hover {
+    background-color: color-mix(in srgb, var(--hmail-accent) 10%, transparent) !important;
+}
+
+.hmail-ribbon-tab.selected {
+    color: var(--hmail-accent) !important;
+    font-weight: 600 !important;
+    border-bottom-color: var(--hmail-accent) !important;
+    background-color: Canvas !important;
+}
+
+/* Search sits at the right of the tab strip, where Outlook puts it. */
+.hmail-ribbon-search {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    margin-inline-start: auto !important;
+    margin-block: 2px !important;
+    align-self: center !important;
+    min-width: 220px !important;
+    max-width: 420px !important;
+    flex: 0 1 340px !important;
+    padding: 4px 10px !important;
+    border-radius: 4px !important;
+    border: 1px solid color-mix(in srgb, CanvasText 20%, transparent) !important;
+    background-color: Canvas !important;
+    color: inherit !important;
+    font: inherit !important;
+    font-size: 0.86rem !important;
+}
+
+.hmail-ribbon-search:focus {
+    border-color: var(--hmail-accent) !important;
+    outline: 1px solid var(--hmail-accent) !important;
+}
+
+.hmail-ribbon-toggle {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    cursor: pointer !important;
+    margin-inline-start: 6px !important;
+    min-width: 26px !important;
+    width: 26px !important;
+    padding: 0 !important;
+    opacity: 0.6;
+}
+
+.hmail-ribbon-toggle::after {
+    content: "⌃";
+    display: block;
+    font-size: 0.9rem;
+    line-height: 1;
+}
+
+#hmail-ribbon.collapsed .hmail-ribbon-toggle::after {
+    content: "⌄";
+}
+
+/* --- panes --- */
+.hmail-ribbon-panes {
+    position: relative;
+}
+
+#hmail-ribbon.collapsed .hmail-ribbon-panes {
+    display: none;
+}
+
+.hmail-ribbon-pane {
+    display: none;
+    align-items: stretch;
+    gap: 0;
+    padding-inline: 8px;
+    padding-block: 4px 0;
+    overflow-x: auto;
+}
+
+.hmail-ribbon-pane.selected {
+    display: flex;
+}
+
+/* --- groups ---
+   Simplified-ribbon layout, as in current Outlook: every command is a single
+   row of icon + label, groups separated by a divider, no captions. The classic
+   two-row ribbon with captions cost roughly twice the vertical space for the
+   same commands. */
+.hmail-ribbon-group {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    padding-inline: 6px;
+    border-inline-end: 1px solid color-mix(in srgb, CanvasText 10%, transparent);
+}
+
+.hmail-ribbon-group-label {
+    display: none !important;
+}
+
+.hmail-ribbon-group[hidden] {
+    display: none !important;
+}
+
+/* Overflow menu for commands that do not fit the current window width. */
+.hmail-ribbon-overflow {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    border: none !important;
+    background: transparent !important;
+    color: inherit !important;
+    font: inherit !important;
+    cursor: pointer !important;
+    padding: 4px 10px !important;
+    margin-inline-start: 2px !important;
+    border-radius: 4px !important;
+    letter-spacing: 1px !important;
+}
+
+.hmail-ribbon-overflow:hover {
+    background-color: color-mix(in srgb, var(--hmail-accent) 12%, transparent) !important;
+}
+
+.hmail-ribbon-overflow[hidden] {
+    display: none !important;
+}
+
+/* Everything is a compact horizontal button now, including what the script
+   still marks as "large" — that flag only selects the accent styling. */
+.hmail-ribbon-button.large,
+.hmail-ribbon-button.small {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 6px !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding: 5px 8px !important;
+    text-align: start !important;
+    font-size: 0.85rem !important;
+}
+
+.hmail-ribbon-button.large .hmail-ribbon-icon,
+.hmail-ribbon-button.small .hmail-ribbon-icon {
+    width: 16px !important;
+    height: 16px !important;
+}
+
+/* Two-line captions ("Email\nMới") collapse onto one line. */
+.hmail-ribbon-button .hmail-ribbon-label {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0.28em !important;
+    white-space: nowrap !important;
+    font-size: 0.85rem !important;
+    line-height: 1.2 !important;
+}
+
+.hmail-ribbon-group-items,
+.hmail-ribbon-column,
+.hmail-ribbon-group-items.stacked {
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    max-height: none !important;
+}
+
+.hmail-ribbon-group:last-child {
+    border-inline-end: none;
+}
+
+.hmail-ribbon-group-items {
+    display: flex;
+    align-items: flex-start;
+    gap: 2px;
+    flex-wrap: wrap;
+    max-height: 74px;
+    align-content: flex-start;
+}
+
+/* A mixed group puts its small commands in a column next to the large ones. */
+.hmail-ribbon-column {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 1px !important;
+}
+
+/* Groups made only of small commands stack them in a single column, the way
+   Outlook lays out its secondary actions. Wrapping is off deliberately:
+   a wrapped column overflows the group box and collides with the next one. */
+.hmail-ribbon-group-items.stacked {
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    max-height: none !important;
+}
+
+.hmail-ribbon-group-label {
+    text-align: center;
+    font-size: 0.74rem;
+    opacity: 0.55;
+    padding-block: 2px 3px;
+}
+
+/* --- buttons --- */
+.hmail-ribbon-button {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    border: 1px solid transparent !important;
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    color: inherit !important;
+    font: inherit !important;
+    border-radius: 4px !important;
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 4px 7px !important;
+    margin: 0 !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+}
+
+.hmail-ribbon-button:hover:not([disabled]) {
+    background-color: color-mix(in srgb, var(--hmail-accent) 12%, transparent) !important;
+    border-color: color-mix(in srgb, var(--hmail-accent) 25%, transparent) !important;
+}
+
+.hmail-ribbon-button:active:not([disabled]) {
+    background-color: color-mix(in srgb, var(--hmail-accent) 22%, transparent) !important;
+}
+
+.hmail-ribbon-button[disabled] {
+    opacity: 0.4;
+    cursor: default !important;
+}
+
+/* Large buttons: icon above a one- or two-line caption, Outlook's primary form */
+/* "large" no longer means a tall two-row button — the simplified-ribbon rules
+   further up give every command the same compact horizontal form. The class
+   now only selects which button gets the accent treatment. */
+.hmail-ribbon-button.small {
+    white-space: nowrap !important;
+    justify-content: flex-start !important;
+}
+
+.hmail-ribbon-icon {
+    flex: none;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+}
+
+/* Icons come from the vendored Fluent set already deployed next to this file. */
+.hmail-ribbon-button[data-icon="new-mail"]  .hmail-ribbon-icon { background-image: url("Icons/mail-col.svg"); }
+.hmail-ribbon-button[data-icon="mail"]      .hmail-ribbon-icon { background-image: url("Icons/mail.svg"); }
+.hmail-ribbon-button[data-icon="mail-read"] .hmail-ribbon-icon { background-image: url("Icons/ic_fluent_mail_all_24_filled.svg"); }
+.hmail-ribbon-button[data-icon="trash"]     .hmail-ribbon-icon { background-image: url("Icons/trash.svg"); }
+.hmail-ribbon-button[data-icon="archive"]   .hmail-ribbon-icon { background-image: url("Icons/archive.svg"); }
+.hmail-ribbon-button[data-icon="junk"]      .hmail-ribbon-icon { background-image: url("Icons/junk.svg"); }
+.hmail-ribbon-button[data-icon="reply"]     .hmail-ribbon-icon { background-image: url("Icons/reply.svg"); }
+.hmail-ribbon-button[data-icon="reply-all"] .hmail-ribbon-icon { background-image: url("Icons/reply-all.svg"); }
+.hmail-ribbon-button[data-icon="forward"]   .hmail-ribbon-icon { background-image: url("Icons/forward.svg"); }
+.hmail-ribbon-button[data-icon="folder"]    .hmail-ribbon-icon { background-image: url("Icons/folder.svg"); }
+.hmail-ribbon-button[data-icon="inbox"]     .hmail-ribbon-icon { background-image: url("Icons/inbox-col.svg"); }
+.hmail-ribbon-button[data-icon="outbox"]    .hmail-ribbon-icon { background-image: url("Icons/outbox.svg"); }
+.hmail-ribbon-button[data-icon="drafts"]    .hmail-ribbon-icon { background-image: url("Icons/drafts.svg"); }
+.hmail-ribbon-button[data-icon="templates"] .hmail-ribbon-icon { background-image: url("Icons/templates.svg"); }
+.hmail-ribbon-button[data-icon="sync"]      .hmail-ribbon-icon { background-image: url("Icons/sync.svg"); }
+.hmail-ribbon-button[data-icon="contact"]   .hmail-ribbon-icon { background-image: url("Icons/contact-col.svg"); }
+.hmail-ribbon-button[data-icon="filter"]    .hmail-ribbon-icon { background-image: url("Icons/filter.svg"); }
+.hmail-ribbon-button[data-icon="search"]    .hmail-ribbon-icon { background-image: url("Icons/list.svg"); }
+.hmail-ribbon-button[data-icon="flag"]      .hmail-ribbon-icon { background-image: url("Icons/ic_fluent_tag_24_filled.svg"); }
+.hmail-ribbon-button[data-icon="list"]      .hmail-ribbon-icon { background-image: url("Icons/list.svg"); }
+.hmail-ribbon-button[data-icon="settings"]  .hmail-ribbon-icon { background-image: url("Icons/settings.svg"); }
+.hmail-ribbon-button[data-icon="extention"] .hmail-ribbon-icon { background-image: url("Icons/extention.svg"); }
+.hmail-ribbon-button[data-icon="more"]      .hmail-ribbon-icon { background-image: url("Icons/more.svg"); }
+.hmail-ribbon-button[data-icon="import"]    .hmail-ribbon-icon { background-image: url("Icons/inbox_color.svg"); }
+.hmail-ribbon-button[data-icon="ai"]        .hmail-ribbon-icon { background-image: url("Icons/notepad-person.svg"); }
+
+/* =====================================================
+   AI SIDEBAR — docked panel on the right
+   ===================================================== */
+
+/* No border here: the splitter next to it already draws the dividing line, and
+   two lines side by side read as one heavy rule that does not match the rest
+   of the window. */
+#hmail-ai-sidebar {
+    min-width: 300px !important;
+    background-color: Canvas !important;
+}
+
+/* A 1px splitter looks right but cannot be grabbed. Keep a 5px drag target and
+   draw the hairline with a border, so it reads as one thin rule like
+   Thunderbird's own pane dividers but is still draggable. */
+#hmail-ai-splitter {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    width: 5px !important;
+    min-width: 5px !important;
+    margin: 0 !important;
+    background-color: transparent !important;
+    border: none !important;
+    border-inline-start: 1px solid color-mix(in srgb, CanvasText 12%, transparent) !important;
+    cursor: ew-resize !important;
+}
+
+#hmail-ai-splitter:hover {
+    border-inline-start-color: var(--hmail-accent) !important;
+}
+
+#hmail-ai-sidebar[hidden],
+#hmail-ai-splitter[hidden] {
+    display: none !important;
+}
+
+.hmail-sidebar-header {
+    align-items: center !important;
+    padding: 6px 8px 6px 12px !important;
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 12%, transparent) !important;
+    background-color: color-mix(in srgb, var(--hmail-accent) 6%, Canvas) !important;
+}
+
+.hmail-sidebar-title {
+    font-weight: 600 !important;
+    color: var(--hmail-accent) !important;
+}
+
+.hmail-sidebar-close {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    border: none !important;
+    background: transparent !important;
+    padding: 2px 6px !important;
+    min-width: 0 !important;
+    cursor: pointer !important;
+}
+
+.hmail-sidebar-close::after {
+    content: "✕";
+    font-size: 0.9rem;
+    opacity: 0.65;
+}
+
+.hmail-sidebar-close:hover::after {
+    opacity: 1;
+}
+
+#hmail-ai-browser {
+    min-width: 0 !important;
+}
+
+#hmail-ai-browser[hidden] {
+    display: none !important;
+}
+
+/* Chrome-DOM panels hosted in the sidebar (AI chat, quarantine list).
+   The sidebar is a XUL vbox; without an explicit flex context here its HTML
+   children size to their content, so a long chat pushed the input box out of
+   the window instead of scrolling. */
+/* The panel keeps the width the user gave it. Without flex:0 0 auto and the
+   min-width:0 further down, long words and wide <select> options widen the
+   whole sidebar as the conversation grows. */
+#hmail-ai-sidebar {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    flex: 0 0 auto !important;
+}
+
+/* Nothing inside may dictate the panel's width. */
+#hmail-ai-sidebar *,
+.hmail-sidebar-content,
+.hmail-sidebar-content * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
+
+.hmail-ai-text,
+.hmail-ai-para,
+.hmail-ai-list li {
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+}
+
+.hmail-sidebar-content {
+    display: flex !important;
+    flex-direction: column !important;
+    /* height:0 with flex-grow makes this fill the panel and no more, which is
+       what lets the scrolling region inside it actually scroll. */
+    flex: 1 1 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    min-height: 0 !important;
+}
+
+/* =====================================================
+   AI ASSISTANT PANEL
+   ===================================================== */
+
+.hmail-ai {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+}
+
+.hmail-ai-bar {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 6px 8px;
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 10%, transparent);
+}
+
+.hmail-ai-prompt {
+    flex: 1 1 auto;
+    min-width: 0;
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 4px 6px;
+    border-radius: 4px;
+    border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+    background-color: Canvas;
+    color: inherit;
+}
+
+.hmail-ai-btn {
+    appearance: none;
+    -moz-appearance: none;
+    font: inherit;
+    font-size: 0.83rem;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+    background-color: Canvas;
+    color: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.hmail-ai-btn:hover {
+    background-color: color-mix(in srgb, var(--hmail-accent) 10%, Canvas);
+}
+
+.hmail-ai-btn.primary {
+    background-color: var(--hmail-accent);
+    border-color: transparent;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.hmail-ai-btn.primary:hover {
+    background-color: var(--hmail-accent-hover);
+}
+
+.hmail-ai-status {
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    opacity: 0.7;
+    min-height: 1.2em;
+}
+
+.hmail-ai.busy .hmail-ai-status::after {
+    content: "";
+    display: inline-block;
+    width: 0.6em;
+    height: 0.6em;
+    margin-inline-start: 6px;
+    border-radius: 50%;
+    background-color: var(--hmail-accent);
+    animation: hmail-ai-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes hmail-ai-pulse {
+    0%, 100% { opacity: 0.25; }
+    50%      { opacity: 1; }
+}
+
+.hmail-ai.busy .hmail-ai-bar,
+.hmail-ai.busy .hmail-ai-ask {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.hmail-ai-log {
+    flex: 1 1 0 !important;
+    height: 0 !important;
+    overflow-y: auto !important;
+    min-height: 0 !important;
+    padding: 6px 10px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* The ask box and the prompt bar must never be squeezed out by a long chat. */
+.hmail-ai-bar,
+.hmail-ai-ask,
+.hmail-ai-status {
+    flex: 0 0 auto !important;
+}
+
+.hmail-ai-turn {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.hmail-ai-role {
+    font-size: 0.74rem;
+    font-weight: 600;
+    opacity: 0.6;
+}
+
+.hmail-ai-turn.assistant .hmail-ai-role {
+    color: var(--hmail-accent);
+    opacity: 1;
+}
+
+/* Actions the assistant carried out, so they are visible in the transcript. */
+.hmail-ai-turn.action .hmail-ai-role {
+    color: #2E7D32;
+    opacity: 1;
+}
+
+.hmail-ai-turn.action .hmail-ai-text {
+    background-color: color-mix(in srgb, #2E7D32 10%, Canvas);
+    font-size: 0.83rem;
+}
+
+.hmail-ai-text {
+    font-size: 0.87rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding: 7px 10px;
+    border-radius: 6px;
+    background-color: color-mix(in srgb, CanvasText 5%, Canvas);
+}
+
+.hmail-ai-turn.assistant .hmail-ai-text {
+    background-color: color-mix(in srgb, var(--hmail-accent) 8%, Canvas);
+    white-space: normal;
+}
+
+/* Light Markdown rendering inside an assistant reply. */
+.hmail-ai-para {
+    margin-block: 0.25em;
+}
+
+.hmail-ai-heading {
+    font-weight: 600;
+    margin-block: 0.6em 0.2em;
+    color: var(--hmail-accent);
+}
+
+.hmail-ai-list {
+    margin: 0.2em 0 0.2em 1.1em;
+    padding: 0;
+}
+
+.hmail-ai-list li {
+    margin-block: 0.15em;
+}
+
+.hmail-ai-gap {
+    height: 0.45em;
+}
+
+.hmail-ai-text code {
+    font-family: monospace;
+    font-size: 0.92em;
+    padding: 0 3px;
+    border-radius: 3px;
+    background-color: color-mix(in srgb, CanvasText 8%, transparent);
+}
+
+.hmail-ai-ask {
+    display: flex;
+    gap: 6px;
+    align-items: flex-end;
+    padding: 6px 8px;
+    border-top: 1px solid color-mix(in srgb, CanvasText 10%, transparent);
+}
+
+.hmail-ai-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 5px 7px;
+    border-radius: 4px;
+    border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+    background-color: Canvas;
+    color: inherit;
+    resize: none;
+}
+
+/* --- settings form --- */
+.hmail-ai-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.hmail-ai-section {
+    font-weight: 600;
+    color: var(--hmail-accent);
+    margin-top: 8px;
+}
+
+.hmail-ai-label {
+    font-size: 0.8rem;
+    opacity: 0.75;
+}
+
+.hmail-ai-field {
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 5px 7px;
+    border-radius: 4px;
+    border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+    background-color: Canvas;
+    color: inherit;
+}
+
+.hmail-ai-hint {
+    font-size: 0.76rem;
+    opacity: 0.6;
+    line-height: 1.4;
+}
+
+.hmail-ai-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+/* -----------------------------------------------------
+   Flat surfaces, soft shadows, one rounded composer.
+
+   These rules come after the ones above on purpose: same specificity, later
+   position, so they win. Sizes are in `em` so the whole panel scales from the
+   one font-size the user picks in settings, and every colour derives from
+   --hmail-ai-accent so picking a colour repaints the panel.
+   ----------------------------------------------------- */
+
+.hmail-ai {
+    --hmail-ai-font: 14px;
+    --hmail-ai-accent: var(--hmail-accent, #0F6CBD);
+    --hmail-ai-surface: Canvas;
+    --hmail-ai-ink: CanvasText;
+    --hmail-ai-line: color-mix(in srgb, var(--hmail-ai-ink) 12%, transparent);
+    --hmail-ai-sunk: color-mix(in srgb, var(--hmail-ai-ink) 4%, var(--hmail-ai-surface));
+    --hmail-ai-lift: 0 1px 2px color-mix(in srgb, var(--hmail-ai-ink) 10%, transparent),
+                     0 4px 12px color-mix(in srgb, var(--hmail-ai-ink) 7%, transparent);
+    font-size: var(--hmail-ai-font) !important;
+    background-color: var(--hmail-ai-surface) !important;
+    color: var(--hmail-ai-ink) !important;
+}
+
+/* Panel background independent of the OS theme, when the user asks for it. */
+.hmail-ai.theme-light {
+    --hmail-ai-surface: #ffffff;
+    --hmail-ai-ink: #1b1b1f;
+}
+
+.hmail-ai.theme-dark {
+    --hmail-ai-surface: #202024;
+    --hmail-ai-ink: #e9e9ec;
+}
+
+.hmail-ai-bar {
+    gap: 8px !important;
+    padding: 8px 10px !important;
+    border-bottom: 1px solid var(--hmail-ai-line) !important;
+}
+
+/* --- controls: flat, rounded, lifted --- */
+
+.hmail-ai-btn {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    border: 1px solid transparent !important;
+    border-radius: 8px !important;
+    padding: 7px 14px !important;
+    font-size: 0.9em !important;
+    font-weight: 500 !important;
+    background-color: color-mix(in srgb, var(--hmail-ai-ink) 6%, var(--hmail-ai-surface)) !important;
+    color: inherit !important;
+    box-shadow: var(--hmail-ai-lift);
+    transition: background-color 0.12s ease, box-shadow 0.12s ease,
+                transform 0.06s ease;
+}
+
+.hmail-ai-btn:hover {
+    background-color: color-mix(in srgb, var(--hmail-ai-ink) 11%, var(--hmail-ai-surface)) !important;
+}
+
+.hmail-ai-btn:active {
+    transform: translateY(1px);
+    box-shadow: none;
+}
+
+.hmail-ai-btn.primary {
+    background-color: var(--hmail-ai-accent) !important;
+    color: #ffffff !important;
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--hmail-ai-accent) 40%, transparent),
+                0 6px 16px color-mix(in srgb, var(--hmail-ai-accent) 28%, transparent);
+}
+
+.hmail-ai-btn.primary:hover {
+    background-color: color-mix(in srgb, var(--hmail-ai-accent) 88%, #000000) !important;
+}
+
+.hmail-ai-btn:focus-visible,
+.hmail-ai-field:focus-visible,
+.hmail-ai-send:focus-visible {
+    outline: 2px solid var(--hmail-ai-accent) !important;
+    outline-offset: 2px !important;
+}
+
+.hmail-ai-field,
+.hmail-ai-prompt {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    border: 1px solid var(--hmail-ai-line) !important;
+    border-radius: 10px !important;
+    padding: 9px 12px !important;
+    font-size: 0.94em !important;
+    background-color: var(--hmail-ai-sunk) !important;
+    color: inherit !important;
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--hmail-ai-ink) 6%, transparent);
+    transition: border-color 0.12s ease, box-shadow 0.12s ease,
+                background-color 0.12s ease;
+}
+
+.hmail-ai-field:focus,
+.hmail-ai-prompt:focus {
+    border-color: var(--hmail-ai-accent) !important;
+    background-color: var(--hmail-ai-surface) !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--hmail-ai-accent) 18%, transparent);
+    outline: none !important;
+}
+
+/* Native dropdown arrows do not follow the flat look, so draw our own. */
+select.hmail-ai-field,
+.hmail-ai-prompt {
+    background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6.5l4 4 4-4' fill='none' stroke='%23808080' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 10px center !important;
+    background-size: 16px 16px !important;
+    padding-inline-end: 32px !important;
+}
+
+/* --- conversation --- */
+
+.hmail-ai-status {
+    font-size: 0.8em !important;
+    padding: 4px 12px !important;
+}
+
+.hmail-ai-log {
+    padding: 12px 12px 4px !important;
+    gap: 14px !important;
+}
+
+.hmail-ai-role {
+    font-size: 0.75em !important;
+}
+
+.hmail-ai-text {
+    font-size: 0.95em !important;
+    padding: 10px 13px !important;
+    border-radius: 12px !important;
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--hmail-ai-ink) 7%, transparent);
+}
+
+.hmail-ai-turn.user .hmail-ai-text {
+    background-color: color-mix(in srgb, var(--hmail-ai-ink) 6%, var(--hmail-ai-surface)) !important;
+}
+
+.hmail-ai-turn.assistant .hmail-ai-text {
+    background-color: color-mix(in srgb, var(--hmail-ai-accent) 8%, var(--hmail-ai-surface)) !important;
+}
+
+.hmail-ai-turn.assistant .hmail-ai-role,
+.hmail-ai-heading {
+    color: var(--hmail-ai-accent) !important;
+}
+
+.hmail-ai-turn.action .hmail-ai-text {
+    font-size: 0.9em !important;
+}
+
+/* --- composer: one rounded surface holding the text and the send button --- */
+
+.hmail-ai-ask {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 4px !important;
+    padding: 8px 12px 12px !important;
+    border-top: none !important;
+}
+
+.hmail-ai-composer {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 5px 5px 5px 14px;
+    border: 1px solid var(--hmail-ai-line);
+    border-radius: 22px;
+    background-color: var(--hmail-ai-sunk);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--hmail-ai-ink) 8%, transparent),
+                0 8px 24px color-mix(in srgb, var(--hmail-ai-ink) 8%, transparent);
+    transition: border-color 0.12s ease, box-shadow 0.12s ease,
+                background-color 0.12s ease;
+}
+
+.hmail-ai-composer:focus-within {
+    border-color: color-mix(in srgb, var(--hmail-ai-accent) 55%, transparent);
+    background-color: var(--hmail-ai-surface);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--hmail-ai-accent) 14%, transparent),
+                0 10px 28px color-mix(in srgb, var(--hmail-ai-ink) 10%, transparent);
+}
+
+.hmail-ai-input {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    padding: 8px 0 !important;
+    margin: 0 !important;
+    font: inherit !important;
+    font-size: 0.95em !important;
+    line-height: 1.45 !important;
+    color: inherit !important;
+    resize: none !important;
+    max-height: 160px;
+    overflow-y: auto;
+}
+
+.hmail-ai-send {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    border: none !important;
+    flex: 0 0 auto;
+    /* A generic chrome rule rounds every bare <button>, so say it louder. */
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    border-radius: 50% !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    padding: 0 !important;
+    background-color: var(--hmail-ai-accent) !important;
+    color: #ffffff !important;
+    cursor: pointer;
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--hmail-ai-accent) 45%, transparent),
+                0 4px 12px color-mix(in srgb, var(--hmail-ai-accent) 30%, transparent);
+    transition: filter 0.12s ease, transform 0.06s ease, opacity 0.12s ease;
+}
+
+.hmail-ai-send:hover {
+    filter: brightness(1.1);
+}
+
+.hmail-ai-send:active {
+    transform: translateY(1px);
+}
+
+.hmail-ai-tip {
+    font-size: 0.72em;
+    opacity: 0.5;
+    text-align: center;
+}
+
+/* --- settings form --- */
+
+.hmail-ai-settings {
+    gap: 8px !important;
+    padding-bottom: 8px;
+}
+
+.hmail-ai-section {
+    color: var(--hmail-ai-accent) !important;
+    font-size: 0.95em !important;
+    margin-top: 14px !important;
+}
+
+.hmail-ai-label {
+    font-size: 0.82em !important;
+    margin-bottom: -2px;
+}
+
+.hmail-ai-hint {
+    font-size: 0.78em !important;
+}
+
+.hmail-ai-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.hmail-ai-range {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    flex: 1 1 auto;
+    height: 4px;
+    border: none !important;
+    border-radius: 999px;
+    background-color: color-mix(in srgb, var(--hmail-ai-ink) 15%, transparent) !important;
+}
+
+.hmail-ai-range::-moz-range-track {
+    height: 4px;
+    border-radius: 999px;
+    background-color: transparent;
+}
+
+.hmail-ai-range::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--hmail-ai-surface);
+    background-color: var(--hmail-ai-accent);
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--hmail-ai-ink) 30%, transparent);
+}
+
+.hmail-ai-badge {
+    font-size: 0.8em;
+    opacity: 0.7;
+    min-width: 3.4em;
+    text-align: end;
+}
+
+.hmail-ai-color {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    width: 36px;
+    height: 28px;
+    padding: 2px !important;
+    border: 1px solid var(--hmail-ai-line) !important;
+    border-radius: 8px !important;
+    background-color: var(--hmail-ai-surface) !important;
+    cursor: pointer;
+}
+
+.hmail-ai-swatch {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    width: 22px !important;
+    height: 22px !important;
+    min-width: 22px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    border: 1px solid color-mix(in srgb, var(--hmail-ai-ink) 15%, transparent) !important;
+    cursor: pointer;
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--hmail-ai-ink) 20%, transparent);
+    transition: transform 0.08s ease;
+}
+
+.hmail-ai-swatch:hover {
+    transform: scale(1.12);
+}
+
+.hmail-ai-actions {
+    gap: 8px !important;
+    margin-top: 16px !important;
+    flex-wrap: wrap;
+}
+
+/* --- token and cost table --- */
+
+.hmail-ai-usage {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 4px;
+}
+
+.hmail-ai-usage-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 5px 2px;
+    font-size: 0.85em;
+    border-bottom: 1px solid var(--hmail-ai-line);
+}
+
+.hmail-ai-usage-row.total {
+    font-weight: 600;
+    border-bottom: none;
+    border-top: 1px solid var(--hmail-ai-line);
+    margin-top: 2px;
+}
+
+.hmail-ai-usage-name {
+    flex: 0 0 auto;
+}
+
+.hmail-ai-usage-num {
+    flex: 1 1 auto;
+    text-align: end;
+    opacity: 0.6;
+    font-size: 0.9em;
+}
+
+.hmail-ai-usage-cost {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+    color: var(--hmail-ai-accent);
+    font-weight: 600;
+}
+
+/* The two price boxes sit inline, so they must not each take a full row. */
+.hmail-ai-row .hmail-ai-field {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+/* -----------------------------------------------------
+   The same panel, docked inside the composer.
+   ----------------------------------------------------- */
+
+/* The body area becomes a row so the panel can sit beside the editor. */
+#messageArea:has(#hmail-compose-ai) {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: stretch !important;
+}
+
+#messageArea:has(#hmail-compose-ai) > #messageEditor {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+
+#hmail-compose-ai {
+    flex: 0 0 auto !important;
+    min-width: 260px;
+    max-width: 60% !important;
+    border-inline-start: 1px solid var(--hmail-ai-line);
+}
+
+#hmail-compose-ai-splitter {
+    flex: 0 0 auto;
+    width: 5px;
+    margin: 0;
+    border: none;
+    background-color: transparent;
+    cursor: ew-resize;
+}
+
+.hmail-compose-ai-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 8px 8px 12px;
+    border-bottom: 1px solid var(--hmail-ai-line);
+}
+
+.hmail-compose-ai-title {
+    flex: 1 1 auto;
+    font-weight: 600;
+    color: var(--hmail-ai-accent);
+}
+
+.hmail-compose-ai-close {
+    appearance: none !important;
+    border: none !important;
+    background: transparent !important;
+    color: inherit !important;
+    cursor: pointer;
+    border-radius: 6px !important;
+    padding: 2px 7px !important;
+    opacity: 0.6;
+}
+
+.hmail-compose-ai-close:hover {
+    opacity: 1;
+    background-color: color-mix(in srgb, var(--hmail-ai-ink) 10%, transparent) !important;
+}
+
+/* Quick replies: each suggestion is a button that inserts itself. */
+.hmail-compose-ai-choice {
+    appearance: none !important;
+    display: block;
+    width: 100%;
+    text-align: start !important;
+    margin-block: 6px;
+    padding: 10px 12px !important;
+    border: 1px solid var(--hmail-ai-line) !important;
+    border-radius: 12px !important;
+    background-color: var(--hmail-ai-sunk) !important;
+    color: inherit !important;
+    font: inherit !important;
+    font-size: 0.92em !important;
+    line-height: 1.45;
+    cursor: pointer;
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--hmail-ai-ink) 8%, transparent);
+    transition: border-color 0.12s ease, background-color 0.12s ease;
+}
+
+.hmail-compose-ai-choice:hover {
+    border-color: var(--hmail-ai-accent) !important;
+    background-color: color-mix(in srgb, var(--hmail-ai-accent) 8%, var(--hmail-ai-surface)) !important;
+}
+
+/* =====================================================
+   SPAM REPORT / QUARANTINE PANEL
+   ===================================================== */
+
+/* The quarantine view has its own tab, so it gets the full pane width; keep
+   the content column readable rather than stretching rows across the screen. */
+.hmail-spam-tab {
+    overflow: hidden;
+}
+
+.hmail-spam-tab .hmail-spam {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-width: 1000px;
+    width: 100%;
+    padding-inline: 16px;
+    padding-block-start: 10px;
+}
+
+.hmail-spam-bar,
+.hmail-spam-tools {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 6px 8px;
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 10%, transparent);
+}
+
+.hmail-spam-account,
+.hmail-spam-range,
+.hmail-spam-search,
+.hmail-spam-code {
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 3px 6px;
+    border-radius: 4px;
+    border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+    background-color: Canvas;
+    color: inherit;
+}
+
+.hmail-spam-account { flex: 1 1 auto; min-width: 0; }
+.hmail-spam-search  { flex: 1 1 auto; min-width: 0; }
+.hmail-spam-code    { width: 8em; letter-spacing: 3px; text-align: center; }
+
+.hmail-spam-btn {
+    appearance: none;
+    -moz-appearance: none;
+    font: inherit;
+    font-size: 0.83rem;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+    background-color: Canvas;
+    color: inherit;
+    cursor: pointer;
+}
+
+.hmail-spam-btn:hover {
+    background-color: color-mix(in srgb, var(--hmail-accent) 10%, Canvas);
+}
+
+.hmail-spam-btn.primary {
+    background-color: var(--hmail-accent);
+    border-color: transparent;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.hmail-spam-btn.primary:hover {
+    background-color: var(--hmail-accent-hover);
+}
+
+.hmail-spam-status {
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    opacity: 0.7;
+    min-height: 1.2em;
+}
+
+/* --- loading feedback ---
+   The backend goes out to the mail filter, which can take a few seconds, so
+   say so rather than leaving the panel looking frozen. */
+.hmail-spam.busy .hmail-spam-tools,
+.hmail-spam.busy .hmail-spam-bar {
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.hmail-spam-progress {
+    height: 2px;
+    background-color: color-mix(in srgb, var(--hmail-accent) 18%, transparent);
+    overflow: hidden;
+    display: none;
+}
+
+.hmail-spam.busy .hmail-spam-progress {
+    display: block;
+}
+
+.hmail-spam-progress::after {
+    content: "";
+    display: block;
+    height: 100%;
+    width: 35%;
+    background-color: var(--hmail-accent);
+    animation: hmail-spam-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes hmail-spam-slide {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(340%); }
+}
+
+/* Skeleton rows while the list loads, so the panel keeps its shape. */
+.hmail-spam-skeleton {
+    border: 1px solid color-mix(in srgb, CanvasText 8%, transparent);
+    border-radius: 4px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.hmail-spam-skeleton span {
+    display: block;
+    height: 9px;
+    border-radius: 3px;
+    background: linear-gradient(90deg,
+        color-mix(in srgb, CanvasText 8%, transparent) 25%,
+        color-mix(in srgb, CanvasText 14%, transparent) 37%,
+        color-mix(in srgb, CanvasText 8%, transparent) 63%);
+    background-size: 400% 100%;
+    animation: hmail-spam-shimmer 1.4s ease-in-out infinite;
+}
+
+.hmail-spam-skeleton span:nth-child(1) { width: 55%; }
+.hmail-spam-skeleton span:nth-child(2) { width: 85%; }
+.hmail-spam-skeleton span:nth-child(3) { width: 40%; }
+
+@keyframes hmail-spam-shimmer {
+    0%   { background-position: 100% 0; }
+    100% { background-position: 0 0; }
+}
+
+.hmail-spam-list {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px 8px 12px;
+}
+
+.hmail-spam-row {
+    border: 1px solid color-mix(in srgb, CanvasText 10%, transparent);
+    border-inline-start: 3px solid color-mix(in srgb, CanvasText 20%, transparent);
+    border-radius: 4px;
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.hmail-spam-row[data-status="quarantined"] { border-inline-start-color: #C8781A; }
+.hmail-spam-row[data-status="delivered"]   { border-inline-start-color: #2E7D32; }
+.hmail-spam-row[data-status="rejected"],
+.hmail-spam-row[data-status="bounced"]     { border-inline-start-color: #9E9E9E; }
+
+.hmail-spam-row-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.82rem;
+}
+
+.hmail-spam-from {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.hmail-spam-time { flex: none; opacity: 0.6; }
+
+.hmail-spam-subject {
+    font-size: 0.88rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hmail-spam-meta {
+    font-size: 0.76rem;
+    opacity: 0.6;
+    white-space: pre-line;
+}
+
+.hmail-spam-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.hmail-spam-note {
+    font-size: 0.85rem;
+    opacity: 0.75;
+    margin: 8px 0;
+}
+
+.hmail-spam-preview {
+    flex: 1 1 auto;
+    min-height: 300px;
+    border: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+    border-radius: 4px;
+}
+.hmail-ribbon-button[data-icon="calendar"]  .hmail-ribbon-icon { background-image: url("Icons/calendar-col.svg"); }
+
+/* "Email Mới" is the primary action — filled accent, like Outlook. */
+.hmail-ribbon-button[data-id="new-msg"] {
+    background-color: var(--hmail-accent) !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
+
+.hmail-ribbon-button[data-id="new-msg"]:hover:not([disabled]) {
+    background-color: var(--hmail-accent-hover) !important;
+    border-color: transparent !important;
+}
+
+/* -----------------------------------------------------
+   Spam Report uses the same flat controls as the assistant, so the two panels
+   do not look like they came from different programs.
+   ----------------------------------------------------- */
+
+.hmail-spam-btn {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    border: 1px solid transparent !important;
+    border-radius: 8px !important;
+    padding: 7px 14px !important;
+    font-weight: 500 !important;
+    background-color: color-mix(in srgb, CanvasText 6%, Canvas) !important;
+    color: inherit !important;
+    box-shadow: 0 1px 2px color-mix(in srgb, CanvasText 10%, transparent),
+                0 4px 12px color-mix(in srgb, CanvasText 7%, transparent);
+    transition: background-color 0.12s ease, box-shadow 0.12s ease,
+                transform 0.06s ease;
+}
+
+.hmail-spam-btn:hover:not([disabled]) {
+    background-color: color-mix(in srgb, CanvasText 11%, Canvas) !important;
+}
+
+.hmail-spam-btn:active:not([disabled]) {
+    transform: translateY(1px);
+    box-shadow: none;
+}
+
+.hmail-spam-btn.primary {
+    background-color: var(--hmail-accent) !important;
+    color: #ffffff !important;
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--hmail-accent) 40%, transparent),
+                0 6px 16px color-mix(in srgb, var(--hmail-accent) 28%, transparent);
+}
+
+.hmail-spam-account,
+.hmail-spam-range,
+.hmail-spam-search,
+.hmail-spam-code {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    border: 1px solid color-mix(in srgb, CanvasText 12%, transparent) !important;
+    border-radius: 10px !important;
+    padding: 9px 12px !important;
+    background-color: color-mix(in srgb, CanvasText 4%, Canvas) !important;
+    color: inherit !important;
+    box-shadow: 0 1px 2px color-mix(in srgb, CanvasText 6%, transparent);
+    transition: border-color 0.12s ease, box-shadow 0.12s ease,
+                background-color 0.12s ease;
+}
+
+.hmail-spam-account:focus,
+.hmail-spam-range:focus,
+.hmail-spam-search:focus,
+.hmail-spam-code:focus {
+    border-color: var(--hmail-accent) !important;
+    background-color: Canvas !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--hmail-accent) 18%, transparent);
+    outline: none !important;
+}
+
+select.hmail-spam-account,
+select.hmail-spam-range {
+    background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6.5l4 4 4-4' fill='none' stroke='%23808080' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 10px center !important;
+    background-size: 16px 16px !important;
+    padding-inline-end: 32px !important;
+}
+
+.hmail-spam-row {
+    border-radius: 10px !important;
+}
+
+/* =====================================================
+   COMPACTING — reclaim the rows Outlook does not have.
+   Every command lives in the ribbon, so Thunderbird's own
+   toolbars are redundant and only cost vertical space.
+   ===================================================== */
+
+/* Thunderbird's unified toolbar — the customizable one — is gone: the ribbon
+   replaces it, and its only remaining occupant, the search field, now lives in
+   the ribbon's tab strip.
+   Hiding it takes the window minimise/maximise/close buttons with it, because
+   they are its sibling inside the same container. mail.tabs.drawInTitlebar is
+   therefore turned off (see hmail.cfg) so Windows draws its own title bar with
+   real window controls, and the container can go entirely. */
+#unifiedToolbarContainer,
+#unifiedToolbar {
+    display: none !important;
+}
+
+/* Folder pane header duplicates the ribbon's New message / Get messages. */
+#folderPaneHeaderBar {
+    display: none !important;
+}
+
+/* Thread pane header: keep the folder name and the display controls, drop the
+   padding around them. */
+#threadPaneHeaderBar {
+    min-height: 0 !important;
+    padding-block: 2px !important;
+}
+
+#threadPaneHeaderBar #threadPaneFolderCount {
+    opacity: 0.6 !important;
+}
+
+/* The ribbon replaces Thunderbird's toolbar customization, so close every entry
+   point into it — otherwise users end up editing a toolbar they cannot see.
+   These are the exact ids from messenger.xhtml's context menus. */
+#unifiedToolbarCustomize,
+#CustomizeMailToolbar,
+#CustomizeChatToolbar,
+#settingsContextOpenCustomizeItem,
+#unifiedToolbarCustomizationButton,
+menuitem[command="cmd_CustomizeMailToolbar"],
+/* the whole drag-and-drop customization machinery */
+#customizationTargetMenu,
+#customizationPaletteMenu,
+unified-toolbar-customization {
+    display: none !important;
+}
+
+/* With Customize gone, the unified toolbar's context menu has nothing left but
+   the menu-bar toggle; keep that, drop the separators that framed the removed
+   items so the menu does not look truncated. */
+#unifiedToolbarMenu > menuseparator,
+#toolbar-context-menu > menuseparator {
+    display: none !important;
+}
+
+/* Trim the ribbon itself a little now that it carries everything. */
+.hmail-ribbon-pane {
+    padding-block: 2px !important;
+    align-items: center !important;
+}
+
+.hmail-ribbon-tabs {
+    padding-block-start: 2px !important;
+}
+
+/* Message list rows sit closer together, Outlook density. */
+#threadTree .card-container {
+    padding-block: 5px !important;
+}
+
+/* =====================================================
+   TOP STRIP (unified toolbar) — Outlook's title bar:
+   search only, commands live in the ribbon above.
+   ===================================================== */
+
+#unifiedToolbarContainer {
+    background-color: color-mix(in srgb, var(--hmail-accent) 3%, Canvas) !important;
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 10%, transparent) !important;
+}
+
+#unifiedToolbar {
+    padding-inline: 8px !important;
+    padding-block: 5px !important;
+    gap: 1px !important;
+    min-height: 44px !important;
+}
+
+/* Command buttons: icon + label side by side, Outlook's compact pill shape */
+#unifiedToolbar .unified-toolbar-button {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 5px 10px !important;
+    border-radius: 4px !important;
+    font-size: 0.92rem !important;
+    font-weight: 400 !important;
+    white-space: nowrap !important;
+    border: 1px solid transparent !important;
+    background-color: transparent !important;
+}
+
+#unifiedToolbar .unified-toolbar-button:hover {
+    background-color: color-mix(in srgb, var(--hmail-accent) 12%, transparent) !important;
+}
+
+#unifiedToolbar .unified-toolbar-button:active,
+#unifiedToolbar .unified-toolbar-button[open] {
+    background-color: color-mix(in srgb, var(--hmail-accent) 20%, transparent) !important;
+}
+
+#unifiedToolbar .unified-toolbar-button img,
+#unifiedToolbar .unified-toolbar-button .button-icon {
+    width: 16px !important;
+    height: 16px !important;
+    -moz-context-properties: fill, stroke !important;
+    fill: color-mix(in srgb, var(--hmail-accent) 85%, CanvasText) !important;
+}
+
+/* "New message" is Outlook's primary action: a filled accent button. */
+#unifiedToolbar #button-write,
+#unifiedToolbar [item-id="write-message"] .unified-toolbar-button {
+    background-color: var(--hmail-accent) !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    padding-inline: 14px !important;
+    margin-inline-end: 8px !important;
+    border-radius: 4px !important;
+}
+
+#unifiedToolbar [item-id="write-message"] .unified-toolbar-button:hover {
+    background-color: var(--hmail-accent-hover) !important;
+}
+
+#unifiedToolbar [item-id="write-message"] .unified-toolbar-button img,
+#unifiedToolbar [item-id="write-message"] .unified-toolbar-button .button-icon {
+    fill: #ffffff !important;
+}
+
+/* Group separators, the way Outlook divides command clusters. */
+#unifiedToolbar [item-id="delete"],
+#unifiedToolbar [item-id="reply"],
+#unifiedToolbar [item-id="tag-message"] {
+    margin-inline-start: 9px !important;
+    border-inline-start: 1px solid color-mix(in srgb, CanvasText 14%, transparent) !important;
+    padding-inline-start: 9px !important;
+}
+
+/* Search: rounded and centred, like Outlook's top search field. */
+#unifiedToolbar global-search-bar,
+#unifiedToolbar #searchInput,
+#unifiedToolbar .search-bar {
+    min-width: 260px !important;
+    max-width: 620px !important;
+    border-radius: 4px !important;
+}
+
+/* =====================================================
+   READING PANE HEADER — Outlook's compact action row
+   Upstream renders large boxed buttons that wrap onto a
+   second line; Outlook keeps one tight row on the right.
+   ===================================================== */
+
+#messageHeader {
+    padding: 10px 14px !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Outlook leads with the subject as a large heading, then the sender row
+   underneath. Thunderbird ships the opposite order, so flip it with flex. */
+#messageHeader .subject-line,
+#messageHeader #expandedsubjectBox {
+    order: -1 !important;
+    margin-block: 0 8px !important;
+}
+
+#messageHeader #expandedsubjectBox,
+#messageHeader .subject-line > span {
+    font-size: 1.45rem !important;
+    font-weight: 600 !important;
+    line-height: 1.25 !important;
+}
+
+/* Keep every action on a single row, aligned right. */
+#header-view-toolbar,
+#messageHeader .message-header-buttons-container {
+    flex-wrap: nowrap !important;
+    justify-content: flex-end !important;
+    gap: 2px !important;
+    overflow: hidden !important;
+}
+
+#header-view-toolbar .button,
+#header-view-toolbar .toolbarbutton-1,
+#messageHeader .message-header-view-button {
+    border: none !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    border-radius: 4px !important;
+    padding: 5px 9px !important;
+    margin: 0 !important;
+    min-height: 30px !important;
+    font-size: 0.9rem !important;
+    font-weight: 400 !important;
+    white-space: nowrap !important;
+}
+
+#header-view-toolbar .button:hover,
+#messageHeader .message-header-view-button:hover {
+    background-color: color-mix(in srgb, var(--hmail-accent) 12%, transparent) !important;
+}
+
+#header-view-toolbar .button img,
+#messageHeader .message-header-view-button img {
+    width: 16px !important;
+    height: 16px !important;
+    -moz-context-properties: fill, stroke !important;
+    fill: color-mix(in srgb, var(--hmail-accent) 85%, CanvasText) !important;
+}
+
+/* Outlook only labels Reply / Reply all / Forward; the rest are icon-only,
+   which is also what keeps the row from wrapping on narrow panes. */
+#hdrArchiveButton .toolbarbutton-text,
+#hdrJunkButton .toolbarbutton-text,
+#hdrTrashButton .toolbarbutton-text,
+#otherActionsButton .toolbarbutton-text {
+    display: none !important;
+}
+
+/* =====================================================
+   STATUS BAR — Outlook has no empty strip at the bottom
+   ===================================================== */
+#status-bar {
+    min-height: 0 !important;
+    padding-block: 0 !important;
+}
+
+#status-bar:not([hidden]) > *:not(#statusText):not(#progressBar) {
+    display: none !important;
+}
+
+#statusText:empty {
+    display: none !important;
+}
+
+/* --- Remove features not present in hMail Desktop --- */
+/* Donation / Mozilla feedback / get-involved surfaces */
+#appmenu_makeDonation,
+#appmenu_getInvolved,
+#appmenu_submitFeedback,
+#donationsPage,
+#feedbackPage,
+#getInvolved,
+/* Chat (also disabled via mail.chat.enabled) */
+#chatButton,
+#spacesPopupButtonChat,
+#menu_goChat,
+#joinChatMenuItem,
+#appmenu_newIMAccountMenuItem,
+#newIMContactMenuItem,
+/* RSS feeds */
+#appmenu_newFeedAccountMenuItem,
+#newFeedAccountMenuItem,
+/* Newsgroups */
+#appmenu_newNewsgroupAccountMenuItem,
+#newNewsgroupAccountMenuItem {
+    display: none !important;
+}
