@@ -86,7 +86,7 @@ var hMailInsight = {
       kind: "permanent",
       title: "Quá nhiều người nhận trong một thư",
       why: "Máy chủ giới hạn số địa chỉ cho mỗi thư để chống phát tán thư rác.",
-      todo: "Chia thành nhiều đợt gửi ít người hơn — tính năng Trộn thư của hMail gửi riêng từng người nên không vướng giới hạn này.",
+      todo: "Chia thành nhiều đợt gửi ít người hơn — tính năng Gửi hàng loạt của hMail gửi riêng từng người nên không vướng giới hạn này.",
     },
     {
       test: (e, b, t) =>

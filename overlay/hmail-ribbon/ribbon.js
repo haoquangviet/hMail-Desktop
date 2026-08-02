@@ -126,7 +126,7 @@ var hMailRibbon = {
             { id: "dav-sync", label: "Đồng bộ Lịch\n& Danh bạ",
               icon: "calendar",
               fn: win => win.hMailDav.setupAll(win, { quiet: false }) },
-            { id: "mail-merge", label: "Trộn thư", icon: "contact",
+            { id: "mail-merge", label: "Gửi hàng loạt", icon: "contact",
               fn: win => win.hMailMerge.openTab(win) },
           ],
         },
@@ -146,6 +146,14 @@ var hMailRibbon = {
               cmd: "cmd_getMsgsForAuthAccounts" },
             { id: "send-unsent", label: "Gửi thư\nchờ gửi", icon: "outbox", size: "large",
               fn: win => win.SendUnsentMessages() },
+          ],
+        },
+        {
+          label: "Công cụ",
+          buttons: [
+            { id: "mail-merge-sr", label: "Gửi hàng\nloạt", icon: "contact",
+              size: "large",
+              fn: win => win.hMailMerge.openTab(win) },
           ],
         },
         {
