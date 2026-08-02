@@ -95,6 +95,40 @@ COMMUNITY_STRINGS = {
             "about-rights-notification-text = { -brand-short-name } is built "
             "on Mozilla Thunderbird, free and open source software made by a "
             "community of thousands of people all over the world.",
+        # Point 3 upstream is about sending crash reports to the vendor. The
+        # crash reporter is switched off in hMail, so the slot carries the
+        # warranty disclaimer instead.
+        "rights-intro-point-3":
+            "rights-intro-point-3 = { -brand-short-name } is provided \"as "
+            "is\", without warranty of any kind, express or implied. To the "
+            "fullest extent permitted by law, { -vendor-short-name } accepts "
+            "no liability and owes no compensation for any loss or damage "
+            "arising from your use of { -brand-short-name } — including lost "
+            "or corrupted mail, lost business, or any direct, indirect, "
+            "incidental or consequential damage. You use { -brand-short-name "
+            "} at your own risk and are responsible for keeping your own "
+            "backups of your data.",
+        "rights-intro-point-4":
+            "rights-intro-point-4 = { -brand-short-name } sends nothing to "
+            "{ -vendor-short-name }. Mail, calendars and contacts go only to "
+            "the servers you configure, and the assistant sends a message to "
+            "an AI provider only when you ask it to, using the service and "
+            "the key you chose.",
+        "rights-webservices-term-5":
+            "rights-webservices-term-5 = <strong>To the fullest extent "
+            "permitted by law, { -vendor-short-name }, its contributors, "
+            "licensors and distributors are not liable for any damage of any "
+            "kind arising out of or in any way relating to the use of "
+            "{ -brand-short-name } or the Services, and owe no compensation "
+            "in respect of any claim relating to them. Some jurisdictions do "
+            "not allow the exclusion or limitation of certain damages, so "
+            "this exclusion may not apply to you.</strong>",
+        "rights-webservices-term-7":
+            "rights-webservices-term-7 = These terms are governed by the laws "
+            "of Viet Nam. If any part of these terms is held invalid or "
+            "unenforceable, the remaining parts remain in full force and "
+            "effect. Where a translated version conflicts with the "
+            "Vietnamese version, the Vietnamese version prevails.",
     },
     "vi": {
         "community-desc":
@@ -119,15 +153,88 @@ COMMUNITY_STRINGS = {
             "dựng trên Mozilla Thunderbird — phần mềm nguồn mở và miễn phí, "
             "do cộng đồng gồm hàng ngàn người từ khắp nơi trên thế giới tạo "
             "ra.",
+        "rights-intro-point-3":
+            "rights-intro-point-3 = { -brand-short-name } được cung cấp theo "
+            "hiện trạng (\"nguyên trạng\"), không kèm bất kỳ bảo hành nào, dù "
+            "rõ ràng hay ngụ ý. Trong phạm vi pháp luật cho phép, "
+            "{ -vendor-short-name } không chịu trách nhiệm và không có nghĩa "
+            "vụ bồi thường đối với bất kỳ tổn thất hay thiệt hại nào phát "
+            "sinh từ việc bạn sử dụng { -brand-short-name } — kể cả mất thư, "
+            "hỏng dữ liệu, gián đoạn công việc, hay bất kỳ thiệt hại trực "
+            "tiếp, gián tiếp, ngẫu nhiên hoặc hệ quả nào. Bạn tự chịu trách "
+            "nhiệm khi sử dụng { -brand-short-name } và tự sao lưu dữ liệu "
+            "của mình.",
+        "rights-intro-point-4":
+            "rights-intro-point-4 = { -brand-short-name } không gửi gì về "
+            "{ -vendor-short-name }. Thư, lịch và danh bạ chỉ đi tới đúng máy "
+            "chủ bạn cấu hình; trợ lý chỉ gửi nội dung thư tới nhà cung cấp "
+            "AI khi bạn yêu cầu, bằng dịch vụ và API key do chính bạn chọn.",
+        "rights-webservices-term-5":
+            "rights-webservices-term-5 = <strong>Trong phạm vi pháp luật cho "
+            "phép, { -vendor-short-name } cùng những người đóng góp, các bên "
+            "cấp phép và phân phối không chịu trách nhiệm đối với bất kỳ "
+            "thiệt hại nào phát sinh từ hoặc liên quan tới việc sử dụng "
+            "{ -brand-short-name } và các Dịch Vụ, và không có nghĩa vụ bồi "
+            "thường đối với bất kỳ yêu cầu nào liên quan. Một số hệ thống "
+            "pháp luật không cho phép miễn trừ hoặc giới hạn đối với một số "
+            "loại thiệt hại, nên phần miễn trừ này có thể không áp dụng với "
+            "bạn.</strong>",
+        "rights-webservices-term-7":
+            "rights-webservices-term-7 = Các điều khoản này được điều chỉnh "
+            "bởi pháp luật Việt Nam. Nếu bất kỳ phần nào bị xem là vô hiệu "
+            "hoặc không thể thi hành, các phần còn lại vẫn giữ nguyên hiệu "
+            "lực. Khi bản dịch có mâu thuẫn với bản tiếng Việt, bản tiếng "
+            "Việt được ưu tiên áp dụng.",
     },
 }
 
 # Which message lives in which file.
 COMMUNITY_FILES = {
     "messenger/aboutDialog.ftl": ("community-desc", "community-experimental"),
-    "messenger/aboutRights.ftl": ("rights-intro",),
+    "messenger/aboutRights.ftl": (
+        "rights-intro", "rights-intro-point-3", "rights-intro-point-4",
+        "rights-webservices-term-5", "rights-webservices-term-7"),
     "messenger/messenger.ftl": ("about-rights-notification-text",),
 }
+
+
+def patch_about_dialog(text: str) -> str:
+    """
+    Trim the About dialog to what attribution actually requires.
+
+    Kept, because they are required: the distribution blurb naming Mozilla
+    Thunderbird as the code base with the "not officially associated" wording
+    (Mozilla Trademark Policy), the link to our source (MPL 2.0 §3.2), the
+    trademark line, and the links to about:license and about:rights.
+
+    Removed, because none of it is required and all of it misleads: the
+    donation and get-involved links, which would send an hMail customer's
+    money to Thunderbird and imply an association we must explicitly deny;
+    the privacy-policy link pointing at Mozilla's policy, which does not
+    govern this product; and Thunderbird's release-codename emblem, which is
+    their artwork, not ours to ship.
+    """
+    # Donation / get involved.
+    text = re.sub(
+        r'\s*<div class="text-blurb" id="contributeDesc".*?</div>',
+        "", text, flags=re.S)
+    # Mozilla privacy policy link.
+    text = re.sub(
+        r'\s*<a class="text-link bottom-link browser-link"'
+        r'\s+href="https://www\.mozilla\.org/privacy/[^"]*"\s*'
+        r'data-l10n-id="bottom-links-privacy"></a>',
+        "", text, flags=re.S)
+    # Thunderbird release codename emblem.
+    text = re.sub(r'\s*<img src="chrome://messenger/skin/icons/brand/'
+                  r'[^"]*"[^>]*id="codenameLogo"\s*/>', "", text)
+    # Those two anchors now read "HQV Software", so they must not go to
+    # Mozilla. The links naming Thunderbird itself are left alone.
+    text = re.sub(
+        r'href="https://www\.mozilla\.org/"(\s*)'
+        r'(data-l10n-name="community(?:-exp)?-mozilla-link")',
+        r'href="https://github.com/haoquangviet/hMail-Desktop"\1\2',
+        text)
+    return text
 
 
 def patch_community(text: str, locale: str, keys) -> str:
@@ -191,6 +298,11 @@ def build_replacements(zf: zipfile.ZipFile, repo: Path):
         m = re.fullmatch(r"localization/([^/]+)/branding/brand\.ftl", name)
         if m:
             repl[name] = load_repo_patch(repo, name) or ftl_en
+            continue
+
+        if name.endswith("content/messenger/aboutDialog.xhtml"):
+            repl[name] = patch_about_dialog(
+                zf.read(name).decode("utf-8")).encode("utf-8")
             continue
 
         m = re.fullmatch(r"localization/([^/]+)/(.+)", name)
