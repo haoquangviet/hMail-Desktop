@@ -1,4 +1,4 @@
-/* hMail Desktop — trộn thư
+/* hMail Desktop — gửi hàng loạt
  * MIT License, Copyright (c) 2026 HQV Software
  *
  * Sending the same letter to two hundred people, each addressed personally, is
@@ -51,7 +51,7 @@ var hMailMerge = {
       const button = doc.createXULElement("toolbarbutton");
       button.id = this.BUTTON_ID;
       button.className = "toolbarbutton-1";
-      button.setAttribute("label", "Trộn thư");
+      button.setAttribute("label", "Gửi hàng loạt");
       button.setAttribute("tooltiptext",
         "Gửi thư này cho nhiều người, mỗi người một bản riêng");
       button.addEventListener("command", () => this.fromComposer(win));
@@ -70,7 +70,7 @@ var hMailMerge = {
 
     const main = Services.wm.getMostRecentWindow("mail:3pane");
     if (!main) {
-      Services.prompt.alert(win, "Trộn thư",
+      Services.prompt.alert(win, "Gửi hàng loạt",
         "Hãy mở cửa sổ thư chính trước.");
       return;
     }
@@ -89,6 +89,11 @@ var hMailMerge = {
     return node;
   },
 
+  /** Problems worth knowing about, without a console to watch. */
+  log(text) {
+    Cu.reportError("hMail bulk send: " + text);
+  },
+
   // --------------------------------------------------------------- the tab
 
   registerTabType(win) {
@@ -102,14 +107,22 @@ var hMailMerge = {
       perTabPanel: "vbox",
       modes: { [self.TAB_MODE]: { type: self.TAB_MODE, maxTabs: 1 } },
       openTab(tab, args) {
-        tab.title = "Trộn thư";
+        tab.title = "Gửi hàng loạt";
         tab.panel.classList.add("hmail-merge-tab");
-        tab.panel.appendChild(self.buildPage(win, args?.seed));
+        try {
+          tab.panel.appendChild(self.buildPage(win, args?.seed));
+        } catch (e) {
+          self.log("buildPage failed: " + e + "\n" + (e.stack || ""));
+          // Say so on the page rather than leaving it blank.
+          const note = self.el(win.document, "div", "hmail-merge-page",
+            "Không dựng được trang gửi hàng loạt: " + (e.message || e));
+          tab.panel.appendChild(note);
+        }
       },
       closeTab() {},
       saveTabState() {},
       showTab(tab) {
-        tab.title = "Trộn thư";
+        tab.title = "Gửi hàng loạt";
       },
       persistTab() {
         return null;
@@ -178,7 +191,7 @@ var hMailMerge = {
     const page = el("div", "hmail-merge-page hmail-ai");
     page.id = "hmail-merge-page";
 
-    page.appendChild(el("div", "hmail-merge-title", "Trộn thư"));
+    page.appendChild(el("div", "hmail-merge-title", "Gửi hàng loạt"));
     page.appendChild(el("div", "hmail-ai-hint",
       "Một thư, nhiều người nhận, mỗi người một bản riêng. Dùng {{Tên cột}} " +
       "trong tiêu đề và nội dung để chèn thông tin của từng người; mỗi thư " +
@@ -194,7 +207,11 @@ var hMailMerge = {
       this.rows = this.fromAddressBook();
       this.refresh(win);
     });
-    source.append(fromCsv, fromBook);
+    // Pasting is often quicker than finding a file, and it works when the
+    // list came from a spreadsheet that was never saved.
+    const fromPaste = el("button", "hmail-ai-btn", "Dán danh sách…");
+    fromPaste.addEventListener("click", () => this.pasteList(win));
+    source.append(fromCsv, fromBook, fromPaste);
     page.appendChild(source);
 
     const summary = el("div", "hmail-ai-status", "Chưa có danh sách.");
@@ -215,6 +232,17 @@ var hMailMerge = {
     page.appendChild(subject);
 
     page.appendChild(el("label", "hmail-ai-label", "Nội dung"));
+
+    // The composer's own editor is a XUL <editor> wired into that window's
+    // globals; it cannot simply be dropped into a tab. So for anything beyond
+    // a short letter, the real composer writes it and hands it back here.
+    const openFull = el("button", "hmail-ai-btn",
+                        "Soạn trong cửa sổ soạn thư…");
+    openFull.title = "Mở cửa sổ soạn thư đầy đủ; xong bấm “Gửi hàng loạt” " +
+                     "trong cửa sổ đó để mang nội dung về đây";
+    openFull.addEventListener("click", () => this.editInComposer(win));
+    page.appendChild(openFull);
+
     page.appendChild(this.buildEditorToolbar(win, doc));
 
     const body = el("div", "hmail-merge-editor");
@@ -509,27 +537,84 @@ var hMailMerge = {
 
   // ------------------------------------------------------------- dữ liệu
 
+  /** Write the letter in the real composer, then send it back here. */
+  editInComposer(win) {
+    const doc = win.document;
+    try {
+      const fields = Cc["@mozilla.org/messengercompose/composefields;1"]
+        .createInstance(Ci.nsIMsgCompFields);
+      fields.subject = doc.getElementById("hmail-merge-subject").value || "";
+      fields.body = doc.getElementById("hmail-merge-body").innerHTML || "";
+
+      const params = Cc["@mozilla.org/messengercompose/composeparams;1"]
+        .createInstance(Ci.nsIMsgComposeParams);
+      params.composeFields = fields;
+      params.type = Ci.nsIMsgCompType.New;
+      params.format = Ci.nsIMsgCompFormat.HTML;
+      params.identity = this.identityByKey(
+        doc.getElementById("hmail-merge-identity").value);
+      MailServices.compose.OpenComposeWindowWithParams(null, params);
+    } catch (e) {
+      Services.prompt.alert(win, "Gửi hàng loạt",
+        "Không mở được cửa sổ soạn thư: " + (e.message || e));
+    }
+  },
+
+  /** For a list copied out of a spreadsheet rather than saved to a file. */
+  pasteList(win) {
+    const text = { value: "" };
+    const ok = Services.prompt.prompt(win, "Dán danh sách",
+      "Dán bảng vào đây — dòng đầu là tên cột, các cột cách nhau bằng dấu " +
+      "phẩy hoặc chấm phẩy.\n\nVí dụ:\nEmail,Tên,Công ty\n" +
+      "an@vidu.com,Anh An,Công ty A",
+      text, null, {});
+    if (!ok || !text.value.trim()) {
+      return;
+    }
+    try {
+      this.rows = this.parseCsv(text.value);
+      this.sourceName = "danh sách dán vào";
+      this.log(`pasteList: ${this.rows.length} dòng`);
+    } catch (e) {
+      this.rows = [];
+      Services.prompt.alert(win, "Gửi hàng loạt",
+        "Không đọc được danh sách: " + (e.message || e));
+    }
+    this.refresh(win);
+  },
+
   pickCsv(win) {
-    const picker = Cc["@mozilla.org/filepicker;1"]
-      .createInstance(Ci.nsIFilePicker);
-    picker.init(win.browsingContext, "Chọn danh sách người nhận",
-                Ci.nsIFilePicker.modeOpen);
-    picker.appendFilter("Bảng CSV (*.csv, *.txt)", "*.csv; *.txt");
-    picker.appendFilters(Ci.nsIFilePicker.filterAll);
-    picker.open(async result => {
-      if (result !== Ci.nsIFilePicker.returnOK || !picker.file) {
-        return;
-      }
-      try {
-        this.rows = this.parseCsv(await IOUtils.readUTF8(picker.file.path));
-        this.sourceName = picker.file.leafName;
-      } catch (e) {
-        this.rows = [];
-        Services.prompt.alert(win, "Trộn thư",
-          "Không đọc được tệp: " + (e.message || e));
-      }
-      this.refresh(win);
-    });
+    try {
+      const picker = Cc["@mozilla.org/filepicker;1"]
+        .createInstance(Ci.nsIFilePicker);
+      picker.init(win.browsingContext, "Chọn danh sách người nhận",
+                  Ci.nsIFilePicker.modeOpen);
+      picker.appendFilter("Bảng CSV (*.csv, *.txt)", "*.csv; *.txt");
+      picker.appendFilters(Ci.nsIFilePicker.filterAll);
+      picker.open(async result => {
+        this.log(`pickCsv: result=${result} file=${picker.file?.path}`);
+        if (result !== Ci.nsIFilePicker.returnOK || !picker.file) {
+          return;
+        }
+        try {
+          const text = await IOUtils.readUTF8(picker.file.path);
+          this.rows = this.parseCsv(text);
+          this.sourceName = picker.file.leafName;
+          this.log(`pickCsv: ${this.rows.length} dòng, cột: ` +
+                   this.columns().join("|"));
+        } catch (e) {
+          this.rows = [];
+          this.log("pickCsv failed: " + e);
+          Services.prompt.alert(win, "Gửi hàng loạt",
+            "Không đọc được tệp: " + (e.message || e));
+        }
+        this.refresh(win);
+      });
+    } catch (e) {
+      this.log("pickCsv init failed: " + e + "\n" + (e.stack || ""));
+      Services.prompt.alert(win, "Gửi hàng loạt",
+        "Không mở được hộp thoại chọn tệp: " + (e.message || e));
+    }
   },
 
   pickAttachments(win) {
@@ -815,17 +900,17 @@ var hMailMerge = {
 
   start(win) {
     if (this.job && !this.job.finished) {
-      Services.prompt.alert(win, "Trộn thư", "Một lần chạy đang diễn ra.");
+      Services.prompt.alert(win, "Gửi hàng loạt", "Một lần chạy đang diễn ra.");
       return;
     }
     const rows = this.rows || [];
     if (!rows.length) {
-      Services.prompt.alert(win, "Trộn thư", "Chưa có danh sách người nhận.");
+      Services.prompt.alert(win, "Gửi hàng loạt", "Chưa có danh sách người nhận.");
       return;
     }
     const settings = this.settings(win);
     if (!settings.to) {
-      Services.prompt.alert(win, "Trộn thư", "Chưa chọn cột địa chỉ.");
+      Services.prompt.alert(win, "Gửi hàng loạt", "Chưa chọn cột địa chỉ.");
       return;
     }
     const total = settings.limit ? Math.min(settings.limit, rows.length)
@@ -833,7 +918,7 @@ var hMailMerge = {
 
     if (settings.mode === "send") {
       const minutes = Math.round(total * settings.delay / 60);
-      if (!Services.prompt.confirm(win, "Trộn thư",
+      if (!Services.prompt.confirm(win, "Gửi hàng loạt",
             `Gửi ${total} thư, cách nhau ${settings.delay} giây` +
             (minutes ? ` (khoảng ${minutes} phút)` : "") + "?\n\n" +
             "Việc gửi vẫn tiếp tục kể cả khi bạn đóng thẻ này.")) {
@@ -987,7 +1072,7 @@ var hMailMerge = {
         .getService(Ci.nsIAlertsService);
       const alert = Cc["@mozilla.org/alert-notification;1"]
         .createInstance(Ci.nsIAlertNotification);
-      alert.init("hmail-merge", "", "Trộn thư", text, false, "");
+      alert.init("hmail-merge", "", "Gửi hàng loạt", text, false, "");
       alerts.showAlert(alert, null);
     } catch (e) {}
   },
@@ -1057,7 +1142,7 @@ var hMailMerge = {
       .createInstance(Ci.nsIFilePicker);
     picker.init(win.browsingContext, "Lưu kết quả",
                 Ci.nsIFilePicker.modeSave);
-    picker.defaultString = "ket-qua-tron-thu.csv";
+    picker.defaultString = "ket-qua-gui-hang-loat.csv";
     picker.appendFilter("CSV", "*.csv");
     picker.open(async result => {
       if (result === Ci.nsIFilePicker.returnCancel || !picker.file) {
@@ -1067,7 +1152,7 @@ var hMailMerge = {
         await IOUtils.writeUTF8(picker.file.path,
                                 "﻿" + lines.join("\r\n"));
       } catch (e) {
-        Services.prompt.alert(win, "Trộn thư",
+        Services.prompt.alert(win, "Gửi hàng loạt",
           "Không lưu được: " + (e.message || e));
       }
     });
