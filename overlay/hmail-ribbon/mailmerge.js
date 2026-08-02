@@ -1,81 +1,78 @@
 /* hMail Desktop — gửi hàng loạt
  * MIT License, Copyright (c) 2026 HQV Software
  *
- * Sending the same letter to two hundred people, each addressed personally, is
- * a job rather than a command: it needs a list, a draft, settings, a preview,
- * and something to watch while it runs. So it lives in its own tab, and the
- * run keeps going when that tab is closed — the job is held by the module,
- * not by the page showing it.
+ * One letter, many recipients, each addressed personally.
  *
- * Sending is paced on purpose. Mail servers throttle or block clients that
+ * The letter is written in Thunderbird's own composer — its editor, its
+ * formatting toolbar, its spell checker, its attachments. Nothing about
+ * writing is reimplemented here, because a home-made editor is always going
+ * to be worse than the real one. What this adds is the part the composer has
+ * no idea about: the recipient list, the substitution, the pacing, and the
+ * run itself, in a panel docked beside the message being written.
+ *
+ * Sending is paced on purpose: mail servers throttle or block clients that
  * fire hundreds of messages in a burst, so the delay between messages and the
- * batch pause are settings, not hard-coded numbers.
+ * batch pause are settings rather than hard-coded numbers.
  *
- * Nothing is sent until the user presses Gửi, and "Lưu vào Nháp" is offered
- * alongside so the whole run can be inspected first.
+ * The job is held by this module, not by the window showing it, so closing
+ * the composer mid-run does not stop the run.
  */
 
 "use strict";
 
 var hMailMerge = {
-  TAB_MODE: "hmailMerge",
+  PANEL_ID: "hmail-merge-panel",
   BUTTON_ID: "hmail-merge-button",
 
-  /**
-   * The running job. Kept on the module so closing the tab does not stop it.
-   * { rows, index, sent, failed, results, paused, stopped, settings }
-   */
+  /** { rows, index, sent, failed, results, paused, stopped, settings } */
   job: null,
 
   // ------------------------------------------------------------ khởi động
 
-  init(win) {
+  /** In the 3-pane: the ribbon opens a composer with the panel already up. */
+  init() {},
+
+  openTab(win) {
+    // Kept for the ribbon: a bulk send starts by writing the letter, so open
+    // the composer and put the panel up in it.
     try {
-      this.registerTabType(win);
+      const params = Cc["@mozilla.org/messengercompose/composeparams;1"]
+        .createInstance(Ci.nsIMsgComposeParams);
+      params.type = Ci.nsIMsgCompType.New;
+      params.format = Ci.nsIMsgCompFormat.HTML;
+      params.identity = MailServices.accounts.defaultAccount?.defaultIdentity;
+      MailServices.compose.OpenComposeWindowWithParams(null, params);
+      this.pendingOpen = true;
     } catch (e) {
-      Cu.reportError("hMail merge init failed: " + e);
+      Services.prompt.alert(win, "Gửi hàng loạt",
+        "Không mở được cửa sổ soạn thư: " + (e.message || e));
     }
   },
 
-  /** In the composer: a button that carries the draft into the merge tab. */
   initCompose(win) {
     try {
       const doc = win.document;
-      if (doc.getElementById(this.BUTTON_ID)) {
-        return;
+      if (!doc.getElementById(this.BUTTON_ID)) {
+        const toolbar = doc.getElementById("composeToolbar2");
+        if (toolbar) {
+          const button = doc.createXULElement("toolbarbutton");
+          button.id = this.BUTTON_ID;
+          button.className = "toolbarbutton-1";
+          button.setAttribute("label", "Gửi hàng loạt");
+          button.setAttribute("tooltiptext",
+            "Gửi thư này cho nhiều người, mỗi người một bản riêng");
+          button.addEventListener("command", () => this.toggle(win));
+          toolbar.appendChild(button);
+        }
       }
-      const toolbar = doc.getElementById("composeToolbar2");
-      if (!toolbar) {
-        return;
+      // Opened from the ribbon: show the panel as soon as the window is up.
+      if (this.pendingOpen) {
+        this.pendingOpen = false;
+        win.setTimeout(() => this.open(win), 600);
       }
-      const button = doc.createXULElement("toolbarbutton");
-      button.id = this.BUTTON_ID;
-      button.className = "toolbarbutton-1";
-      button.setAttribute("label", "Gửi hàng loạt");
-      button.setAttribute("tooltiptext",
-        "Gửi thư này cho nhiều người, mỗi người một bản riêng");
-      button.addEventListener("command", () => this.fromComposer(win));
-      toolbar.appendChild(button);
     } catch (e) {
-      Cu.reportError("hMail merge compose button failed: " + e);
+      Cu.reportError("hMail bulk send init failed: " + e);
     }
-  },
-
-  fromComposer(win) {
-    let seed = { subject: "", body: "" };
-    try {
-      seed.subject = win.document.getElementById("msgSubject")?.value || "";
-      seed.body = win.getBrowser()?.contentDocument?.body?.innerHTML || "";
-    } catch (e) {}
-
-    const main = Services.wm.getMostRecentWindow("mail:3pane");
-    if (!main) {
-      Services.prompt.alert(win, "Gửi hàng loạt",
-        "Hãy mở cửa sổ thư chính trước.");
-      return;
-    }
-    main.hMailMerge.openTab(main, seed);
-    main.focus();
   },
 
   el(doc, tag, cls, text) {
@@ -89,217 +86,124 @@ var hMailMerge = {
     return node;
   },
 
-  /** Problems worth knowing about, without a console to watch. */
   log(text) {
     Cu.reportError("hMail bulk send: " + text);
   },
 
-  // --------------------------------------------------------------- the tab
+  // ---------------------------------------------------------------- panel
 
-  registerTabType(win) {
-    const tabmail = win.document.getElementById("tabmail");
-    if (!tabmail || tabmail.tabModes?.[this.TAB_MODE]) {
-      return;
-    }
-    const self = this;
-    tabmail.registerTabType({
-      name: self.TAB_MODE,
-      perTabPanel: "vbox",
-      modes: { [self.TAB_MODE]: { type: self.TAB_MODE, maxTabs: 1 } },
-      openTab(tab, args) {
-        tab.title = "Gửi hàng loạt";
-        tab.panel.classList.add("hmail-merge-tab");
-        try {
-          tab.panel.appendChild(self.buildPage(win, args?.seed));
-        } catch (e) {
-          self.log("buildPage failed: " + e + "\n" + (e.stack || ""));
-          // Say so on the page rather than leaving it blank.
-          const note = self.el(win.document, "div", "hmail-merge-page",
-            "Không dựng được trang gửi hàng loạt: " + (e.message || e));
-          tab.panel.appendChild(note);
-        }
-      },
-      closeTab() {},
-      saveTabState() {},
-      showTab(tab) {
-        tab.title = "Gửi hàng loạt";
-      },
-      persistTab() {
-        return null;
-      },
-      restoreTab(tabmailToRestore) {
-        tabmailToRestore.openTab(self.TAB_MODE, {});
-      },
-      supportsCommand() {
-        return false;
-      },
-    });
-  },
-
-  openTab(win, seed) {
-    const tabmail = win.document.getElementById("tabmail");
-    if (!tabmail) {
-      return;
-    }
-    this.registerTabType(win);
-    const existing = tabmail.tabInfo.find(t => t.mode?.name === this.TAB_MODE);
-    if (existing) {
-      tabmail.switchToTab(existing);
-      if (seed) {
-        this.applySeed(win, seed);
-      }
-      return;
-    }
-    tabmail.openTab(this.TAB_MODE, { seed });
-    const opened = tabmail.tabInfo.find(t => t.mode?.name === this.TAB_MODE);
-    if (opened) {
-      tabmail.switchToTab(opened);
+  toggle(win) {
+    if (win.document.getElementById(this.PANEL_ID)) {
+      this.close(win);
+    } else {
+      this.open(win);
     }
   },
 
-  applySeed(win, seed) {
+  close(win) {
     const doc = win.document;
-    const subject = doc.getElementById("hmail-merge-subject");
-    const body = doc.getElementById("hmail-merge-body");
-    if (subject && seed.subject) {
-      subject.value = seed.subject;
-    }
-    if (body && seed.body) {
-      body.value = this.htmlToText(seed.body);
-    }
-    this.refresh(win);
+    doc.getElementById(this.PANEL_ID)?.remove();
+    doc.getElementById(this.PANEL_ID + "-splitter")?.remove();
   },
 
-  htmlToText(html) {
-    return String(html)
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<\/p>/gi, "\n\n")
-      .replace(/<[^>]+>/g, "")
-      .replace(/&nbsp;/g, " ")
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .trim();
+  open(win) {
+    try {
+      this.build(win);
+    } catch (e) {
+      this.log("panel failed: " + e + "\n" + (e.stack || ""));
+      Services.prompt.alert(win, "Gửi hàng loạt",
+        "Không mở được bảng gửi hàng loạt: " + (e.message || e));
+    }
   },
 
-  // -------------------------------------------------------------- the page
-
-  buildPage(win, seed) {
+  build(win) {
     const doc = win.document;
+    const area = doc.getElementById("messageArea");
+    if (!area || doc.getElementById(this.PANEL_ID)) {
+      return;
+    }
     const el = (t, c, x) => this.el(doc, t, c, x);
 
-    const page = el("div", "hmail-merge-page hmail-ai");
-    page.id = "hmail-merge-page";
+    // Thunderbird's own splitter, the one the contacts sidebar uses.
+    let splitter;
+    try {
+      splitter = doc.createElement("hr", { is: "pane-splitter" });
+      splitter.setAttribute("is", "pane-splitter");
+      splitter.setAttribute("resize-direction", "horizontal");
+      splitter.setAttribute("resize-id", this.PANEL_ID);
+    } catch (e) {
+      splitter = el("div");
+    }
+    splitter.id = this.PANEL_ID + "-splitter";
 
-    page.appendChild(el("div", "hmail-merge-title", "Gửi hàng loạt"));
-    page.appendChild(el("div", "hmail-ai-hint",
-      "Một thư, nhiều người nhận, mỗi người một bản riêng. Dùng {{Tên cột}} " +
-      "trong tiêu đề và nội dung để chèn thông tin của từng người; mỗi thư " +
-      "chỉ có một người nhận nên không ai thấy địa chỉ của ai."));
+    const panel = el("div", "hmail-ai hmail-merge-panel");
+    panel.id = this.PANEL_ID;
+    let width = 420;
+    try {
+      width = Services.prefs.getIntPref("hmail.merge.width");
+    } catch (e) {}
+    panel.style.width = `${width}px`;
 
-    // --- 1. danh sách người nhận -----------------------------------------
-    page.appendChild(el("div", "hmail-ai-section", "1. Danh sách người nhận"));
+    // Header ---------------------------------------------------------------
+    const header = el("div", "hmail-compose-ai-header");
+    header.append(el("span", "hmail-compose-ai-title", "Gửi hàng loạt"));
+    const close = el("button", "hmail-compose-ai-close", "✕");
+    close.title = "Đóng";
+    close.addEventListener("click", () => this.close(win));
+    header.appendChild(close);
+    panel.appendChild(header);
+
+    const scroll = el("div", "hmail-merge-scroll");
+    panel.appendChild(scroll);
+
+    scroll.appendChild(el("div", "hmail-ai-hint",
+      "Viết thư như bình thường ở bên trái. Dùng {{Tên cột}} trong tiêu đề " +
+      "và nội dung để chèn thông tin riêng của từng người. Mỗi người nhận " +
+      "một thư riêng nên không ai thấy địa chỉ của ai."));
+
+    // 1. list --------------------------------------------------------------
+    scroll.appendChild(el("div", "hmail-ai-section", "1. Danh sách người nhận"));
     const source = el("div", "hmail-ai-row");
     const fromCsv = el("button", "hmail-ai-btn", "Mở tệp CSV…");
     fromCsv.addEventListener("click", () => this.pickCsv(win));
-    const fromBook = el("button", "hmail-ai-btn", "Lấy từ sổ địa chỉ");
+    const fromBook = el("button", "hmail-ai-btn", "Sổ địa chỉ");
     fromBook.addEventListener("click", () => {
       this.rows = this.fromAddressBook();
       this.refresh(win);
     });
-    // Pasting is often quicker than finding a file, and it works when the
-    // list came from a spreadsheet that was never saved.
-    const fromPaste = el("button", "hmail-ai-btn", "Dán danh sách…");
+    const fromPaste = el("button", "hmail-ai-btn", "Dán…");
     fromPaste.addEventListener("click", () => this.pasteList(win));
     source.append(fromCsv, fromBook, fromPaste);
-    page.appendChild(source);
+    scroll.appendChild(source);
 
     const summary = el("div", "hmail-ai-status", "Chưa có danh sách.");
     summary.id = "hmail-merge-summary";
-    page.appendChild(summary);
+    scroll.appendChild(summary);
 
     const table = el("div", "hmail-merge-table");
     table.id = "hmail-merge-table";
-    page.appendChild(table);
+    scroll.appendChild(table);
 
-    // --- 2. nội dung ------------------------------------------------------
-    page.appendChild(el("div", "hmail-ai-section", "2. Nội dung thư"));
-    page.appendChild(el("label", "hmail-ai-label", "Tiêu đề"));
-    const subject = el("input", "hmail-ai-field");
-    subject.id = "hmail-merge-subject";
-    subject.value = seed?.subject || "";
-    subject.addEventListener("input", () => this.refresh(win));
-    page.appendChild(subject);
-
-    page.appendChild(el("label", "hmail-ai-label", "Nội dung"));
-
-    // The composer's own editor is a XUL <editor> wired into that window's
-    // globals; it cannot simply be dropped into a tab. So for anything beyond
-    // a short letter, the real composer writes it and hands it back here.
-    const openFull = el("button", "hmail-ai-btn",
-                        "Soạn trong cửa sổ soạn thư…");
-    openFull.title = "Mở cửa sổ soạn thư đầy đủ; xong bấm “Gửi hàng loạt” " +
-                     "trong cửa sổ đó để mang nội dung về đây";
-    openFull.addEventListener("click", () => this.editInComposer(win));
-    page.appendChild(openFull);
-
-    page.appendChild(this.buildEditorToolbar(win, doc));
-
-    const body = el("div", "hmail-merge-editor");
-    body.id = "hmail-merge-body";
-    body.setAttribute("contenteditable", "true");
-    if (seed?.body) {
-      // Seeded from the composer, which produced this markup itself.
-      body.innerHTML = seed.body;
-    }
-    body.addEventListener("input", () => this.refresh(win));
-    page.appendChild(body);
-
-    const attachRow = el("div", "hmail-ai-row");
-    const attachBtn = el("button", "hmail-ai-btn", "Đính kèm tệp…");
-    attachBtn.addEventListener("click", () => this.pickAttachments(win));
-    const attachList = el("span", "hmail-merge-attachments",
-                          "Không có tệp đính kèm");
-    attachList.id = "hmail-merge-attachments";
-    attachRow.append(attachBtn, attachList);
-    page.appendChild(attachRow);
-
-    // --- 3. tham số -------------------------------------------------------
-    page.appendChild(el("div", "hmail-ai-section", "3. Tham số gửi"));
-
-    const grid = el("div", "hmail-merge-grid");
+    // 2. settings ----------------------------------------------------------
+    scroll.appendChild(el("div", "hmail-ai-section", "2. Tham số gửi"));
 
     const field = (label, node, hint) => {
-      const cell = el("div", "hmail-merge-cell");
-      cell.appendChild(el("label", "hmail-ai-label", label));
-      cell.appendChild(node);
+      scroll.appendChild(el("label", "hmail-ai-label", label));
+      scroll.appendChild(node);
       if (hint) {
-        cell.appendChild(el("div", "hmail-ai-hint", hint));
+        scroll.appendChild(el("div", "hmail-ai-hint", hint));
       }
-      grid.appendChild(cell);
       return node;
     };
 
     const toField = el("select", "hmail-ai-field");
     toField.id = "hmail-merge-to";
+    toField.addEventListener("change", () => this.refresh(win));
     field("Cột địa chỉ người nhận", toField);
 
     const ccField = el("select", "hmail-ai-field");
     ccField.id = "hmail-merge-cc";
     field("Cột CC (tuỳ chọn)", ccField);
-
-    const identity = el("select", "hmail-ai-field");
-    identity.id = "hmail-merge-identity";
-    for (const one of MailServices.accounts.allIdentities) {
-      if (!one.email) {
-        continue;
-      }
-      const opt = el("option", null,
-        one.fullName ? `${one.fullName} <${one.email}>` : one.email);
-      opt.value = one.key;
-      identity.appendChild(opt);
-    }
-    field("Gửi từ tài khoản", identity);
 
     const mode = el("select", "hmail-ai-field");
     mode.id = "hmail-merge-mode";
@@ -313,60 +217,50 @@ var hMailMerge = {
     }
     field("Cách gửi", mode);
 
-    const delay = el("input", "hmail-ai-field");
-    delay.id = "hmail-merge-delay";
-    delay.type = "number";
-    delay.min = "0";
-    delay.max = "600";
-    delay.value = "3";
-    field("Giãn cách giữa hai thư (giây)", delay,
-      "Gửi dồn dập dễ bị máy chủ chặn hoặc xếp vào thư rác.");
+    const number = (id, value, min, max) => {
+      const input = el("input", "hmail-ai-field");
+      input.id = id;
+      input.type = "number";
+      input.min = String(min);
+      if (max !== undefined) {
+        input.max = String(max);
+      }
+      input.value = String(value);
+      return input;
+    };
 
-    const batch = el("input", "hmail-ai-field");
-    batch.id = "hmail-merge-batch";
-    batch.type = "number";
-    batch.min = "0";
-    batch.value = "50";
-    field("Số thư mỗi đợt", batch, "0 nghĩa là không chia đợt.");
+    field("Giãn cách giữa hai thư (giây)",
+          number("hmail-merge-delay", 3, 0, 600),
+          "Gửi dồn dập dễ bị máy chủ chặn hoặc xếp vào thư rác.");
+    field("Số thư mỗi đợt", number("hmail-merge-batch", 50, 0),
+          "0 nghĩa là không chia đợt.");
+    field("Nghỉ giữa hai đợt (giây)", number("hmail-merge-pause", 300, 0));
+    field("Giới hạn số thư lần chạy này", number("hmail-merge-limit", 0, 0),
+          "0 nghĩa là gửi hết danh sách.");
 
-    const pause = el("input", "hmail-ai-field");
-    pause.id = "hmail-merge-pause";
-    pause.type = "number";
-    pause.min = "0";
-    pause.value = "300";
-    field("Nghỉ giữa hai đợt (giây)", pause);
-
-    const limit = el("input", "hmail-ai-field");
-    limit.id = "hmail-merge-limit";
-    limit.type = "number";
-    limit.min = "0";
-    limit.value = "0";
-    field("Giới hạn số thư lần chạy này", limit,
-      "0 nghĩa là gửi hết danh sách.");
-
-    const skipInvalid = el("select", "hmail-ai-field");
-    skipInvalid.id = "hmail-merge-skip";
+    const onError = el("select", "hmail-ai-field");
+    onError.id = "hmail-merge-skip";
     for (const [value, label] of [
       ["skip", "Bỏ qua và ghi vào kết quả"],
       ["stop", "Dừng cả lần chạy"],
     ]) {
       const opt = el("option", null, label);
       opt.value = value;
-      skipInvalid.appendChild(opt);
+      onError.appendChild(opt);
     }
-    field("Khi gặp dòng lỗi", skipInvalid);
+    field("Khi gặp dòng lỗi", onError);
 
-    page.appendChild(grid);
-
-    // --- 4. xem trước -----------------------------------------------------
-    page.appendChild(el("div", "hmail-ai-section", "4. Xem trước"));
+    // 3. preview -----------------------------------------------------------
+    scroll.appendChild(el("div", "hmail-ai-section", "3. Xem trước"));
+    const refreshBtn = el("button", "hmail-ai-btn", "Cập nhật xem trước");
+    refreshBtn.addEventListener("click", () => this.refresh(win));
+    scroll.appendChild(refreshBtn);
     const preview = el("div", "hmail-merge-preview");
     preview.id = "hmail-merge-preview";
-    page.appendChild(preview);
+    scroll.appendChild(preview);
 
-    // --- 5. chạy ----------------------------------------------------------
-    page.appendChild(el("div", "hmail-ai-section", "5. Thực hiện"));
-
+    // 4. run ---------------------------------------------------------------
+    scroll.appendChild(el("div", "hmail-ai-section", "4. Thực hiện"));
     const actions = el("div", "hmail-ai-actions");
     const start = el("button", "hmail-ai-btn primary", "Bắt đầu");
     start.id = "hmail-merge-start";
@@ -383,184 +277,85 @@ var hMailMerge = {
         this.job.stopped = true;
       }
     });
-    const exportBtn = el("button", "hmail-ai-btn", "Xuất kết quả CSV");
+    const exportBtn = el("button", "hmail-ai-btn", "Xuất kết quả");
     exportBtn.id = "hmail-merge-export";
     exportBtn.hidden = true;
     exportBtn.addEventListener("click", () => this.exportResults(win));
     actions.append(start, pauseBtn, stopBtn, exportBtn);
-    page.appendChild(actions);
+    scroll.appendChild(actions);
 
     const progress = el("div", "hmail-merge-progress");
     progress.id = "hmail-merge-progress";
-    page.appendChild(progress);
+    scroll.appendChild(progress);
 
     const log = el("div", "hmail-merge-log");
     log.id = "hmail-merge-log";
-    page.appendChild(log);
+    scroll.appendChild(log);
+
+    area.append(splitter, panel);
+    hMailAI.applyLook(win, panel);
+
+    const remember = () => {
+      const w = Math.round(panel.getBoundingClientRect().width);
+      if (w > 200) {
+        try {
+          Services.prefs.setIntPref("hmail.merge.width", w);
+        } catch (e) {}
+      }
+    };
+    win.addEventListener("mouseup", remember);
 
     win.setTimeout(() => {
       this.refresh(win);
       this.paint(win);
     }, 0);
-    return page;
   },
 
-  /**
-   * The formatting row above the editor. execCommand is deprecated on the
-   * web, but it is exactly what Thunderbird's own composer uses and it is the
-   * only thing that edits a contenteditable region without pulling in an
-   * editor library.
-   */
-  buildEditorToolbar(win, doc) {
-    const el = (t, c, x) => this.el(doc, t, c, x);
-    const bar = el("div", "hmail-merge-toolbar");
+  // ------------------------------------------------- what the composer has
 
-    const focusEditor = () => {
-      const editor = doc.getElementById("hmail-merge-body");
-      if (editor && doc.activeElement !== editor) {
-        editor.focus();
-      }
-      return editor;
-    };
+  subject(win) {
+    return win.document.getElementById("msgSubject")?.value || "";
+  },
 
-    const command = (label, title, cmd, arg) => {
-      const button = el("button", "hmail-merge-tool", label);
-      button.title = title;
-      // mousedown, not click: clicking a button would take the selection away
-      // from the editor before the command could act on it.
-      button.addEventListener("mousedown", event => {
-        event.preventDefault();
-        focusEditor();
-        try {
-          doc.execCommand(cmd, false, arg);
-        } catch (e) {}
-        this.refresh(win);
-      });
-      return button;
-    };
-
-    bar.append(
-      command("B", "Đậm (Ctrl+B)", "bold"),
-      command("I", "Nghiêng (Ctrl+I)", "italic"),
-      command("U", "Gạch chân (Ctrl+U)", "underline"),
-      command("S", "Gạch ngang", "strikeThrough"),
-      el("span", "hmail-merge-tool-sep"),
-      command("•", "Danh sách dấu chấm", "insertUnorderedList"),
-      command("1.", "Danh sách đánh số", "insertOrderedList"),
-      command("⇤", "Giảm thụt lề", "outdent"),
-      command("⇥", "Tăng thụt lề", "indent"),
-      el("span", "hmail-merge-tool-sep"),
-      command("↤", "Canh trái", "justifyLeft"),
-      command("↔", "Canh giữa", "justifyCenter"),
-      command("↦", "Canh phải", "justifyRight"));
-
-    // Font size.
-    const size = el("select", "hmail-merge-tool-select");
-    size.title = "Cỡ chữ";
-    for (const [value, label] of [
-      ["", "Cỡ chữ"], ["2", "Nhỏ"], ["3", "Thường"], ["4", "Lớn"],
-      ["5", "Rất lớn"], ["6", "Tiêu đề"],
-    ]) {
-      const opt = el("option", null, label);
-      opt.value = value;
-      size.appendChild(opt);
+  bodyHtml(win) {
+    try {
+      return win.getBrowser()?.contentDocument?.body?.innerHTML || "";
+    } catch (e) {
+      return "";
     }
-    size.addEventListener("change", () => {
-      if (!size.value) {
-        return;
+  },
+
+  bodyText(win) {
+    return this.htmlToText(this.bodyHtml(win));
+  },
+
+  htmlToText(html) {
+    return String(html)
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .trim();
+  },
+
+  attachments(win) {
+    const list = [];
+    try {
+      const bucket = win.document.getElementById("attachmentBucket");
+      for (const item of bucket?.children || []) {
+        if (item.attachment?.url) {
+          list.push(item.attachment.url);
+        }
       }
-      focusEditor();
-      try {
-        doc.execCommand("fontSize", false, size.value);
-      } catch (e) {}
-      size.value = "";
-      this.refresh(win);
-    });
-    bar.appendChild(size);
-
-    // Text colour.
-    const colour = el("input", "hmail-merge-tool-colour");
-    colour.type = "color";
-    colour.title = "Màu chữ";
-    colour.value = "#1b1b1f";
-    colour.addEventListener("change", () => {
-      focusEditor();
-      try {
-        doc.execCommand("foreColor", false, colour.value);
-      } catch (e) {}
-      this.refresh(win);
-    });
-    bar.appendChild(colour);
-
-    bar.appendChild(el("span", "hmail-merge-tool-sep"));
-
-    // Link.
-    const link = el("button", "hmail-merge-tool", "🔗");
-    link.title = "Chèn liên kết";
-    link.addEventListener("mousedown", event => {
-      event.preventDefault();
-      const url = { value: "https://" };
-      if (!Services.prompt.prompt(win, "Chèn liên kết",
-            "Địa chỉ liên kết:", url, null, {})) {
-        return;
-      }
-      focusEditor();
-      try {
-        doc.execCommand("createLink", false, url.value);
-      } catch (e) {}
-      this.refresh(win);
-    });
-    bar.appendChild(link);
-
-    bar.appendChild(command("✕", "Xoá định dạng", "removeFormat"));
-
-    // Insert a placeholder for one of the columns, which is the whole point
-    // of a merge and awkward to type by hand.
-    const insert = el("select", "hmail-merge-tool-select");
-    insert.id = "hmail-merge-insert";
-    insert.title = "Chèn ô thay thế";
-    bar.appendChild(insert);
-    insert.addEventListener("change", () => {
-      if (!insert.value) {
-        return;
-      }
-      focusEditor();
-      try {
-        doc.execCommand("insertText", false, `{{${insert.value}}}`);
-      } catch (e) {}
-      insert.value = "";
-      this.refresh(win);
-    });
-
-    return bar;
+    } catch (e) {}
+    return list;
   },
 
   // ------------------------------------------------------------- dữ liệu
 
-  /** Write the letter in the real composer, then send it back here. */
-  editInComposer(win) {
-    const doc = win.document;
-    try {
-      const fields = Cc["@mozilla.org/messengercompose/composefields;1"]
-        .createInstance(Ci.nsIMsgCompFields);
-      fields.subject = doc.getElementById("hmail-merge-subject").value || "";
-      fields.body = doc.getElementById("hmail-merge-body").innerHTML || "";
-
-      const params = Cc["@mozilla.org/messengercompose/composeparams;1"]
-        .createInstance(Ci.nsIMsgComposeParams);
-      params.composeFields = fields;
-      params.type = Ci.nsIMsgCompType.New;
-      params.format = Ci.nsIMsgCompFormat.HTML;
-      params.identity = this.identityByKey(
-        doc.getElementById("hmail-merge-identity").value);
-      MailServices.compose.OpenComposeWindowWithParams(null, params);
-    } catch (e) {
-      Services.prompt.alert(win, "Gửi hàng loạt",
-        "Không mở được cửa sổ soạn thư: " + (e.message || e));
-    }
-  },
-
-  /** For a list copied out of a spreadsheet rather than saved to a file. */
   pasteList(win) {
     const text = { value: "" };
     const ok = Services.prompt.prompt(win, "Dán danh sách",
@@ -574,7 +369,6 @@ var hMailMerge = {
     try {
       this.rows = this.parseCsv(text.value);
       this.sourceName = "danh sách dán vào";
-      this.log(`pasteList: ${this.rows.length} dòng`);
     } catch (e) {
       this.rows = [];
       Services.prompt.alert(win, "Gửi hàng loạt",
@@ -592,52 +386,23 @@ var hMailMerge = {
       picker.appendFilter("Bảng CSV (*.csv, *.txt)", "*.csv; *.txt");
       picker.appendFilters(Ci.nsIFilePicker.filterAll);
       picker.open(async result => {
-        this.log(`pickCsv: result=${result} file=${picker.file?.path}`);
         if (result !== Ci.nsIFilePicker.returnOK || !picker.file) {
           return;
         }
         try {
-          const text = await IOUtils.readUTF8(picker.file.path);
-          this.rows = this.parseCsv(text);
+          this.rows = this.parseCsv(await IOUtils.readUTF8(picker.file.path));
           this.sourceName = picker.file.leafName;
-          this.log(`pickCsv: ${this.rows.length} dòng, cột: ` +
-                   this.columns().join("|"));
         } catch (e) {
           this.rows = [];
-          this.log("pickCsv failed: " + e);
           Services.prompt.alert(win, "Gửi hàng loạt",
             "Không đọc được tệp: " + (e.message || e));
         }
         this.refresh(win);
       });
     } catch (e) {
-      this.log("pickCsv init failed: " + e + "\n" + (e.stack || ""));
       Services.prompt.alert(win, "Gửi hàng loạt",
         "Không mở được hộp thoại chọn tệp: " + (e.message || e));
     }
-  },
-
-  pickAttachments(win) {
-    const picker = Cc["@mozilla.org/filepicker;1"]
-      .createInstance(Ci.nsIFilePicker);
-    picker.init(win.browsingContext, "Chọn tệp đính kèm",
-                Ci.nsIFilePicker.modeOpenMultiple);
-    picker.appendFilters(Ci.nsIFilePicker.filterAll);
-    picker.open(result => {
-      if (result !== Ci.nsIFilePicker.returnOK) {
-        return;
-      }
-      this.attachments = [];
-      for (const file of picker.files) {
-        this.attachments.push(file.QueryInterface(Ci.nsIFile));
-      }
-      const label = win.document.getElementById("hmail-merge-attachments");
-      if (label) {
-        label.textContent = this.attachments.length
-          ? this.attachments.map(f => f.leafName).join(", ")
-          : "Không có tệp đính kèm";
-      }
-    });
   },
 
   /** Quoted fields, doubled quotes, comma or semicolon. */
@@ -716,7 +481,7 @@ var hMailMerge = {
         });
       }
     }
-    this.sourceName = "Sổ địa chỉ";
+    this.sourceName = "sổ địa chỉ";
     return records;
   },
 
@@ -742,11 +507,7 @@ var hMailMerge = {
     });
   },
 
-  /**
-   * Same substitution, but for a template that is already HTML: the value
-   * from the list is escaped so a stray "<" in someone's company name cannot
-   * become markup.
-   */
+  /** Same, for a template that is already HTML: values get escaped. */
   fillHtml(template, record) {
     return String(template).replace(/\{\{\s*([^}]+?)\s*\}\}/g, (whole, key) => {
       const found = Object.keys(record).find(
@@ -767,22 +528,21 @@ var hMailMerge = {
     return [...found];
   },
 
-  // ---------------------------------------------------------- vẽ lại trang
+  // ---------------------------------------------------------- vẽ lại bảng
 
   refresh(win) {
     const doc = win.document;
-    if (!doc.getElementById("hmail-merge-page")) {
+    if (!doc.getElementById(this.PANEL_ID)) {
       return;
     }
+    const el = (t, c, x) => this.el(doc, t, c, x);
     const rows = this.rows || [];
     const summary = doc.getElementById("hmail-merge-summary");
     const table = doc.getElementById("hmail-merge-table");
     const toField = doc.getElementById("hmail-merge-to");
     const ccField = doc.getElementById("hmail-merge-cc");
     const preview = doc.getElementById("hmail-merge-preview");
-    const el = (t, c, x) => this.el(doc, t, c, x);
 
-    // Recipient columns.
     const previousTo = toField.value;
     const previousCc = ccField.value;
     toField.textContent = "";
@@ -801,23 +561,8 @@ var hMailMerge = {
       ? previousTo : this.guessEmailColumn();
     ccField.value = this.columns().includes(previousCc) ? previousCc : "";
 
-    // The column list for the "insert placeholder" menu.
-    const insert = doc.getElementById("hmail-merge-insert");
-    if (insert) {
-      insert.textContent = "";
-      const head = el("option", null, "Chèn ô thay thế");
-      head.value = "";
-      insert.appendChild(head);
-      for (const name of this.columns()) {
-        const opt = el("option", null, name);
-        opt.value = name;
-        insert.appendChild(opt);
-      }
-    }
-
-    // Summary and the placeholder check.
-    const subject = doc.getElementById("hmail-merge-subject").value;
-    const body = doc.getElementById("hmail-merge-body").innerHTML || "";
+    const subject = this.subject(win);
+    const body = this.bodyHtml(win);
     const keys = [...new Set([...this.placeholders(subject),
                               ...this.placeholders(body)])];
     const missing = keys.filter(k =>
@@ -826,10 +571,9 @@ var hMailMerge = {
     summary.textContent = rows.length
       ? `${rows.length} người nhận từ ${this.sourceName || "danh sách"}. ` +
         (keys.length ? `Ô thay thế: ${keys.join(", ")}. ` : "") +
-        (missing.length ? `Không tìm thấy cột: ${missing.join(", ")}.` : "")
+        (missing.length ? `Không có cột: ${missing.join(", ")}.` : "")
       : "Chưa có danh sách.";
 
-    // First rows, so the columns can be checked at a glance.
     table.textContent = "";
     if (rows.length) {
       const head = el("div", "hmail-merge-tr head");
@@ -837,31 +581,28 @@ var hMailMerge = {
         head.appendChild(el("span", "hmail-merge-td", name));
       }
       table.appendChild(head);
-      for (const row of rows.slice(0, 5)) {
+      for (const row of rows.slice(0, 4)) {
         const tr = el("div", "hmail-merge-tr");
         for (const name of this.columns()) {
           tr.appendChild(el("span", "hmail-merge-td", String(row[name] ?? "")));
         }
         table.appendChild(tr);
       }
-      if (rows.length > 5) {
+      if (rows.length > 4) {
         table.appendChild(el("div", "hmail-ai-hint",
-          `… và ${rows.length - 5} dòng nữa.`));
+          `… và ${rows.length - 4} dòng nữa.`));
       }
     }
 
-    // Preview of the first three letters as they will be sent.
     preview.textContent = "";
-    for (const row of rows.slice(0, 3)) {
+    for (const row of rows.slice(0, 2)) {
       const item = el("div", "hmail-merge-item");
       item.append(
         el("div", "hmail-merge-to-line",
            `Đến: ${this.fill(row[toField.value] || "", row)}`),
         el("div", "hmail-merge-subject", this.fill(subject, row)),
-        // Shown as text: the letter's own markup is the user's, but the
-        // values coming from the list are not, and this page runs in chrome.
         el("div", "hmail-merge-bodyline",
-           this.htmlToText(this.fillHtml(body, row)).slice(0, 400)));
+           this.htmlToText(this.fillHtml(body, row)).slice(0, 300)));
       preview.appendChild(item);
     }
   },
@@ -877,35 +618,30 @@ var hMailMerge = {
     return {
       to: doc.getElementById("hmail-merge-to").value,
       cc: doc.getElementById("hmail-merge-cc").value,
-      identityKey: doc.getElementById("hmail-merge-identity").value,
       mode: doc.getElementById("hmail-merge-mode").value,
       delay: number("hmail-merge-delay", 3),
       batch: number("hmail-merge-batch", 0),
       pause: number("hmail-merge-pause", 0),
       limit: number("hmail-merge-limit", 0),
       onError: doc.getElementById("hmail-merge-skip").value,
-      subject: doc.getElementById("hmail-merge-subject").value,
-      body: doc.getElementById("hmail-merge-body").innerHTML || "",
+      subject: this.subject(win),
+      body: this.bodyHtml(win),
+      attachments: this.attachments(win),
+      identity: win.gMsgCompose?.identity ||
+        MailServices.accounts.defaultAccount?.defaultIdentity || null,
     };
-  },
-
-  identityByKey(key) {
-    for (const one of MailServices.accounts.allIdentities) {
-      if (one.key === key) {
-        return one;
-      }
-    }
-    return MailServices.accounts.defaultAccount?.defaultIdentity || null;
   },
 
   start(win) {
     if (this.job && !this.job.finished) {
-      Services.prompt.alert(win, "Gửi hàng loạt", "Một lần chạy đang diễn ra.");
+      Services.prompt.alert(win, "Gửi hàng loạt",
+        "Một lần chạy đang diễn ra.");
       return;
     }
     const rows = this.rows || [];
     if (!rows.length) {
-      Services.prompt.alert(win, "Gửi hàng loạt", "Chưa có danh sách người nhận.");
+      Services.prompt.alert(win, "Gửi hàng loạt",
+        "Chưa có danh sách người nhận.");
       return;
     }
     const settings = this.settings(win);
@@ -913,15 +649,26 @@ var hMailMerge = {
       Services.prompt.alert(win, "Gửi hàng loạt", "Chưa chọn cột địa chỉ.");
       return;
     }
+    if (!settings.identity) {
+      Services.prompt.alert(win, "Gửi hàng loạt",
+        "Chưa có tài khoản để gửi.");
+      return;
+    }
+    if (!settings.subject.trim()) {
+      if (!Services.prompt.confirm(win, "Gửi hàng loạt",
+            "Thư chưa có tiêu đề. Vẫn tiếp tục?")) {
+        return;
+      }
+    }
+
     const total = settings.limit ? Math.min(settings.limit, rows.length)
                                  : rows.length;
-
     if (settings.mode === "send") {
       const minutes = Math.round(total * settings.delay / 60);
       if (!Services.prompt.confirm(win, "Gửi hàng loạt",
             `Gửi ${total} thư, cách nhau ${settings.delay} giây` +
             (minutes ? ` (khoảng ${minutes} phút)` : "") + "?\n\n" +
-            "Việc gửi vẫn tiếp tục kể cả khi bạn đóng thẻ này.")) {
+            "Việc gửi vẫn tiếp tục kể cả khi bạn đóng cửa sổ này.")) {
         return;
       }
     }
@@ -929,7 +676,6 @@ var hMailMerge = {
     this.job = {
       rows: rows.slice(0, total),
       settings,
-      attachments: (this.attachments || []).slice(),
       index: 0,
       sent: 0,
       failed: 0,
@@ -937,7 +683,6 @@ var hMailMerge = {
       paused: false,
       stopped: false,
       finished: false,
-      startedAt: Date.now(),
     };
     this.paint(win);
     this.step(win);
@@ -954,7 +699,6 @@ var hMailMerge = {
     }
   },
 
-  /** One message, then schedule the next. Never blocks the interface. */
   async step(win) {
     const job = this.job;
     if (!job || job.paused) {
@@ -963,7 +707,7 @@ var hMailMerge = {
     if (job.stopped || job.index >= job.rows.length) {
       job.finished = true;
       this.paint(win);
-      this.announce(win);
+      this.announce();
       return;
     }
 
@@ -995,23 +739,27 @@ var hMailMerge = {
     if (job.stopped || job.index >= job.rows.length) {
       job.finished = true;
       this.paint(win);
-      this.announce(win);
+      this.announce();
       return;
     }
 
-    // Pace it: a delay between messages, and a longer rest between batches.
     let wait = job.settings.delay * 1000;
     if (job.settings.batch && job.index % job.settings.batch === 0) {
       wait = Math.max(wait, job.settings.pause * 1000);
     }
-    win.setTimeout(() => this.step(win), wait);
+    // The window may be gone; fall back to a timer that outlives it.
+    const later = () => this.step(win);
+    try {
+      win.setTimeout(later, wait);
+    } catch (e) {
+      const timer = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
+      timer.initWithCallback({ notify: later }, wait,
+                             Ci.nsITimer.TYPE_ONE_SHOT);
+    }
   },
 
   async sendOne(row, address, job) {
-    const identity = this.identityByKey(job.settings.identityKey);
-    if (!identity) {
-      throw new Error("chưa có tài khoản gửi");
-    }
+    const identity = job.settings.identity;
 
     const fields = Cc["@mozilla.org/messengercompose/composefields;1"]
       .createInstance(Ci.nsIMsgCompFields);
@@ -1025,15 +773,12 @@ var hMailMerge = {
       }
     }
     fields.subject = this.fill(job.settings.subject, row);
-    // The letter is already HTML from the editor; only the values merged into
-    // it need escaping.
     fields.body = this.fillHtml(job.settings.body, row);
 
-    for (const file of job.attachments) {
+    for (const url of job.settings.attachments) {
       const attachment = Cc["@mozilla.org/messengercompose/attachment;1"]
         .createInstance(Ci.nsIMsgAttachment);
-      attachment.url = Services.io.newFileURI(file).spec;
-      attachment.name = file.leafName;
+      attachment.url = url;
       fields.addAttachment(attachment);
     }
 
@@ -1047,9 +792,7 @@ var hMailMerge = {
     const compose = MailServices.compose.initCompose(params);
     const msgWindow = Cc["@mozilla.org/messenger/msgwindow;1"]
       .createInstance(Ci.nsIMsgWindow);
-    const accountKey = MailServices.accounts
-      .getFirstIdentityAccount?.(identity)?.key ||
-      MailServices.accounts.defaultAccount?.key || "";
+    const accountKey = MailServices.accounts.defaultAccount?.key || "";
 
     await compose.sendMsg(
       job.settings.mode === "send" ? Ci.nsIMsgCompDeliverMode.Now
@@ -1057,7 +800,7 @@ var hMailMerge = {
       identity, accountKey, msgWindow, null);
   },
 
-  announce(win) {
+  announce() {
     const job = this.job;
     if (!job) {
       return;
@@ -1077,7 +820,6 @@ var hMailMerge = {
     } catch (e) {}
   },
 
-  /** Progress and the per-row result list, redrawn as the job advances. */
   paint(win) {
     const doc = win.document;
     const progress = doc.getElementById("hmail-merge-progress");
@@ -1116,7 +858,7 @@ var hMailMerge = {
     }
 
     log.textContent = "";
-    for (const result of (job?.results || []).slice(-40).reverse()) {
+    for (const result of (job?.results || []).slice(-30).reverse()) {
       const line = el("div",
         `hmail-merge-result ${result.error ? "bad" : "ok"}`);
       line.append(
