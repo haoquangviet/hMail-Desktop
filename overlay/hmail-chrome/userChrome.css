@@ -584,9 +584,13 @@ tree-view[data-show-grouped-by-sort="true"] .card-layout.children *:hover {
 }
 
 /* Info bar (e.g. remote content notice), credit jevandusen */
+/* hMail: `margin: auto !important` used to be here, and it overrode the
+   margin-block that Thunderbird's close animation drives — the animation never
+   finished, so a dismissed bar left an empty band above the message. Centre it
+   horizontally only and leave the vertical margins to the animation. */
 .infobar.animated:not([value="maybeScam"]) {
 	width: 98% !important;
-	margin: auto !important;
+	margin-inline: auto !important;
 	--message-bar-background-color: #e6f2fa !important;
 	margin-bottom: 10px !important;
 }

@@ -2044,6 +2044,20 @@ unified-toolbar-customization {
     border-radius: 4px !important;
 }
 
+/* A notification bar that has been dismissed must take no room, even if its
+   closing animation was cut short. Without this the reading pane keeps an
+   empty band where the bar used to be. */
+#mail-notification-top:not(:has(notification-message)) {
+    display: none !important;
+}
+
+#mail-notification-top notification-message[dismissed],
+#mail-notification-top .notificationbox-stack:not(:has(notification-message)) {
+    display: none !important;
+    min-height: 0 !important;
+    height: 0 !important;
+}
+
 /* =====================================================
    READING PANE HEADER — Outlook's compact action row
    Upstream renders large boxed buttons that wrap onto a
