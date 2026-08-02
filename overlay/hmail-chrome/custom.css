@@ -1579,7 +1579,63 @@ select.hmail-ai-field,
 }
 
 /* =====================================================
-   MAIL MERGE — its own page, since it is a job not a command
+   COMPOSE RIBBON — the composer works like the main window
+   ===================================================== */
+
+/* Everything on Thunderbird's compose toolbar is on the ribbon now. */
+#composeToolbar2 {
+    display: none !important;
+}
+
+.hmail-compose-ribbon {
+    flex: 0 0 auto !important;
+}
+
+/* The panels docked beside the message being written. */
+.hmail-merge-panel {
+    flex: 0 0 auto !important;
+    min-width: 300px;
+    max-width: 60% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    border-inline-start: 1px solid var(--hmail-ai-line);
+}
+
+#hmail-merge-panel-splitter {
+    flex: 0 0 auto;
+    width: 5px;
+    margin: 0;
+    border: none;
+    background-color: transparent;
+    cursor: ew-resize;
+}
+
+/* The panel scrolls; the header stays. */
+.hmail-merge-scroll {
+    flex: 1 1 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px;
+    padding: 10px 12px 16px;
+}
+
+#messageArea:has(#hmail-merge-panel) {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: stretch !important;
+}
+
+#messageArea:has(#hmail-merge-panel) > #messageEditor {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+
+/* =====================================================
+   MAIL MERGE — list, settings and the run
    ===================================================== */
 
 /* Icons for the two hMail buttons in the composer toolbar. */
