@@ -1579,6 +1579,71 @@ select.hmail-ai-field,
 }
 
 /* =====================================================
+   IMPORT FROM OUTLOOK
+   ===================================================== */
+
+.hmail-import-tab {
+    overflow: hidden;
+}
+
+.hmail-import {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px;
+    padding: 20px 24px;
+    overflow: auto;
+    max-width: 900px;
+}
+
+.hmail-import-title {
+    font-size: 1.3em;
+    font-weight: 600;
+    color: var(--hmail-ai-accent);
+}
+
+.hmail-import-found {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.hmail-import-tree {
+    display: flex;
+    flex-direction: column;
+    max-height: 45vh;
+    overflow: auto;
+    border: 1px solid var(--hmail-ai-line);
+    border-radius: 10px;
+    padding: 6px 4px;
+}
+
+.hmail-import-tree:empty {
+    display: none;
+}
+
+.hmail-import-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+
+.hmail-import-row:hover {
+    background-color: color-mix(in srgb, var(--hmail-ai-ink) 6%, transparent);
+}
+
+.hmail-import-name {
+    flex: 1 1 auto;
+}
+
+.hmail-import-count {
+    flex: 0 0 auto;
+    opacity: 0.55;
+    font-variant-numeric: tabular-nums;
+}
+
+/* =====================================================
    SPAM REPORT / QUARANTINE PANEL
    ===================================================== */
 
