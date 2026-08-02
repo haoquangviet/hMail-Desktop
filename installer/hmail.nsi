@@ -41,6 +41,14 @@ VIAddVersionKey /LANG=0 "LegalCopyright" "(c) ${COMPANY}. Based on Mozilla Thund
 !define MUI_ABORTWARNING
 
 !insertmacro MUI_PAGE_WELCOME
+
+; The terms are accepted before anything is installed. A disclaimer that only
+; lives in a Help menu is worth far less than one the user agreed to first.
+!define MUI_LICENSEPAGE_TEXT_TOP "Vui lòng đọc kỹ điều khoản sử dụng."
+!define MUI_LICENSEPAGE_TEXT_BOTTOM "Nếu bạn đồng ý với các điều khoản trên, hãy chọn Tôi đồng ý để tiếp tục cài đặt."
+!define MUI_LICENSEPAGE_BUTTON "Tôi đồng ý"
+!insertmacro MUI_PAGE_LICENSE "..\installer\EULA.txt"
+
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !define MUI_FINISHPAGE_RUN "$INSTDIR\hmail.exe"
@@ -57,6 +65,8 @@ Section "hMail Desktop" SecMain
   SectionIn RO
   SetOutPath "$INSTDIR"
   File /r "${APPDIR}\*.*"
+  ; Keep the terms with the program, so they can be read after installing.
+  File "..\installer\EULA.txt"
 
   ; Force a one-shot startup-cache purge after every (re)install
   FileOpen $0 "$INSTDIR\.purgecaches" w

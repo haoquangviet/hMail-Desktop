@@ -1,8 +1,8 @@
 # hMail Desktop
 
-**hMail Desktop** là ứng dụng email cho Windows của **HQV Software** — xây dựng trên nền mã nguồn mở Mozilla Thunderbird, với giao diện hiện đại lấy cảm hứng từ phong cách các ứng dụng mail văn phòng quen thuộc, tích hợp sẵn trợ lý AI do HQV Software tự viết (Google Gemini, các dịch vụ dùng API kiểu OpenAI, hoặc AI chạy ngay trên máy) và bộ cấu hình tối ưu cho người dùng doanh nghiệp.
+**hMail Desktop** là ứng dụng email cho Windows của **HQV Software** — xây dựng trên nền mã nguồn mở Mozilla Thunderbird, với giao diện hiện đại lấy cảm hứng từ phong cách các ứng dụng mail văn phòng quen thuộc, tích hợp sẵn trợ lý AI do HQV Software tự phát triển (Google Gemini, các dịch vụ dùng API kiểu OpenAI, hoặc AI chạy ngay trên máy) và bộ cấu hình tối ưu cho người dùng doanh nghiệp.
 
-**hMail Desktop** is a Windows email client by **HQV Software**, built on the open-source Mozilla Thunderbird codebase, with a modern office-style UI, an AI assistant written by HQV Software (Google Gemini, any OpenAI-compatible service, or a model running locally), and enterprise-friendly defaults.
+**hMail Desktop** is a Windows email client by **HQV Software**, built on the open-source Mozilla Thunderbird codebase, with a modern office-style UI, an AI assistant developed by HQV Software (Google Gemini, any OpenAI-compatible service, or a model running locally), and enterprise-friendly defaults.
 
 > **Notice / Tuyên bố:** hMail Desktop is based on Mozilla Thunderbird open source code.
 > **hMail Desktop and Thunderbird are not officially associated with Mozilla or its products.**
@@ -45,7 +45,7 @@ Chi tiết giấy phép trong [LICENSE.md](LICENSE.md):
 | Mã Mozilla Thunderbird + các file Mozilla được sửa đổi (trong `omni-patches/`) | MPL 2.0 |
 | File mới do HQV Software viết (script build, cấu hình, CSS tùy biến, installer) | MIT |
 | Theme cơ sở từ [Browmew/thunderbird-outlook-theme](https://github.com/Browmew/thunderbird-outlook-theme) | MIT |
-| Trợ lý AI, ribbon, ngăn bên, tích hợp lọc thư rác (do HQV Software viết) | MIT |
+| Trợ lý AI, ribbon, ngăn bên, tích hợp lọc thư rác (do HQV Software phát triển) | MIT |
 | Logo và tên "hMail" | © HQV Software, bảo lưu mọi quyền |
 
 ## Build từ source

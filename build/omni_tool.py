@@ -129,6 +129,44 @@ COMMUNITY_STRINGS = {
             "unenforceable, the remaining parts remain in full force and "
             "effect. Where a translated version conflicts with the "
             "Vietnamese version, the Vietnamese version prevails.",
+        "rights-webservices-header":
+            "rights-webservices-header = { -brand-full-name } terms of use",
+        "rights-webservices2":
+            "rights-webservices2 = { -brand-full-name } is software that runs "
+            "on your own machine, not a service operated by "
+            "{ -vendor-short-name }. Mail, calendars and contacts go only to "
+            "the servers you configure, and the assistant sends a message to "
+            "an AI provider only when you ask it to, using the service and "
+            "key you chose. The full terms are in EULA.txt in the "
+            "installation folder and were shown to you during installation.",
+        "rights-webservices-term-1":
+            "rights-webservices-term-1 = { -brand-short-name } is provided as "
+            "is, without warranty of any kind. { -vendor-short-name } does "
+            "not promise that mail will always be sent, received, stored or "
+            "synchronised completely and on time.",
+        "rights-webservices-term-2":
+            "rights-webservices-term-2 = You are responsible for keeping your "
+            "own backups, particularly before using the import or migration "
+            "features, and for the content of the mail you send and its "
+            "compliance with the law.",
+        "rights-webservices-term-3":
+            "rights-webservices-term-3 = Anything the assistant produces "
+            "comes from the AI provider you chose, is for reference only and "
+            "should be checked before use. Any charges for that service are "
+            "yours. You may choose an AI service running on your own machine "
+            "so that message content never leaves it.",
+        "rights-webservices-term-4":
+            "rights-webservices-term-4 = <strong>To the fullest extent "
+            "permitted by law, { -vendor-short-name }, its contributors, "
+            "licensors and distributors are not liable for any damage arising "
+            "out of or relating to the use of, or inability to use, "
+            "{ -brand-short-name } — including lost mail, corrupted or "
+            "disclosed data, business interruption, lost profits or lost "
+            "opportunities.</strong>",
+        "rights-webservices-term-6":
+            "rights-webservices-term-6 = { -vendor-short-name } may issue "
+            "updates but is under no obligation to do so, and may stop "
+            "developing or supporting the software at any time.",
     },
     "vi": {
         "community-desc":
@@ -175,16 +213,64 @@ COMMUNITY_STRINGS = {
             "cấp phép và phân phối không chịu trách nhiệm đối với bất kỳ "
             "thiệt hại nào phát sinh từ hoặc liên quan tới việc sử dụng "
             "{ -brand-short-name } và các Dịch Vụ, và không có nghĩa vụ bồi "
-            "thường đối với bất kỳ yêu cầu nào liên quan. Một số hệ thống "
-            "pháp luật không cho phép miễn trừ hoặc giới hạn đối với một số "
-            "loại thiệt hại, nên phần miễn trừ này có thể không áp dụng với "
-            "bạn.</strong>",
+            "thường đối với bất kỳ yêu cầu nào liên quan. Nếu theo pháp luật "
+            "áp dụng, một phần trách nhiệm nào đó không thể được miễn trừ, "
+            "thì tổng trách nhiệm của { -vendor-short-name } được giới hạn ở "
+            "số tiền bạn đã thực trả cho { -vendor-short-name } để sử dụng "
+            "{ -brand-short-name } trong mười hai tháng liền trước sự kiện "
+            "phát sinh khiếu nại; nếu bạn không trả khoản tiền nào thì giới "
+            "hạn này bằng không. Một số hệ thống pháp luật không cho phép "
+            "miễn trừ hoặc giới hạn đối với một số loại thiệt hại, khi đó "
+            "phần miễn trừ chỉ không áp dụng ở đúng phạm vi bị cấm.</strong>",
         "rights-webservices-term-7":
             "rights-webservices-term-7 = Các điều khoản này được điều chỉnh "
             "bởi pháp luật Việt Nam. Nếu bất kỳ phần nào bị xem là vô hiệu "
             "hoặc không thể thi hành, các phần còn lại vẫn giữ nguyên hiệu "
             "lực. Khi bản dịch có mâu thuẫn với bản tiếng Việt, bản tiếng "
             "Việt được ưu tiên áp dụng.",
+        # Upstream this section is about Mozilla's own web services — Safe
+        # Browsing, geolocation — every one of which hMail switches off. Left
+        # as it stood it would describe services this program does not use,
+        # so it carries hMail's actual terms instead.
+        "rights-webservices-header":
+            "rights-webservices-header = Điều khoản sử dụng "
+            "{ -brand-full-name }",
+        "rights-webservices2":
+            "rights-webservices2 = { -brand-full-name } là phần mềm chạy trên "
+            "máy của bạn, không phải một dịch vụ do { -vendor-short-name } "
+            "vận hành. Thư, lịch và danh bạ chỉ đi tới đúng những máy chủ bạn "
+            "cấu hình; trợ lý chỉ gửi nội dung thư tới nhà cung cấp AI khi "
+            "bạn yêu cầu, bằng dịch vụ và API key do chính bạn chọn. Bản đầy "
+            "đủ của điều khoản nằm trong tệp EULA.txt ở thư mục cài đặt và đã "
+            "được hiển thị khi bạn cài phần mềm.",
+        "rights-webservices-term-1":
+            "rights-webservices-term-1 = { -brand-short-name } được cung cấp "
+            "theo hiện trạng, không kèm bảo hành dưới bất kỳ hình thức nào. "
+            "{ -vendor-short-name } không cam kết rằng thư sẽ luôn được gửi "
+            "đi, nhận về, lưu giữ hay đồng bộ đầy đủ và đúng hạn.",
+        "rights-webservices-term-2":
+            "rights-webservices-term-2 = Bạn tự chịu trách nhiệm sao lưu dữ "
+            "liệu của mình, đặc biệt trước khi dùng các chức năng nhập hoặc "
+            "chuyển dữ liệu, và tự chịu trách nhiệm về nội dung thư mình gửi "
+            "đi cũng như việc tuân thủ pháp luật.",
+        "rights-webservices-term-3":
+            "rights-webservices-term-3 = Nội dung do trợ lý AI tạo ra là của "
+            "nhà cung cấp AI mà bạn chọn, chỉ mang tính tham khảo và cần được "
+            "bạn kiểm tra trước khi dùng. Mọi chi phí sử dụng dịch vụ AI do "
+            "bạn chịu. Bạn có thể chọn dịch vụ AI chạy ngay trên máy để nội "
+            "dung thư không rời khỏi máy.",
+        "rights-webservices-term-4":
+            "rights-webservices-term-4 = <strong>Trong phạm vi pháp luật cho "
+            "phép, { -vendor-short-name } cùng người đóng góp, bên cấp phép "
+            "và bên phân phối không chịu trách nhiệm đối với bất kỳ thiệt hại "
+            "nào phát sinh từ hoặc liên quan tới việc sử dụng hay không sử "
+            "dụng được { -brand-short-name }, kể cả mất thư, hỏng hoặc lộ dữ "
+            "liệu, gián đoạn công việc, mất lợi nhuận hay cơ hội kinh "
+            "doanh.</strong>",
+        "rights-webservices-term-6":
+            "rights-webservices-term-6 = { -vendor-short-name } có thể phát "
+            "hành bản cập nhật nhưng không có nghĩa vụ phải làm vậy, và có "
+            "thể ngừng phát triển hoặc hỗ trợ phần mềm vào bất kỳ lúc nào.",
     },
 }
 
@@ -193,7 +279,11 @@ COMMUNITY_FILES = {
     "messenger/aboutDialog.ftl": ("community-desc", "community-experimental"),
     "messenger/aboutRights.ftl": (
         "rights-intro", "rights-intro-point-3", "rights-intro-point-4",
-        "rights-webservices-term-5", "rights-webservices-term-7"),
+        "rights-webservices-header", "rights-webservices2",
+        "rights-webservices-term-1", "rights-webservices-term-2",
+        "rights-webservices-term-3", "rights-webservices-term-4",
+        "rights-webservices-term-5", "rights-webservices-term-6",
+        "rights-webservices-term-7"),
     "messenger/messenger.ftl": ("about-rights-notification-text",),
 }
 
