@@ -7,7 +7,7 @@
 #   .\build\build.ps1 -SkipInstaller      # stop after producing work\app (for testing)
 #
 param(
-    [string]$Version      = "0.1.0",
+    [string]$Version      = "0.1.1",
     [string]$TbVersion    = "140.13.0esr",
     [string]$Locale       = "vi",
     [string]$Arch         = "win64",
