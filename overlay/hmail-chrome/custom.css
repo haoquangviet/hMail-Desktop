@@ -1579,6 +1579,66 @@ select.hmail-ai-field,
 }
 
 /* =====================================================
+   MAIL MERGE
+   ===================================================== */
+
+.hmail-merge-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: color-mix(in srgb, CanvasText 35%, transparent);
+}
+
+.hmail-merge {
+    width: min(560px, 90vw);
+    max-height: 86vh;
+    overflow: auto;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px;
+    padding: 18px 20px 20px;
+    border-radius: 14px;
+    background-color: var(--hmail-ai-surface, Canvas);
+    box-shadow: 0 12px 48px color-mix(in srgb, CanvasText 35%, transparent);
+}
+
+.hmail-merge-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.hmail-merge-title {
+    flex: 1 1 auto;
+    font-size: 1.15em;
+    font-weight: 600;
+    color: var(--hmail-ai-accent);
+}
+
+.hmail-merge-preview:empty {
+    display: none;
+}
+
+.hmail-merge-item {
+    padding: 8px 12px;
+    margin-block: 4px;
+    border-radius: 10px;
+    background-color: var(--hmail-ai-sunk);
+    font-size: 0.88em;
+}
+
+.hmail-merge-to {
+    opacity: 0.65;
+}
+
+.hmail-merge-subject {
+    font-weight: 500;
+}
+
+/* =====================================================
    LOCAL ANALYSIS — warning bar and the reading card
    ===================================================== */
 
