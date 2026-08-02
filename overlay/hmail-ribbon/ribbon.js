@@ -114,7 +114,9 @@ var hMailRibbon = {
           label: "Chuyển từ Outlook",
           buttons: [
             { id: "import-outlook", label: "Nhập từ\nOutlook", icon: "import",
-              size: "large", fn: openImport("app") },
+              size: "large", fn: win => win.hMailImport.openTab(win) },
+            { id: "import-other", label: "Nhập hồ sơ khác", icon: "import",
+              fn: openImport("app") },
             { id: "import-contacts", label: "Nhập danh bạ", icon: "contact",
               fn: openImport("addressBook") },
             { id: "import-calendar", label: "Nhập lịch", icon: "calendar",
