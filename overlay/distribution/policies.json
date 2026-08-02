@@ -1,0 +1,42 @@
+{
+  "policies": {
+    "DisableAppUpdate": true,
+    "DisableSystemAddonUpdate": true,
+    "DisableTelemetry": true,
+    "ExtensionUpdate": false,
+    "InAppNotification": {
+      "DisableAllNotifications": true
+    },
+    "ExtensionSettings": {
+      "*": {
+        "installation_mode": "blocked",
+        "blocked_install_message": "hMail Desktop chỉ cho phép các tiện ích do HQV Software phân phối. / hMail Desktop only allows extensions distributed by HQV Software."
+      },
+      "hmail-ai@hqvsoftware.com": {
+        "installation_mode": "allowed"
+      }
+    },
+    "Preferences": {
+      "toolkit.legacyUserProfileCustomizations.stylesheets": {
+        "Value": true,
+        "Status": "locked"
+      },
+      "app.update.auto": {
+        "Value": false,
+        "Status": "locked"
+      },
+      "mail.chat.enabled": {
+        "Value": false,
+        "Status": "locked"
+      },
+      "datareporting.healthreport.uploadEnabled": {
+        "Value": false,
+        "Status": "locked"
+      },
+      "toolkit.telemetry.enabled": {
+        "Value": false,
+        "Status": "locked"
+      }
+    }
+  }
+}

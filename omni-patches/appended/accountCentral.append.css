@@ -1,0 +1,32 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ *
+ * hMail Desktop additions appended to accountCentral.css:
+ * hide features hMail does not ship (chat, feeds, newsgroups) and all
+ * Mozilla/Thunderbird donation and resource links. */
+
+#setupChat,
+#setupChat + .account-description,
+#setupFeeds,
+#setupFeeds + .account-description,
+#setupNewsgroups,
+#setupNewsgroups + .account-description,
+#nntpSubscriptionButton,
+#rssSubscriptionButton,
+#donationParagraph,
+#supportLink,
+#involvedLink,
+#developerLink {
+  display: none !important;
+}
+
+/* The Resources section has no content left once the Mozilla links are gone. */
+.account-central-section:has(#supportLink) {
+  display: none !important;
+}
+
+/* hMail accent for the account central page */
+:root {
+  --account-central-accent: #0F6CBD;
+}
