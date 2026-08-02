@@ -1579,6 +1579,127 @@ select.hmail-ai-field,
 }
 
 /* =====================================================
+   LOCAL ANALYSIS — warning bar and the reading card
+   ===================================================== */
+
+/* The bar sits with Thunderbird's own notices, above the message. */
+#hmail-warning {
+    margin: 6px 8px 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border-inline-start: 4px solid #B45309;
+    background-color: color-mix(in srgb, #B45309 8%, Canvas);
+    color: CanvasText;
+    font-size: 0.92em;
+    box-shadow: 0 1px 2px color-mix(in srgb, CanvasText 10%, transparent);
+}
+
+#hmail-warning.danger {
+    border-inline-start-color: #B42318;
+    background-color: color-mix(in srgb, #B42318 9%, Canvas);
+}
+
+.hmail-warning-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.hmail-warning-title {
+    flex: 1 1 auto;
+    font-weight: 600;
+}
+
+.hmail-warning-close {
+    appearance: none !important;
+    border: none !important;
+    background: transparent !important;
+    color: inherit !important;
+    cursor: pointer;
+    opacity: 0.6;
+    padding: 2px 6px !important;
+    border-radius: 6px !important;
+}
+
+.hmail-warning-close:hover {
+    opacity: 1;
+    background-color: color-mix(in srgb, CanvasText 10%, transparent) !important;
+}
+
+.hmail-warning-list {
+    margin: 6px 0 0;
+    padding-inline-start: 18px;
+}
+
+.hmail-warning-item {
+    margin-block: 3px;
+    line-height: 1.45;
+}
+
+/* --- the same reading, in the assistant panel --- */
+
+.hmail-ai-insight {
+    border: 1px solid var(--hmail-ai-line);
+    border-radius: 12px;
+    padding: 12px 14px;
+    background-color: var(--hmail-ai-sunk);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.hmail-ai-insight.warn {
+    border-inline-start: 4px solid #B45309;
+}
+
+.hmail-ai-insight.danger {
+    border-inline-start: 4px solid #B42318;
+}
+
+.hmail-ai-insight-head {
+    font-weight: 600;
+    color: var(--hmail-ai-accent);
+    font-size: 0.9em;
+}
+
+.hmail-ai-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.hmail-ai-chip {
+    font-size: 0.78em;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background-color: color-mix(in srgb, var(--hmail-ai-ink) 8%, transparent);
+}
+
+.hmail-ai-findings {
+    margin: 0;
+    padding-inline-start: 18px;
+    font-size: 0.86em;
+}
+
+.hmail-ai-finding {
+    margin-block: 3px;
+    line-height: 1.45;
+}
+
+.hmail-ai-finding.danger {
+    color: #B42318;
+    font-weight: 500;
+}
+
+.hmail-ai-finding.warn {
+    color: #B45309;
+}
+
+.hmail-ai-finding.info {
+    opacity: 0.75;
+}
+
+/* =====================================================
    IMPORT FROM OUTLOOK
    ===================================================== */
 
@@ -2112,7 +2233,7 @@ unified-toolbar-customization {
 /* A notification bar that has been dismissed must take no room, even if its
    closing animation was cut short. Without this the reading pane keeps an
    empty band where the bar used to be. */
-#mail-notification-top:not(:has(notification-message)) {
+#mail-notification-top:not(:has(notification-message)):not(:has(#hmail-warning)) {
     display: none !important;
 }
 

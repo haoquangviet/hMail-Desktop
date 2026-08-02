@@ -263,6 +263,71 @@ Object.assign(hMailAI, {
     return box;
   },
 
+  /**
+   * The local reading of the message, shown above the conversation: a short
+   * summary, what was found in the headers, and anything worth being careful
+   * about. Costs nothing and needs no network.
+   */
+  async showInsight(win, hdr) {
+    const doc = win.document;
+    const log = doc.getElementById("hmail-ai-log");
+    if (!log || typeof hMailInsight === "undefined") {
+      return;
+    }
+    const result = await hMailInsight.analyze(hdr);
+    if (doc.getElementById("hmail-ai-insight")) {
+      return;
+    }
+
+    const el = (t, c, x) => this.el(doc, t, c, x);
+    const card = el("div", `hmail-ai-insight ${result.level}`);
+    card.id = "hmail-ai-insight";
+
+    card.appendChild(el("div", "hmail-ai-insight-head", "Đọc nhanh tại chỗ"));
+
+    if (result.summary.length) {
+      const list = el("ul", "hmail-ai-list");
+      for (const line of result.summary) {
+        list.appendChild(el("li", null, line));
+      }
+      card.appendChild(list);
+    } else {
+      card.appendChild(el("div", "hmail-ai-hint",
+        "Thư quá ngắn để tóm tắt."));
+    }
+
+    const chips = el("div", "hmail-ai-chips");
+    const chip = (label, value) => {
+      if (!value || (Array.isArray(value) && !value.length)) {
+        return;
+      }
+      chips.appendChild(el("span", "hmail-ai-chip",
+        `${label}: ${Array.isArray(value) ? value.join(", ") : value}`));
+    };
+    chip("Ngày", result.facts.dates);
+    chip("Số tiền", result.facts.amounts);
+    const auth = result.facts.auth;
+    if (auth && (auth.spf || auth.dkim || auth.dmarc)) {
+      chip("Xác thực",
+        [auth.spf && `SPF ${auth.spf}`, auth.dkim && `DKIM ${auth.dkim}`,
+         auth.dmarc && `DMARC ${auth.dmarc}`].filter(Boolean).join(" · "));
+    }
+    if (chips.children.length) {
+      card.appendChild(chips);
+    }
+
+    if (result.findings.length) {
+      const list = el("ul", "hmail-ai-findings");
+      for (const finding of result.findings) {
+        list.appendChild(el("li", `hmail-ai-finding ${finding.level}`,
+                            finding.text));
+      }
+      card.appendChild(list);
+    }
+
+    log.insertBefore(card, log.firstChild);
+  },
+
   addTurn(win, role, text) {
     const doc = win.document;
     const log = doc.getElementById("hmail-ai-log");
@@ -297,6 +362,11 @@ Object.assign(hMailAI, {
       this.notify(win, "Chưa chọn thư nào — chọn một thư để bắt đầu.");
       return;
     }
+    // What the machine can work out on its own comes first: it is instant,
+    // free, and does not send the message anywhere. The model is for what
+    // this cannot do.
+    this.showInsight(win, hdr).catch(() => {});
+
     const convo = await this.conversationFor(hdr);
     for (const t of convo.turns) {
       this.addTurn(win, t.role, t.text);
