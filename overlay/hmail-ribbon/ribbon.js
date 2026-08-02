@@ -126,6 +126,8 @@ var hMailRibbon = {
             { id: "dav-sync", label: "Đồng bộ Lịch\n& Danh bạ",
               icon: "calendar",
               fn: win => win.hMailDav.setupAll(win, { quiet: false }) },
+            { id: "mail-merge", label: "Trộn thư", icon: "contact",
+              fn: win => win.hMailMerge.openTab(win) },
           ],
         },
       ],
@@ -321,6 +323,9 @@ var hMailRibbon = {
           buttons: [
             { id: "h-about", label: "Giới thiệu\nhMail", icon: "mail", size: "large",
               fn: win => win.openAboutDialog() },
+            { id: "h-update", label: "Kiểm tra\ncập nhật", icon: "import",
+              size: "large",
+              fn: win => win.hMailUpdate.check(win, true) },
             { id: "h-github", label: "Trang\nGitHub", icon: "extention", size: "large",
               fn: win => win.openLinkExternally("https://github.com/haoquangviet/hMail-Desktop") },
           ],

@@ -1579,43 +1579,197 @@ select.hmail-ai-field,
 }
 
 /* =====================================================
-   MAIL MERGE
+   MAIL MERGE — its own page, since it is a job not a command
    ===================================================== */
 
-.hmail-merge-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 10;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: color-mix(in srgb, CanvasText 35%, transparent);
+/* Icons for the two hMail buttons in the composer toolbar. */
+#hmail-compose-ai-button {
+    list-style-image: url("Icons/notepad-person.svg") !important;
 }
 
-.hmail-merge {
-    width: min(560px, 90vw);
-    max-height: 86vh;
-    overflow: auto;
+#hmail-merge-button {
+    list-style-image: url("Icons/contact.svg") !important;
+}
+
+#hmail-compose-ai-button .toolbarbutton-icon,
+#hmail-merge-button .toolbarbutton-icon {
+    width: 16px !important;
+    height: 16px !important;
+    margin-inline-end: 6px !important;
+    -moz-context-properties: fill, stroke !important;
+    fill: color-mix(in srgb, var(--hmail-accent) 85%, CanvasText) !important;
+}
+
+/* The tab panel is a XUL vbox. The page has to claim the height itself —
+   flex:1 with height:0 is the pattern that makes a scrollable child work
+   inside one of these boxes; without it the page either collapses to nothing
+   or grows past the window with no scrollbar. */
+.hmail-merge-tab {
+    overflow: hidden;
+}
+
+.hmail-merge-page {
+    flex: 1 1 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
     display: flex !important;
     flex-direction: column !important;
-    gap: 10px;
-    padding: 18px 20px 20px;
-    border-radius: 14px;
-    background-color: var(--hmail-ai-surface, Canvas);
-    box-shadow: 0 12px 48px color-mix(in srgb, CanvasText 35%, transparent);
+    gap: 8px;
+    padding: 20px 24px 32px;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    max-width: 980px;
 }
 
-.hmail-merge-head {
+/* --- the letter editor --- */
+
+.hmail-merge-toolbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: 3px;
+    padding: 5px 6px;
+    border: 1px solid var(--hmail-ai-line);
+    border-radius: 10px 10px 0 0;
+    border-bottom: none;
+    background-color: var(--hmail-ai-sunk);
+}
+
+.hmail-merge-tool {
+    appearance: none !important;
+    border: none !important;
+    background: transparent !important;
+    color: inherit !important;
+    cursor: pointer;
+    min-width: 28px !important;
+    padding: 4px 7px !important;
+    border-radius: 6px !important;
+    font: inherit !important;
+    font-size: 0.9em !important;
+    line-height: 1.1 !important;
+}
+
+.hmail-merge-tool:hover {
+    background-color: color-mix(in srgb, var(--hmail-ai-ink) 10%, transparent) !important;
+}
+
+.hmail-merge-tool-sep {
+    width: 1px;
+    height: 18px;
+    margin-inline: 4px;
+    background-color: var(--hmail-ai-line);
+}
+
+.hmail-merge-tool-select {
+    appearance: none !important;
+    border: 1px solid var(--hmail-ai-line) !important;
+    border-radius: 6px !important;
+    background-color: var(--hmail-ai-surface) !important;
+    color: inherit !important;
+    font: inherit !important;
+    font-size: 0.85em !important;
+    padding: 3px 8px !important;
+}
+
+.hmail-merge-tool-colour {
+    appearance: none !important;
+    width: 28px !important;
+    height: 24px !important;
+    padding: 2px !important;
+    border: 1px solid var(--hmail-ai-line) !important;
+    border-radius: 6px !important;
+    background-color: var(--hmail-ai-surface) !important;
+    cursor: pointer;
+}
+
+.hmail-merge-editor {
+    min-height: 220px;
+    max-height: 45vh;
+    overflow-y: auto;
+    padding: 12px 14px;
+    border: 1px solid var(--hmail-ai-line);
+    border-radius: 0 0 10px 10px;
+    background-color: var(--hmail-ai-surface);
+    line-height: 1.55;
+}
+
+.hmail-merge-editor:focus {
+    outline: none;
+    border-color: var(--hmail-ai-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--hmail-ai-accent) 15%, transparent);
+}
+
+.hmail-merge-editor:empty::before {
+    content: "Viết thư ở đây. Dùng nút “Chèn ô thay thế” để thêm thông tin riêng của từng người.";
+    opacity: 0.45;
 }
 
 .hmail-merge-title {
-    flex: 1 1 auto;
-    font-size: 1.15em;
+    font-size: 1.3em;
     font-weight: 600;
     color: var(--hmail-ai-accent);
+}
+
+.hmail-merge-body {
+    font-family: inherit !important;
+    line-height: 1.5 !important;
+    resize: vertical !important;
+}
+
+/* The first rows of the list, so the columns can be checked at a glance. */
+.hmail-merge-table {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--hmail-ai-line);
+    border-radius: 10px;
+    overflow: auto;
+}
+
+.hmail-merge-table:empty {
+    display: none;
+}
+
+.hmail-merge-tr {
+    display: flex;
+    gap: 12px;
+    padding: 6px 10px;
+    font-size: 0.85em;
+    border-bottom: 1px solid var(--hmail-ai-line);
+}
+
+.hmail-merge-tr:last-child {
+    border-bottom: none;
+}
+
+.hmail-merge-tr.head {
+    font-weight: 600;
+    background-color: var(--hmail-ai-sunk);
+}
+
+.hmail-merge-td {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Settings sit two to a row on a wide window, one on a narrow one. */
+.hmail-merge-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px 18px;
+}
+
+.hmail-merge-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.hmail-merge-attachments {
+    opacity: 0.7;
+    font-size: 0.85em;
 }
 
 .hmail-merge-preview:empty {
@@ -1623,19 +1777,68 @@ select.hmail-ai-field,
 }
 
 .hmail-merge-item {
-    padding: 8px 12px;
-    margin-block: 4px;
+    padding: 10px 12px;
+    margin-block: 5px;
     border-radius: 10px;
     background-color: var(--hmail-ai-sunk);
     font-size: 0.88em;
 }
 
-.hmail-merge-to {
+.hmail-merge-to-line {
     opacity: 0.65;
 }
 
 .hmail-merge-subject {
-    font-weight: 500;
+    font-weight: 600;
+    margin-block: 2px;
+}
+
+.hmail-merge-bodyline {
+    white-space: pre-wrap;
+    opacity: 0.85;
+}
+
+.hmail-merge-bar {
+    height: 6px;
+    border-radius: 999px;
+    background-color: color-mix(in srgb, var(--hmail-ai-ink) 12%, transparent);
+    overflow: hidden;
+}
+
+.hmail-merge-bar-fill {
+    height: 100%;
+    background-color: var(--hmail-ai-accent);
+    transition: width 0.2s ease;
+}
+
+.hmail-merge-log {
+    display: flex;
+    flex-direction: column;
+    max-height: 30vh;
+    overflow: auto;
+}
+
+.hmail-merge-result {
+    display: flex;
+    gap: 12px;
+    padding: 4px 2px;
+    font-size: 0.84em;
+    border-bottom: 1px solid var(--hmail-ai-line);
+}
+
+.hmail-merge-result-address {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hmail-merge-result.ok .hmail-merge-result-note {
+    color: #2E7D32;
+}
+
+.hmail-merge-result.bad .hmail-merge-result-note {
+    color: #B42318;
 }
 
 /* =====================================================
@@ -1857,11 +2060,6 @@ select.hmail-ai-field,
     font-family: monospace;
     font-size: 0.86em;
     overflow-wrap: anywhere;
-}
-
-/* The assistant button in the message's own action row. */
-#hmail-ai-header-button {
-    font-weight: 500 !important;
 }
 
 /* --- the same reading, in the assistant panel --- */
@@ -2515,12 +2713,32 @@ unified-toolbar-customization {
     background-color: transparent !important;
     box-shadow: none !important;
     border-radius: 4px !important;
-    padding: 5px 9px !important;
+    /* Outlook's action row is tight; upstream padding leaves the buttons
+       floating far apart and pushes the last ones out of sight. */
+    padding: 3px 7px !important;
     margin: 0 !important;
-    min-height: 30px !important;
-    font-size: 0.9rem !important;
+    min-height: 26px !important;
+    font-size: 0.88rem !important;
     font-weight: 400 !important;
     white-space: nowrap !important;
+}
+
+#header-view-toolbar {
+    gap: 0 !important;
+}
+
+/* The assistant button is made by hMail, so it needs its icon set here. */
+#hmail-ai-header-button {
+    font-weight: 500 !important;
+    list-style-image: url("Icons/notepad-person.svg") !important;
+}
+
+#hmail-ai-header-button .toolbarbutton-icon {
+    width: 16px !important;
+    height: 16px !important;
+    margin-inline-end: 5px !important;
+    -moz-context-properties: fill, stroke !important;
+    fill: color-mix(in srgb, var(--hmail-accent) 85%, CanvasText) !important;
 }
 
 #header-view-toolbar .button:hover,

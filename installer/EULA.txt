@@ -1,0 +1,114 @@
+ĐIỀU KHOẢN SỬ DỤNG PHẦN MỀM hMAIL DESKTOP
+
+Phiên bản 0.1 — HQV SOFTWARE CO., LTD (HAO QUANG VIET SOFTWARE COMPANY
+LIMITED), Thành phố Hồ Chí Minh, Việt Nam.
+
+Vui lòng đọc trước khi cài đặt. Bằng việc cài đặt hoặc sử dụng hMail Desktop,
+bạn xác nhận đã đọc, hiểu và đồng ý với các điều khoản dưới đây. Nếu không
+đồng ý, xin dừng cài đặt.
+
+
+1. GIẤY PHÉP
+
+hMail Desktop được xây dựng trên mã nguồn mở Mozilla Thunderbird và được cung
+cấp theo các giấy phép mã nguồn mở tương ứng: Mozilla Public License 2.0 cho
+phần mã kế thừa từ Thunderbird, và giấy phép MIT cho phần do HQV Software
+viết. Toàn văn các giấy phép này xem trong ứng dụng tại mục Trợ giúp ▸ Giới
+thiệu ▸ Thông tin giấy phép.
+
+Tên gọi "hMail", "hMail Desktop" và biểu tượng hMail là nhãn hiệu và tài sản
+của HQV Software, không nằm trong các giấy phép mã nguồn mở nêu trên.
+
+hMail Desktop và Thunderbird không liên kết chính thức với Mozilla hay các
+sản phẩm của Mozilla.
+
+
+2. KHÔNG BẢO HÀNH
+
+PHẦN MỀM ĐƯỢC CUNG CẤP THEO HIỆN TRẠNG ("NGUYÊN TRẠNG"), KHÔNG KÈM BẤT KỲ
+BẢO HÀNH NÀO, DÙ RÕ RÀNG HAY NGỤ Ý, BAO GỒM NHƯNG KHÔNG GIỚI HẠN Ở BẢO ĐẢM
+VỀ KHẢ NĂNG THƯƠNG MẠI, VỀ SỰ PHÙ HỢP CHO MỘT MỤC ĐÍCH CỤ THỂ, VỀ TÍNH KHÔNG
+XÂM PHẠM QUYỀN CỦA BÊN THỨ BA, HAY VỀ VIỆC PHẦN MỀM CHẠY KHÔNG GIÁN ĐOẠN VÀ
+KHÔNG CÓ LỖI.
+
+HQV Software không cam kết rằng thư sẽ luôn được gửi đi, nhận về, lưu giữ
+hay đồng bộ đầy đủ và đúng hạn.
+
+
+3. GIỚI HẠN TRÁCH NHIỆM
+
+Trong phạm vi pháp luật cho phép, HQV Software cùng người lao động, người
+đóng góp, bên cấp phép và bên phân phối của mình không chịu trách nhiệm đối
+với bất kỳ thiệt hại nào phát sinh từ hoặc liên quan tới việc bạn sử dụng
+hoặc không sử dụng được phần mềm, bao gồm nhưng không giới hạn ở: mất thư,
+hỏng hoặc lộ dữ liệu, gián đoạn công việc, mất lợi nhuận, mất cơ hội kinh
+doanh, hay bất kỳ thiệt hại trực tiếp, gián tiếp, ngẫu nhiên, đặc biệt hoặc
+hệ quả nào khác.
+
+Nếu theo pháp luật áp dụng, một phần trách nhiệm nào đó không thể được miễn
+trừ, thì tổng trách nhiệm của HQV Software đối với mọi khiếu nại liên quan
+tới phần mềm được giới hạn ở số tiền bạn đã thực trả cho HQV Software để sử
+dụng hMail Desktop trong mười hai (12) tháng liền trước sự kiện phát sinh
+khiếu nại; nếu bạn không trả khoản tiền nào thì giới hạn này bằng không.
+
+Một số hệ thống pháp luật không cho phép miễn trừ hoặc giới hạn đối với một
+số loại thiệt hại. Trong trường hợp đó, phần miễn trừ và giới hạn nêu trên
+chỉ không áp dụng ở đúng phạm vi bị cấm, các phần còn lại vẫn giữ nguyên
+hiệu lực.
+
+
+4. TRÁCH NHIỆM CỦA NGƯỜI DÙNG
+
+Bạn tự chịu trách nhiệm về việc sử dụng phần mềm, trong đó có:
+
+  a) Tự sao lưu dữ liệu thư, lịch và danh bạ của mình. Phần mềm có chức năng
+     nhập và chuyển dữ liệu; bạn phải sao lưu trước khi dùng các chức năng
+     đó.
+  b) Nội dung thư bạn soạn, gửi, chuyển tiếp hoặc lưu trữ, và việc tuân thủ
+     pháp luật cũng như quy định nội bộ nơi bạn làm việc.
+  c) Việc cấu hình đúng tài khoản thư, máy chủ và thông tin đăng nhập.
+  d) Kiểm tra kỹ trước khi thực hiện các thao tác khó hoàn tác, kể cả các
+     thao tác do trợ lý AI đề xuất hoặc thực hiện.
+
+
+5. TRỢ LÝ AI VÀ DỊCH VỤ CỦA BÊN THỨ BA
+
+Trợ lý AI trong hMail Desktop do HQV Software phát triển, nhưng nội dung câu
+trả lời do nhà cung cấp AI mà chính bạn chọn và cấu hình tạo ra. HQV Software
+không kiểm soát, không bảo đảm và không chịu trách nhiệm về tính chính xác,
+đầy đủ hay phù hợp của các nội dung đó. Kết quả do AI tạo ra chỉ mang tính
+tham khảo; bạn phải tự kiểm tra trước khi sử dụng.
+
+Khi bạn dùng trợ lý AI với một dịch vụ trực tuyến, nội dung thư liên quan sẽ
+được gửi tới dịch vụ đó theo cấu hình của bạn, và bạn tự chịu mọi chi phí
+phát sinh cũng như tuân thủ điều khoản của nhà cung cấp đó. Bạn có thể chọn
+dịch vụ AI chạy ngay trên máy để nội dung thư không rời khỏi máy.
+
+Tương tự với máy chủ thư, lịch, danh bạ và dịch vụ lọc thư rác: đó là dịch
+vụ của bên cung cấp tương ứng, không phải của HQV Software.
+
+
+6. DỮ LIỆU CỦA BẠN
+
+hMail Desktop không gửi dữ liệu về HQV Software. Thư, lịch và danh bạ chỉ đi
+tới đúng những máy chủ bạn cấu hình. Phần mềm đã tắt sẵn các kênh báo cáo
+thống kê và báo lỗi của Mozilla.
+
+
+7. CẬP NHẬT
+
+HQV Software có thể phát hành bản cập nhật nhưng không có nghĩa vụ phải làm
+vậy, và có thể ngừng phát triển hoặc hỗ trợ phần mềm vào bất kỳ lúc nào.
+
+
+8. LUẬT ÁP DỤNG
+
+Các điều khoản này được điều chỉnh bởi pháp luật Việt Nam. Nếu bất kỳ điều
+khoản nào bị xem là vô hiệu hoặc không thể thi hành, các điều khoản còn lại
+vẫn giữ nguyên hiệu lực.
+
+Các điều khoản này không loại trừ những quyền mà pháp luật bảo vệ người tiêu
+dùng dành cho bạn và không thể bị từ bỏ bằng thoả thuận.
+
+
+Liên hệ: HQV SOFTWARE CO., LTD — https://github.com/haoquangviet/hMail-Desktop
