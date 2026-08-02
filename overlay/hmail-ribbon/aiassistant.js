@@ -310,6 +310,12 @@ var hMailAI = {
 
   selectedMessage(win) {
     try {
+      // A message opened in its own window has no tabmail; the message it is
+      // showing hangs off the browser that hosts about:message.
+      const standalone = win.document.getElementById("messageBrowser");
+      if (standalone && !win.document.getElementById("tabmail")) {
+        return standalone.contentWindow?.gMessage || null;
+      }
       const about3Pane = win.document.getElementById("tabmail")?.currentAbout3Pane;
       return about3Pane?.gDBView?.hdrForFirstSelectedMessage || null;
     } catch (e) {
@@ -631,7 +637,11 @@ var hMailAI = {
     for (let round = 0; round < 4; round++) {
       const parts = await this.call(contents, { tools });
 
-      const calls = parts.filter(p => p.functionCall).map(p => p.functionCall);
+      // Keep the model's own parts, not just the functionCall inside them.
+      // Gemini attaches a thoughtSignature to each call and refuses the next
+      // request if it is missing, so the parts must go back verbatim.
+      const callParts = parts.filter(p => p.functionCall);
+      const calls = callParts.map(p => p.functionCall);
       if (!calls.length) {
         const reply = parts.map(p => p.text || "").join("").trim();
         if (!reply) {
@@ -647,7 +657,7 @@ var hMailAI = {
       }
 
       // Echo the model's request, then answer each call.
-      contents.push({ role: "model", parts: calls.map(c => ({ functionCall: c })) });
+      contents.push({ role: "model", parts: callParts });
       const responses = [];
       for (const call of calls) {
         const result = await this.runTool(win, call.name, call.args || {});

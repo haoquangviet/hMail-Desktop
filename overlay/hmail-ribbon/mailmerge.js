@@ -345,6 +345,8 @@ var hMailMerge = {
     if (!identity) {
       throw new Error("chưa có tài khoản gửi thư");
     }
+    const accountKey = win.gMsgCompose?.savedFolderURI
+      ? "" : (MailServices.accounts.defaultAccount?.key || "");
 
     let sent = 0;
     let skipped = 0;
@@ -374,27 +376,14 @@ var hMailMerge = {
 
       const compose = MailServices.compose.initCompose(params);
       compose.type = Ci.nsIMsgCompType.New;
-      await new Promise((resolve, reject) => {
-        const listener = {
-          QueryInterface: ChromeUtils.generateQI(["nsIMsgSendListener"]),
-          onStartSending() {},
-          onProgress() {},
-          onStatus() {},
-          onGetDraftFolderURI() {},
-          onSendNotPerformed() {
-            resolve();
-          },
-          onStopSending(id, status) {
-            Components.isSuccessCode(status)
-              ? resolve()
-              : reject(new Error("mã lỗi " + status));
-          },
-        };
-        compose.SendMsg(
-          mode === "send" ? Ci.nsIMsgCompDeliverMode.Now
-                          : Ci.nsIMsgCompDeliverMode.SaveAsDraft,
-          identity, "", null, listener);
-      });
+      // Thunderbird 140: sendMsg(deliverMode, identity, accountKey,
+      // msgWindow, progress), returning a promise.
+      const msgWindow = Cc["@mozilla.org/messenger/msgwindow;1"]
+        .createInstance(Ci.nsIMsgWindow);
+      await compose.sendMsg(
+        mode === "send" ? Ci.nsIMsgCompDeliverMode.Now
+                        : Ci.nsIMsgCompDeliverMode.SaveAsDraft,
+        identity, accountKey, msgWindow, null);
       sent++;
     }
 

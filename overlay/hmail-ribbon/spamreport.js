@@ -70,7 +70,7 @@ var hMailSpam = {
       const folder = about3Pane?.gFolder;
       if (folder) {
         const server = folder.server;
-        const account = MailServices.accounts.FindAccountForServer(server);
+        const account = MailServices.accounts.findAccountForServer(server);
         const email = account?.defaultIdentity?.email;
         if (email) {
           return email.trim().toLowerCase();
@@ -282,7 +282,7 @@ var hMailSpam = {
     // Attribute the report to the account the message actually lives in.
     let email = "";
     try {
-      const account = MailServices.accounts.FindAccountForServer(hdr.folder.server);
+      const account = MailServices.accounts.findAccountForServer(hdr.folder.server);
       email = (account?.defaultIdentity?.email || "").trim().toLowerCase();
     } catch (e) {}
     if (!email) {
@@ -631,7 +631,7 @@ var hMailSpam = {
 
       let email = "";
       try {
-        const account = MailServices.accounts.FindAccountForServer(hdr.folder.server);
+        const account = MailServices.accounts.findAccountForServer(hdr.folder.server);
         email = (account?.defaultIdentity?.email || "").trim().toLowerCase();
       } catch (e) {}
       if (!email || !this.Creds.get(email)) {

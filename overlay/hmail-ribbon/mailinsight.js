@@ -38,6 +38,119 @@ var hMailInsight = {
     "kindly process", "confidential",
   ],
 
+  /**
+   * Bounce messages say what went wrong in the language of mail servers:
+   * "554 5.7.1", "552 5.3.4", "Diagnostic-Code: smtp; ...". This turns that
+   * into an answer to the two questions the sender actually has — why did it
+   * not arrive, and what do I do now.
+   *
+   * Order matters: the first rule that matches wins, so the specific ones
+   * come before the general ones. `text` is the diagnostic line lowercased,
+   * which is what carries the reason when a server sends no enhanced code.
+   */
+  BOUNCE_RULES: [
+    {
+      test: (e, b, t) => e === "5.1.1" || e === "5.1.10" ||
+        /user unknown|no such user|recipient not found|does not exist|unknown recipient|invalid recipient|address rejected/.test(t),
+      kind: "permanent",
+      title: "Địa chỉ người nhận không tồn tại",
+      why: "Máy chủ bên nhận trả lời rằng hộp thư này không có trên hệ thống của họ.",
+      todo: "Kiểm tra lại chính tả địa chỉ. Nếu đúng, có thể người đó đã nghỉ việc hoặc hộp thư đã bị xoá — hỏi lại bằng kênh khác.",
+    },
+    {
+      test: e => e === "5.1.2" || e === "5.4.4",
+      kind: "permanent",
+      title: "Không tìm thấy máy chủ thư của tên miền người nhận",
+      why: "Tên miền trong địa chỉ không có bản ghi máy chủ thư, hoặc tên miền viết sai.",
+      todo: "Kiểm tra phần sau dấu @. Nếu tên miền đúng thì hệ thống thư của họ đang có sự cố.",
+    },
+    {
+      test: (e, b, t) => e === "5.2.2" ||
+        /mailbox full|quota exceeded|over quota|hộp thư đầy/.test(t),
+      kind: "permanent",
+      title: "Hộp thư người nhận đã đầy",
+      why: "Người nhận đã dùng hết dung lượng được cấp nên không nhận thêm được thư.",
+      todo: "Báo cho họ dọn bớt hộp thư, rồi gửi lại.",
+    },
+    {
+      test: (e, b, t) => ["5.3.4", "5.2.3"].includes(e) || b === 552 ||
+        b === 523 || /message too (large|big)|size exceeds|exceeds size limit|quá dung lượng/.test(t),
+      kind: "permanent",
+      title: "Thư vượt quá dung lượng cho phép",
+      why: "Thư (thường là do tệp đính kèm) lớn hơn giới hạn của máy chủ gửi hoặc máy chủ nhận. Nhiều nơi chỉ cho phép 10–25 MB, và đính kèm bị phình thêm khoảng một phần ba khi mã hoá.",
+      todo: "Nén tệp lại, hoặc tải lên nơi lưu trữ rồi gửi liên kết thay vì đính kèm.",
+    },
+    {
+      test: (e, b, t) => e === "5.5.3" ||
+        /too many recipients|quá nhiều người nhận/.test(t),
+      kind: "permanent",
+      title: "Quá nhiều người nhận trong một thư",
+      why: "Máy chủ giới hạn số địa chỉ cho mỗi thư để chống phát tán thư rác.",
+      todo: "Chia thành nhiều đợt gửi ít người hơn — tính năng Trộn thư của hMail gửi riêng từng người nên không vướng giới hạn này.",
+    },
+    {
+      test: (e, b, t) =>
+        /too many parts|too many mime|nesting|too many attachments|line too long|message too long|header too large|too many headers/.test(t),
+      kind: "permanent",
+      title: "Cấu trúc thư vượt giới hạn của máy chủ",
+      why: "Thư có quá nhiều phần, quá nhiều tệp đính kèm, dòng quá dài hoặc phần đầu thư quá lớn so với mức máy chủ chấp nhận.",
+      todo: "Gửi lại dưới dạng đơn giản hơn: bớt tệp đính kèm, bỏ nội dung trích dẫn dài, tránh dán ảnh trực tiếp vào thân thư.",
+    },
+    {
+      test: (e, b, t) => /bad ip|blacklist|blocked using|listed (at|on|in)|spamhaus|rbl|dnsbl|poor reputation|bad reputation/.test(t),
+      kind: "permanent",
+      title: "Địa chỉ IP máy chủ gửi đang bị chặn",
+      why: "Bên nhận từ chối vì IP của máy chủ gửi nằm trong danh sách đen, hoặc uy tín gửi thư đang thấp.",
+      todo: "Đây là việc của quản trị hệ thống thư phía gửi, không phải lỗi của bạn. Báo cho họ để yêu cầu gỡ khỏi danh sách đen.",
+    },
+    {
+      test: (e, b, t) => ["5.7.23", "5.7.24", "5.7.25", "5.7.26"].includes(e) ||
+        /spf|dkim|dmarc|sender policy|not authorized to send|unauthenticated/.test(t),
+      kind: "permanent",
+      title: "Bên nhận không chấp nhận vì xác thực người gửi không đạt",
+      why: "SPF, DKIM hoặc DMARC của tên miền gửi không hợp lệ với bên nhận, nên họ coi thư là mạo danh.",
+      todo: "Báo quản trị hệ thống kiểm tra lại bản ghi SPF/DKIM/DMARC của tên miền gửi.",
+    },
+    {
+      test: (e, b, t) => e === "5.7.13" || e === "5.7.0" ||
+        /relay(ing)? denied|relay access denied|not permitted|sender denied|authentication required/.test(t),
+      kind: "permanent",
+      title: "Không được phép gửi qua máy chủ này",
+      why: "Máy chủ từ chối chuyển tiếp thư từ người gửi này — thường do chưa đăng nhập SMTP hoặc tài khoản không có quyền gửi ra ngoài.",
+      todo: "Kiểm tra cài đặt máy chủ gửi (SMTP) trong tài khoản: đúng máy chủ, đúng cổng, và có bật xác thực.",
+    },
+    {
+      test: (e, b, t) => e === "5.7.1" || b === 554 ||
+        /rejected|not allowed|policy|refused|blocked|từ chối/.test(t),
+      kind: "permanent",
+      title: "Bên nhận chủ động từ chối thư",
+      why: "Máy chủ bên nhận từ chối theo chính sách của họ — có thể do nội dung bị coi là thư rác, do người nhận chặn người gửi, hoặc do quy định nội bộ.",
+      todo: "Thử liên hệ người nhận bằng kênh khác và nhờ họ đưa địa chỉ của bạn vào danh sách cho phép.",
+    },
+    {
+      test: (e, b, t) => /spam|bulk mail|content rejected|virus|malware/.test(t),
+      kind: "permanent",
+      title: "Thư bị coi là thư rác hoặc chứa nội dung nguy hiểm",
+      why: "Bộ lọc bên nhận đánh giá nội dung hoặc tệp đính kèm là không an toàn.",
+      todo: "Bỏ tệp đính kèm dạng chạy được, viết lại nội dung tự nhiên hơn, tránh nhiều liên kết rút gọn.",
+    },
+    {
+      test: (e, b, t) => /greylist|try again later|deferred|temporarily/.test(t) ||
+        (e || "").startsWith("4"),
+      kind: "temporary",
+      title: "Tạm thời chưa gửi được, hệ thống sẽ tự thử lại",
+      why: "Bên nhận đang bận, đang hoãn tạm thời (greylisting), hoặc gặp trục trặc ngắn hạn.",
+      todo: "Không cần làm gì. Máy chủ sẽ tự gửi lại trong vài giờ; nếu vài ngày vẫn không được, bạn sẽ nhận thêm một thư báo lỗi vĩnh viễn.",
+    },
+    {
+      test: (e, b, t) => /loop|too many hops/.test(t),
+      kind: "permanent",
+      title: "Thư bị lặp vòng giữa các máy chủ",
+      why: "Cấu hình chuyển tiếp thư ở đâu đó tạo thành vòng lặp, thư đi qua quá nhiều chặng.",
+      todo: "Báo quản trị hệ thống kiểm tra quy tắc chuyển tiếp của hộp thư liên quan.",
+    },
+  ],
+
   RISKY_ATTACHMENTS:
     /\.(exe|scr|com|pif|bat|cmd|js|jse|vbs|vbe|wsf|hta|msi|lnk|iso|img|jar|ps1)$/i,
 
@@ -83,6 +196,10 @@ var hMailInsight = {
 
   selected(win) {
     try {
+      const standalone = win.document.getElementById("messageBrowser");
+      if (standalone && !win.document.getElementById("tabmail")) {
+        return standalone.contentWindow?.gMessage || null;
+      }
       return win.document.getElementById("tabmail")?.currentAbout3Pane
         ?.gDBView?.hdrForFirstSelectedMessage || null;
     } catch (e) {
@@ -92,9 +209,12 @@ var hMailInsight = {
 
   messageDocument(win) {
     try {
-      const about3Pane = win.document.getElementById("tabmail")
-        ?.currentAbout3Pane;
-      return about3Pane?.messageBrowser?.contentDocument || null;
+      const tabmail = win.document.getElementById("tabmail");
+      if (!tabmail) {
+        return win.document.getElementById("messageBrowser")
+          ?.contentDocument || null;
+      }
+      return tabmail.currentAbout3Pane?.messageBrowser?.contentDocument || null;
     } catch (e) {
       return null;
     }
@@ -145,6 +265,35 @@ var hMailInsight = {
 
     const bar = el("div", `hmail-warning ${result.level}`);
     bar.id = "hmail-warning";
+
+    // A bounce gets the bar to itself: the sender wants to know why their
+    // message came back, not a list of header observations.
+    if (result.bounce) {
+      const b = result.bounce;
+      const head = el("div", "hmail-warning-head");
+      head.append(el("span", "hmail-warning-title",
+        b.temporary ? `Thư chưa gửi được — ${b.title}`
+                    : `Thư không gửi được — ${b.title}`));
+      const close = el("button", "hmail-warning-close", "✕");
+      close.title = "Ẩn cảnh báo";
+      close.addEventListener("click", () => {
+        this.dismissed?.add(key);
+        bar.remove();
+      });
+      head.appendChild(close);
+      bar.appendChild(head);
+
+      const list = el("ul", "hmail-warning-list");
+      if (b.recipient) {
+        list.appendChild(el("li", "hmail-warning-item",
+                            `Không tới được: ${b.recipient}`));
+      }
+      list.appendChild(el("li", "hmail-warning-item", b.why));
+      list.appendChild(el("li", "hmail-warning-item", `Nên làm: ${b.todo}`));
+      bar.appendChild(list);
+      host.insertBefore(bar, host.firstChild);
+      return;
+    }
 
     const serious = result.findings.filter(f => f.level === "danger");
     const shown = (serious.length ? serious : result.findings).slice(0, 3);
@@ -518,10 +667,113 @@ var hMailInsight = {
       }
     }
 
+    // --- thư bị trả về ----------------------------------------------------
+    // Checked last so the security findings above are already in place, and
+    // reported as information rather than danger: a bounce is a fact about
+    // your own message, not a threat.
+    const bounce = this.bounce(headers, body, hdr);
+    if (bounce) {
+      out.bounce = bounce;
+      out.facts.bounce = bounce;
+      note("info", `Thư trả về: ${bounce.title}` +
+        (bounce.recipient ? ` (${bounce.recipient})` : ""));
+    }
+
     out.summary = this.summarize(hdr, body);
     out.facts.dates = this.dates(body);
     out.facts.amounts = this.amounts(body);
     return out;
+  },
+
+  // --------------------------------------------------------- thư trả về
+
+  /**
+   * Is this a bounce, and if so what happened?
+   *
+   * The tidy case is a delivery status notification (RFC 3464): a
+   * multipart/report with Final-Recipient, Action, Status and
+   * Diagnostic-Code fields. Plenty of servers send prose instead, so the
+   * codes and the address are also dug out of the body text.
+   */
+  bounce(headers, body, hdr) {
+    const from = this.address(this.first(headers, "from") || hdr?.author || "");
+    const contentType = this.first(headers, "content-type").toLowerCase();
+    const subject = String(hdr?.mime2DecodedSubject || "");
+
+    const looksLikeBounce =
+      /report-type=delivery-status|multipart\/report/.test(contentType) ||
+      /^(mailer-daemon|postmaster|no-?reply)@/i.test(from) ||
+      /delivery (status notification|failure|has failed)|undeliver|returned mail|failure notice|thư không gửi được|không thể gửi/i
+        .test(subject);
+    if (!looksLikeBounce) {
+      return null;
+    }
+
+    const field = name => {
+      const m = new RegExp(`^${name}\\s*:\\s*(.+)$`, "im").exec(body);
+      return m ? m[1].trim() : "";
+    };
+
+    // Who it was for. rfc822;user@host in a DSN, or the prose form.
+    let recipient = field("Final-Recipient") || field("Original-Recipient");
+    recipient = recipient.replace(/^[^;]*;\s*/, "").trim();
+    if (!recipient) {
+      const m = /^To:\s*([^\s<>]+@[^\s<>]+)/im.exec(body) ||
+        /addressed to[^\n]*?([\w.+-]+@[\w.-]+\.\w+)/i.exec(body);
+      recipient = m ? m[1] : "";
+    }
+    recipient = recipient.replace(/[<>]/g, "");
+
+    const diagnostic = field("Diagnostic-Code")
+      .replace(/^smtp\s*;\s*/i, "").trim();
+    const statusField = field("Status");
+    const action = field("Action").toLowerCase();
+
+    // Codes, wherever they appear: the DSN fields first, then the body.
+    const enhancedMatch = /\b([245]\.\d{1,3}\.\d{1,3})\b/
+      .exec(`${statusField} ${diagnostic} ${body}`);
+    const basicMatch = /\b([245]\d\d)[\s-]/.exec(`${diagnostic} ${body}`);
+    const enhanced = enhancedMatch ? enhancedMatch[1] : "";
+    const basic = basicMatch ? parseInt(basicMatch[1], 10) : 0;
+
+    // The server's own words, which is what the rules read.
+    const serverSaid = diagnostic ||
+      (/The server returned:\s*\n*\s*(.+)/i.exec(body)?.[1] || "").trim() ||
+      (/Reason:\s*(.+)/i.exec(body)?.[1] || "").trim();
+    const haystack = `${serverSaid} ${statusField} ${body.slice(0, 4000)}`
+      .toLowerCase();
+
+    if (!enhanced && !basic && !serverSaid) {
+      return null;
+    }
+
+    const rule = this.BOUNCE_RULES.find(r => {
+      try {
+        return r.test(enhanced, basic, haystack);
+      } catch (e) {
+        return false;
+      }
+    });
+
+    const temporary = action.startsWith("delay") ||
+      enhanced.startsWith("4") || (basic >= 400 && basic < 500);
+
+    return {
+      recipient,
+      enhanced,
+      basic,
+      serverSaid: serverSaid.slice(0, 300),
+      temporary: rule ? rule.kind === "temporary" : temporary,
+      title: rule ? rule.title
+        : (temporary ? "Tạm thời chưa gửi được"
+                     : "Thư không gửi được tới người nhận"),
+      why: rule ? rule.why
+        : "Máy chủ bên nhận từ chối nhưng không nói rõ lý do theo cách hMail " +
+          "hiểu được. Nội dung nguyên văn của máy chủ nằm bên dưới.",
+      todo: rule ? rule.todo
+        : "Đọc dòng nguyên văn của máy chủ, hoặc chuyển tiếp thư báo lỗi này " +
+          "cho quản trị hệ thống thư.",
+    };
   },
 
   /** Text body, HTML stripped, good enough for reading and matching. */
