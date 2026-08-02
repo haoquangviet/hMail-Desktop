@@ -774,6 +774,27 @@ Object.assign(hMailAI, {
     }
     this._watching = true;
     this._autoDone = new Set();
+    // Whether a message was unread *when it was picked*. By the time the
+    // poll below notices the selection changed, Thunderbird has usually
+    // marked it read already, so asking hdr.isRead then always says "read"
+    // and the "chỉ thư chưa đọc" scope would never fire.
+    this._wasUnread = new Map();
+    this._watchSelection = () => {
+      try {
+        const tree = win.document.getElementById("tabmail")
+          ?.currentAbout3Pane?.threadTree;
+        if (!tree || tree._hmailWatched) {
+          return;
+        }
+        tree._hmailWatched = true;
+        tree.addEventListener("select", () => {
+          const hdr = this.selectedMessage(win);
+          if (hdr) {
+            this._wasUnread.set(this.messageKey(hdr), !hdr.isRead);
+          }
+        }, true);
+      } catch (e) {}
+    };
 
     const check = () => {
       try {
@@ -791,8 +812,12 @@ Object.assign(hMailAI, {
         }
 
         const scope = this.pref("hmail.ai.autoScope", "unread");
-        if (scope === "unread" && hdr.isRead) {
-          return;
+        if (scope === "unread") {
+          const wasUnread = this._wasUnread.has(key)
+            ? this._wasUnread.get(key) : !hdr.isRead;
+          if (!wasUnread) {
+            return;
+          }
         }
         if (scope === "inbox") {
           const isInbox = !!(hdr.folder?.flags & Ci.nsMsgFolderFlags.Inbox);
@@ -817,6 +842,7 @@ Object.assign(hMailAI, {
     // also poll the selection cheaply.
     let lastKey = null;
     win.setInterval(() => {
+      this._watchSelection();
       const hdr = this.selectedMessage(win);
       const key = hdr ? this.messageKey(hdr) : null;
       if (key !== lastKey) {
