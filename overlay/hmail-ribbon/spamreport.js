@@ -478,6 +478,99 @@ var hMailSpam = {
    * only learns about spam if it is told. Mirror every junk marking to the
    * service so one action trains both.
    */
+  /**
+   * Where junk goes on this account: the folder flagged Junk, or one named
+   * like it. Returns null when the account has none.
+   */
+  junkFolder(server) {
+    try {
+      const flagged = server.rootFolder.getFolderWithFlags(
+        Ci.nsMsgFolderFlags.Junk);
+      if (flagged) {
+        return flagged;
+      }
+      for (const folder of server.rootFolder.descendants) {
+        if (/^(spam|junk|thư rác|email rác)$/i.test(folder.name)) {
+          return folder;
+        }
+      }
+    } catch (e) {}
+    return null;
+  },
+
+  /**
+   * Marking a message as junk in Thunderbird only sets a flag; whether it
+   * moves anywhere is a per-account setting most people never find. Ask once
+   * per account, then do it every time.
+   */
+  ensureJunkMove(win, hdr) {
+    let server;
+    try {
+      server = hdr.folder.server;
+    } catch (e) {
+      return;
+    }
+
+    let asked = [];
+    try {
+      asked = JSON.parse(
+        Services.prefs.getCharPref("hmail.spam.junkActionAsked", "[]"));
+    } catch (e) {}
+
+    const configured = (() => {
+      try {
+        return server.getBoolValue("moveOnSpam");
+      } catch (e) {
+        return false;
+      }
+    })();
+
+    if (!configured && !asked.includes(server.key)) {
+      const target = this.junkFolder(server);
+      const where = target ? `"${target.prettyName}"` : '"Thư rác"';
+      const move = Services.prompt.confirm(win, "Thư rác",
+        `Bạn muốn hMail tự chuyển thư bị đánh dấu là thư rác vào thư mục ` +
+        `${where} của tài khoản ${server.prettyName} không?\n\n` +
+        `Nếu chọn Không, thư chỉ được đánh dấu và vẫn nằm nguyên chỗ cũ.`);
+
+      asked.push(server.key);
+      try {
+        Services.prefs.setCharPref("hmail.spam.junkActionAsked",
+                                   JSON.stringify(asked));
+      } catch (e) {}
+
+      if (!move) {
+        return;
+      }
+      try {
+        server.setBoolValue("moveOnSpam", true);
+        // 0 = the account's own junk folder.
+        server.setIntValue("moveTargetMode", 0);
+        server.spamSettings.initialize(server);
+      } catch (e) {
+        Cu.reportError("hMail junk settings failed: " + e);
+      }
+    } else if (!configured) {
+      return;
+    }
+
+    this.moveToJunk(win, hdr);
+  },
+
+  moveToJunk(win, hdr) {
+    try {
+      const server = hdr.folder.server;
+      const target = this.junkFolder(server);
+      if (!target || target.URI === hdr.folder.URI) {
+        return;
+      }
+      MailServices.copy.copyMessages(
+        hdr.folder, [hdr], target, true, null, null, false);
+    } catch (e) {
+      Cu.reportError("hMail junk move failed: " + e);
+    }
+  },
+
   watchJunk(win) {
     if (this._junkListener) {
       return;
@@ -499,6 +592,10 @@ var hMailSpam = {
             if (score !== "100") {
               continue;
             }
+            // Marking junk should also put the message where junk belongs.
+            // Deferred: this runs inside a folder notification, and a dialog
+            // must not open in the middle of one.
+            win.setTimeout(() => self.ensureJunkMove(win, hdr), 0);
             self.autoReport(win, hdr);
           }
         } catch (e) {
