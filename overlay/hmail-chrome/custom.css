@@ -1587,8 +1587,41 @@ select.hmail-ai-field,
     display: none !important;
 }
 
+/* One row of commands. The composer's height belongs to the message. */
 .hmail-compose-ribbon {
     flex: 0 0 auto !important;
+}
+
+.hmail-compose-ribbon .hmail-ribbon-pane {
+    padding-block: 3px !important;
+    align-items: center !important;
+}
+
+.hmail-compose-ribbon .hmail-ribbon-group-items {
+    flex-wrap: nowrap !important;
+    max-height: none !important;
+    align-items: center !important;
+}
+
+.hmail-compose-ribbon .hmail-ribbon-button {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 6px !important;
+    min-width: 0 !important;
+    min-height: 28px !important;
+    padding: 4px 9px !important;
+    white-space: nowrap !important;
+}
+
+.hmail-compose-ribbon .hmail-ribbon-icon {
+    width: 16px !important;
+    height: 16px !important;
+    margin: 0 !important;
+}
+
+.hmail-compose-ribbon .hmail-ribbon-label {
+    font-size: 0.85rem !important;
+    text-align: start !important;
 }
 
 /* The panels docked beside the message being written. */

@@ -25,19 +25,19 @@ var hMailComposeRibbon = {
         {
           label: "Gửi",
           buttons: [
-            { id: "c-send", label: "Gửi\nngay", icon: "sent", size: "large",
+            { id: "c-send", label: "Gửi ngay", icon: "sent",
               cmd: "cmd_sendNow" },
-            { id: "c-later", label: "Gửi\nsau", icon: "outbox", size: "large",
+            { id: "c-later", label: "Gửi sau", icon: "outbox",
               cmd: "cmd_sendLater" },
-            { id: "c-draft", label: "Lưu\nnháp", icon: "drafts", size: "large",
+            { id: "c-draft", label: "Lưu nháp", icon: "drafts",
               cmd: "cmd_saveAsDraft" },
           ],
         },
         {
           label: "Đính kèm",
           buttons: [
-            { id: "c-attach", label: "Đính kèm\ntệp", icon: "import",
-              size: "large", cmd: "cmd_attachFile" },
+            { id: "c-attach", label: "Đính kèm", icon: "import",
+              cmd: "cmd_attachFile" },
             { id: "c-image", label: "Chèn ảnh", icon: "mail-col",
               cmd: "cmd_image" },
             { id: "c-link", label: "Chèn liên kết", icon: "extention",
@@ -67,10 +67,9 @@ var hMailComposeRibbon = {
         {
           label: "hMail",
           buttons: [
-            { id: "c-ai", label: "Trợ lý\nAI", icon: "ai", size: "large",
+            { id: "c-ai", label: "Trợ lý AI", icon: "ai",
               fn: win => win.hMailComposeAI.toggle(win) },
-            { id: "c-merge", label: "Gửi hàng\nloạt", icon: "contact",
-              size: "large",
+            { id: "c-merge", label: "Gửi hàng loạt", icon: "contact",
               fn: win => win.hMailMerge.toggle(win) },
           ],
         },
@@ -121,8 +120,10 @@ var hMailComposeRibbon = {
       const pane = el("div", "hmail-ribbon-pane selected");
       for (const group of tab.groups) {
         const box = el("div", "hmail-ribbon-group");
-        const items = el("div", "hmail-ribbon-group-items" +
-          (group.buttons.every(b => b.size !== "large") ? " stacked" : ""));
+        // One row: the composer needs its height for the message, not for a
+        // two-storey command bar, so every button is icon-beside-text and the
+        // group captions are dropped.
+        const items = el("div", "hmail-ribbon-group-items");
 
         for (const button of group.buttons) {
           const b = el("button", "hmail-ribbon-button" +
@@ -161,9 +162,7 @@ var hMailComposeRibbon = {
         }
 
         box.appendChild(items);
-        const caption = el("div", "hmail-ribbon-group-label");
-        caption.textContent = group.label;
-        box.appendChild(caption);
+        box.title = group.label;
         pane.appendChild(box);
       }
       panes.appendChild(pane);

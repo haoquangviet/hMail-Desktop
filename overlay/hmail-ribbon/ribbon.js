@@ -108,28 +108,6 @@ var hMailRibbon = {
               fn: win => win.hMailSpam.openTab(win) },
           ],
         },
-        {
-          // Migrating from Outlook is the first thing a new user does, so it
-          // sits on the Home tab rather than buried in a menu.
-          label: "Chuyển từ Outlook",
-          buttons: [
-            { id: "import-outlook", label: "Nhập từ\nOutlook", icon: "import",
-              size: "large", fn: win => win.hMailImport.openTab(win) },
-            { id: "import-other", label: "Nhập hồ sơ khác", icon: "import",
-              fn: openImport("app") },
-            { id: "import-contacts", label: "Nhập danh bạ", icon: "contact",
-              fn: openImport("addressBook") },
-            { id: "import-calendar", label: "Nhập lịch", icon: "calendar",
-              fn: openImport("calendar") },
-            { id: "export-data", label: "Xuất dữ liệu", icon: "outbox",
-              fn: openImport("export") },
-            { id: "dav-sync", label: "Đồng bộ Lịch\n& Danh bạ",
-              icon: "calendar",
-              fn: win => win.hMailDav.setupAll(win, { quiet: false }) },
-            { id: "mail-merge", label: "Gửi hàng loạt", icon: "contact",
-              fn: win => win.hMailMerge.openTab(win) },
-          ],
-        },
       ],
     },
     {
@@ -336,6 +314,27 @@ var hMailRibbon = {
               fn: win => win.hMailUpdate.check(win, true) },
             { id: "h-github", label: "Trang\nGitHub", icon: "extention", size: "large",
               fn: win => win.openLinkExternally("https://github.com/haoquangviet/hMail-Desktop") },
+          ],
+        },
+        {
+          // Importing and setting up sync are things done once, when moving
+          // in — they belong beside the other setup commands, not on the tab
+          // used every day.
+          label: "Chuyển dữ liệu vào hMail",
+          buttons: [
+            { id: "import-outlook", label: "Nhập từ\nOutlook", icon: "import",
+              size: "large", fn: win => win.hMailImport.openTab(win) },
+            { id: "import-other", label: "Nhập hồ sơ khác", icon: "import",
+              fn: openImport("app") },
+            { id: "import-contacts", label: "Nhập danh bạ", icon: "contact",
+              fn: openImport("addressBook") },
+            { id: "import-calendar", label: "Nhập lịch", icon: "calendar",
+              fn: openImport("calendar") },
+            { id: "export-data", label: "Xuất dữ liệu", icon: "outbox",
+              fn: openImport("export") },
+            { id: "dav-sync", label: "Đồng bộ Lịch & Danh bạ",
+              icon: "calendar",
+              fn: win => win.hMailDav.setupAll(win, { quiet: false }) },
           ],
         },
         {
