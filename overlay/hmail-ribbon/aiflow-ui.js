@@ -830,6 +830,10 @@ var hMailFlowUI = {
 
       this.pending = (this.pending || []).concat(
         result.review.map(r => ({ ...r, rule })));
+      if (result.review.length) {
+        // Land where the outcome is, not where the button was.
+        this.selected = "review";
+      }
       this.say(win,
         `Xong. Đã xử lý ${result.acted.length.toLocaleString("vi-VN")} thư, ` +
         `${result.review.length.toLocaleString("vi-VN")} thư chờ bạn duyệt, ` +

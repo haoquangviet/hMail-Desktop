@@ -4191,30 +4191,60 @@ unified-toolbar-customization {
    drew more lines than the rows were worth, and a page of full-width cards
    meant scrolling past every rule to reach the one you wanted.
    ===================================================== */
-.hmail-flow-split {
-    display: flex;
-    gap: 20px;
-    align-items: flex-start;
-    margin-block: 10px 4px;
+/* =====================================================
+   AI AUTOMATION — the account settings shape.
+
+   The list is a column of its own against the edge of the tab, running its
+   full height, and everything else lives in the pane beside it. A list that
+   starts halfway down the page under a heading and a switch is a card, and a
+   card is what this was before.
+   ===================================================== */
+.hmail-flow-page {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: stretch;
+    flex: 1 1 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+    background-color: Canvas !important;
 }
 
-/* The Settings page's category column: a tinted panel running the full
-   height, rows full-bleed inside it, and the selected row lifted out in the
-   content colour rather than tinted further. */
+.hmail-flow-page.resizing {
+    user-select: none;
+    cursor: col-resize;
+}
+
 .hmail-flow-side {
-    flex: 0 0 250px;
+    flex: 0 0 30%;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 12px 10px;
-    border-radius: 3px;
+    gap: 8px;
+    padding: 10px 8px;
     background-color: color-mix(in srgb, CanvasText 5%, Canvas);
-    /* Stays put while the form scrolls, the way the Settings category list
-       does. The form is long enough that clipping it at a fixed height made
-       it look truncated rather than scrollable. */
-    position: sticky;
-    top: 0;
-    max-height: 72vh;
+    border-inline-end: 1px solid
+        color-mix(in srgb, CanvasText 12%, transparent);
+}
+
+.hmail-flow-splitter {
+    flex: 0 0 7px;
+    margin-inline-start: -4px;
+    align-self: stretch;
+    cursor: col-resize;
+    position: relative;
+    z-index: 1;
+}
+
+.hmail-flow-splitter:hover::before,
+.hmail-flow-page.resizing .hmail-flow-splitter::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 3px;
+    width: 2px;
+    background-color: var(--hmail-accent);
 }
 
 .hmail-flow-side-head {
@@ -4225,18 +4255,17 @@ unified-toolbar-customization {
     appearance: none !important;
     -moz-appearance: none !important;
     width: 100%;
-    padding: 8px 12px !important;
-    min-height: 36px !important;
+    padding: 7px 12px !important;
+    min-height: 32px !important;
     line-height: 1.6 !important;
     border: 1px solid var(--hmail-accent) !important;
     border-radius: 3px !important;
     background-color: var(--hmail-accent) !important;
     color: #fff !important;
     font: inherit !important;
-    font-size: 0.92em !important;
+    font-size: 0.9em !important;
     font-weight: 500;
     cursor: pointer !important;
-    box-shadow: 0 1px 3px color-mix(in srgb, CanvasText 15%, transparent);
 }
 
 .hmail-flow-add:hover {
@@ -4249,16 +4278,16 @@ unified-toolbar-customization {
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
 }
 
 .hmail-flow-side-row {
     display: flex;
     align-items: flex-start;
-    gap: 9px;
-    padding: 8px 10px;
+    gap: 8px;
+    padding: 6px 8px;
     border: none;
-    border-radius: 4px;
+    border-radius: 3px;
     background-color: transparent;
     box-shadow: none;
     cursor: pointer;
@@ -4269,11 +4298,9 @@ unified-toolbar-customization {
 }
 
 .hmail-flow-side-row.selected {
-    background-color: Canvas;
-    box-shadow: 0 1px 2px color-mix(in srgb, CanvasText 12%, transparent);
+    background-color: color-mix(in srgb, var(--hmail-accent) 14%, Canvas);
 }
 
-/* A rule that is switched off should look switched off. */
 .hmail-flow-side-row.off .hmail-flow-side-text {
     opacity: 0.5;
 }
@@ -4289,27 +4316,32 @@ unified-toolbar-customization {
 
 .hmail-flow-side-name {
     font-weight: 600;
-    font-size: 0.94em;
+    font-size: 0.92em;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .hmail-flow-side-note {
-    font-size: 0.8em;
+    font-size: 0.79em;
     opacity: 0.7;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.hmail-flow-detail {
-    flex: 1 1 auto;
+/* The pane beside it: everything else, and the only thing that scrolls. */
+.hmail-flow-main {
+    flex: 1 1 0;
     min-width: 0;
-    padding-inline-end: 6px;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 20px 26px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
-/* The card no longer needs its own frame inside the detail pane. */
 .hmail-flow-detail .hmail-flow-rule {
     border: none;
     box-shadow: none;
@@ -4317,18 +4349,168 @@ unified-toolbar-customization {
     padding: 0;
 }
 
-@media (max-width: 900px) {
-    .hmail-flow-split {
-        flex-direction: column;
-        height: auto;
+.hmail-flow-main .hmail-ai-row .hmail-ai-field,
+.hmail-flow-main textarea.hmail-ai-field {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+@media (max-width: 820px) {
+    .hmail-flow-page {
+        flex-direction: column !important;
+        height: auto !important;
     }
     .hmail-flow-side {
-        flex: 0 0 auto;
-        width: 100%;
-        max-height: 30vh;
+        flex: 0 0 auto !important;
+        max-height: 26vh;
+        border-inline-end: none;
+        border-block-end: 1px solid
+            color-mix(in srgb, CanvasText 12%, transparent);
     }
+    .hmail-flow-splitter {
+        display: none;
+    }
+}
+    .hmail-flow-splitter {
+        display: none;
+    }
+    .hmail-flow-detail {
+        padding-inline-start: 0;
+    }
+}
     .hmail-flow-detail {
         max-height: none;
     }
 }
+}
+
+/* The foot of the rule column: the neighbouring pages, and a plain list of
+   what is not built yet. Saying so beats leaving people to hunt for it. */
+.hmail-flow-foot {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding-block-start: 8px;
+    border-block-start: 1px solid
+        color-mix(in srgb, CanvasText 12%, transparent);
+}
+
+.hmail-flow-foot-link {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    text-align: start;
+    padding: 6px 8px !important;
+    border: none !important;
+    border-radius: 3px !important;
+    background-color: transparent !important;
+    color: inherit !important;
+    font: inherit !important;
+    font-size: 0.88em !important;
+    line-height: 1.6 !important;
+    cursor: pointer !important;
+    opacity: 0.85;
+}
+
+.hmail-flow-foot-link:hover {
+    background-color: color-mix(in srgb, CanvasText 6%, transparent) !important;
+    opacity: 1;
+}
+
+.hmail-flow-soon {
+    margin-block-start: 6px;
+    padding: 7px 8px;
+    border-radius: 3px;
+    background-color: color-mix(in srgb, CanvasText 4%, transparent);
+}
+
+.hmail-flow-soon-head {
+    font-size: 0.78em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.55;
+    margin-block-end: 2px;
+}
+
+.hmail-flow-soon-note {
+    font-size: 0.78em;
+    line-height: 1.55;
+    opacity: 0.6;
+}
+
+/* Section headings inside the rule column. */
+.hmail-flow-side-title {
+    flex: 0 0 auto;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.5;
+    padding: 8px 8px 2px;
+}
+
+.hmail-flow-side-empty {
+    padding: 4px 8px 8px;
+    font-size: 0.82em;
+    opacity: 0.6;
+}
+
+.hmail-flow-pages {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+/* The non-rule pages have no switch, so their text starts at the edge. */
+.hmail-flow-side-row.page {
+    padding-inline-start: 8px;
+}
+
+/* One pane at a time on the right, each with its own heading. */
+.hmail-flow-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 860px;
+}
+
+.hmail-flow-links {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-block-start: 2px;
+}
+
+.hmail-flow-link {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    text-align: start;
+    padding: 9px 12px !important;
+    border: 1px solid color-mix(in srgb, CanvasText 12%, transparent) !important;
+    border-radius: 3px !important;
+    background-color: Canvas !important;
+    color: inherit !important;
+    font: inherit !important;
+    cursor: pointer !important;
+    box-shadow: 0 1px 2px color-mix(in srgb, CanvasText 8%, transparent);
+}
+
+.hmail-flow-link:hover {
+    border-color: var(--hmail-accent) !important;
+    background-color: color-mix(in srgb, var(--hmail-accent) 6%, Canvas) !important;
+}
+
+.hmail-flow-link-name {
+    font-weight: 600;
+    font-size: 0.92em;
+}
+
+.hmail-flow-link-note {
+    font-size: 0.8em;
+    opacity: 0.7;
 }
