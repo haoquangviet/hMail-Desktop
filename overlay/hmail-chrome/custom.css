@@ -38,11 +38,10 @@
     background-image: none !important;
 }
 
-/* Bỏ đường kẻ + bo góc phía trên ribbon (giáp thanh tab, trông chối mắt). */
+/* Bỏ đường kẻ phía trên ribbon. Bo góc để nguyên cả bốn — ribbon là một mặt
+   riêng, cắt phẳng hai góc trên trông cụt. */
 #hmail-ribbon {
     border-top: none !important;
-    border-top-left-radius: 0 !important;
-    border-top-right-radius: 0 !important;
     box-shadow: none !important;
     margin-top: 0 !important;
 }
@@ -3500,23 +3499,30 @@ unified-toolbar-customization {
     display: none !important;
 }
 
-/* The ribbon is a surface of its own, so it gets a surface's corners — but
-   only the bottom two. The base theme leaves an 8px margin under the tab
-   strip, and rounding the top corners let the window background show through
-   at both ends, which read as a stray line above the ribbon. The ribbon now
-   meets the tab strip flush. */
+/* The ribbon is a surface of its own, so it gets a surface's corners — all
+   four of them. Squaring the top two to hide a line only made the ribbon
+   look cut off, and the line was never the radius: it is the tab strip's own
+   bottom edge, removed below. */
 #hmail-ribbon {
-    border-start-start-radius: 0 !important;
-    border-start-end-radius: 0 !important;
-    border-end-start-radius: 10px;
-    border-end-end-radius: 10px;
+    border-radius: 10px !important;
     overflow: hidden;
 }
 
-/* That margin is what the line actually was. */
-#tabs-toolbar {
+/* The line above the ribbon. The base theme draws a bottom edge on the tab
+   strip and leaves a margin under it; both had to go. */
+#tabs-toolbar,
+#tabmail-tabs,
+#navigation-toolbox,
+#toolbar-menubar {
     margin-bottom: 0 !important;
     border-bottom: none !important;
+    box-shadow: none !important;
+}
+
+/* And the ribbon's own tab row, which carried a top edge of its own. */
+.hmail-ribbon-tabs {
+    border-top: none !important;
+    box-shadow: none !important;
 }
 
 /* Only the row that is actually selected carries the marker. An account row
@@ -4546,4 +4552,46 @@ unified-toolbar-customization {
 .hmail-flow-link-note {
     font-size: 0.8em;
     opacity: 0.7;
+}
+
+/* The rule editor is the content of its page, not a card sitting on it. The
+   frame and shadow only repeated the boundary the pane already has. */
+.hmail-flow-detail .hmail-flow-rule,
+.hmail-flow-pane .hmail-flow-rule,
+.hmail-flow-rule {
+    border: none !important;
+    box-shadow: none !important;
+    background-color: transparent !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+}
+
+/* Các ô chọn nhiều giá trị trong quy tắc AI. Một hàng checkbox dọc cho chín
+   loại thư đẩy phần còn lại của biểu mẫu xuống quá xa để đọc được. */
+.hmail-flow-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 4px 0 10px;
+}
+
+.hmail-flow-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border: 1px solid var(--hmail-border, rgba(0, 0, 0, 0.14));
+    border-radius: 3px;
+    font-size: 0.92em;
+    cursor: pointer;
+    user-select: none;
+}
+
+.hmail-flow-chip:hover {
+    background-color: rgba(15, 108, 189, 0.08);
+}
+
+.hmail-flow-chip:has(input:checked) {
+    background-color: rgba(15, 108, 189, 0.12);
+    border-color: #0f6cbd;
 }

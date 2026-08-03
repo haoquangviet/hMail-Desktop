@@ -157,8 +157,9 @@ var hMailFlowUI = {
       "Bộ lọc thường chỉ so khớp chữ: một địa chỉ, một từ trong tiêu đề. " +
       "Ở đây mỗi quy tắc có hai nửa. Nửa rẻ tiền so khớp như bộ lọc thường " +
       "và chạy trước, không tốn gì. Chỉ khi nửa đó khớp, hMail mới đưa thư " +
-      "cho AI và hỏi đúng một câu bạn tự viết — nhờ thứ tự đó mà hỏi AI " +
-      "không biến thành một hoá đơn."));
+      "cho AI đọc. AI đọc mỗi thư một lần và rút ra loại thư, ý định " +
+      "người gửi, mức khẩn, thái độ, chủ đề — quy tắc xét trên những thứ đó " +
+      "chứ không xét trên chữ. Nhờ thứ tự đó mà hỏi AI không thành hoá đơn."));
 
     const master = el("div", "hmail-flow-master");
     const toggle = el("input");
@@ -200,7 +201,7 @@ var hMailFlowUI = {
 
     box.appendChild(el("div", "hmail-ai-section", "Chưa có"));
     box.appendChild(el("div", "hmail-ai-hint",
-      "Lịch chạy định kỳ · Điều kiện theo người nhận và ngày tháng · " +
+      "Lịch chạy định kỳ · Điều kiện theo ngày tháng cụ thể · " +
       "Xuất báo cáo phân loại · Áp quy tắc cho nhiều thư mục một lượt"));
     return box;
   },
@@ -477,6 +478,40 @@ var hMailFlowUI = {
     if (rule.serverSpam) {
       when.push("máy chủ báo rác");
     }
+    if (rule.body) {
+      when.push(`nội dung "${rule.body}"`);
+    }
+    if (rule.listMail === "yes") {
+      when.push("thư danh sách");
+    } else if (rule.listMail === "no") {
+      when.push("người thật gửi");
+    }
+    if (rule.knownContact === "no") {
+      when.push("người lạ");
+    } else if (rule.knownContact === "yes") {
+      when.push("có trong danh bạ");
+    }
+    if (rule.olderThanDays > 0) {
+      when.push(`cũ hơn ${rule.olderThanDays} ngày`);
+    }
+    const ai = rule.ai;
+    if (ai?.on) {
+      const bits = [
+        ...(ai.categories || []),
+        ...(ai.intents || []),
+        ...(ai.sentiments || []),
+      ];
+      if (ai.minUrgency > 0) {
+        bits.push(`khẩn ≥${ai.minUrgency}`);
+      }
+      if (ai.needsReply === "yes") {
+        bits.push("cần trả lời");
+      }
+      if (ai.topic) {
+        bits.push(`về "${ai.topic}"`);
+      }
+      when.push(bits.length ? `AI: ${bits.join("/")}` : "AI đọc hiểu");
+    }
     if (rule.ask) {
       when.push("có hỏi AI");
     }
@@ -494,6 +529,9 @@ var hMailFlowUI = {
     if (rule.flag) {
       then.push("gắn cờ");
     }
+    if (rule.tagCategory) {
+      then.push("gắn nhãn theo loại");
+    }
     if (rule.summarize) {
       then.push("tóm tắt");
     }
@@ -504,7 +542,8 @@ var hMailFlowUI = {
     if (!when.length && !then.length) {
       return "chưa cấu hình";
     }
-    return `${when.join(", ") || "mọi thư"} → ${then.join(", ") || "chưa có hành động"}`;
+    const join = rule.match === "any" ? " hoặc " : ", ";
+    return `${when.join(join) || "mọi thư"} → ${then.join(", ") || "chưa có hành động"}`;
   },
 
   card(win, rule, index, rules) {
@@ -557,8 +596,77 @@ var hMailFlowUI = {
       box.appendChild(row);
       return field;
     };
-    text("Người gửi chứa", "from", "ví dụ: @domain.com");
-    text("Tiêu đề chứa", "subject", "ví dụ: hóa đơn");
+    // Cách ghép điều kiện. Hầu hết quy tắc thật không phải một phép AND:
+    // "từ ngân hàng HOẶC tiêu đề có chữ hoá đơn" phải viết được trong một
+    // quy tắc, không phải hai quy tắc rồi cùng bắn vào một lá thư.
+    const matchRow = el("div", "hmail-ai-row");
+    matchRow.append(el("span", "hmail-flow-label", "Thư phải khớp"));
+    const matchMode = el("select", "hmail-ai-field");
+    for (const [val, lbl] of [
+      ["all", "tất cả điều kiện dưới đây"],
+      ["any", "bất kỳ điều kiện nào dưới đây"],
+    ]) {
+      const opt = el("option", null, lbl);
+      opt.value = val;
+      matchMode.appendChild(opt);
+    }
+    matchMode.value = rule.match || "all";
+    matchMode.addEventListener("change", () => {
+      rule.match = matchMode.value;
+      save();
+      this.refresh(win);
+    });
+    matchRow.appendChild(matchMode);
+    box.appendChild(matchRow);
+    box.appendChild(el("div", "hmail-ai-hint",
+      "Ô nào để trống thì không tính là điều kiện. Nhiều giá trị trong một ô " +
+      "thì ngăn bằng dấu phẩy, và chỉ cần khớp một trong số đó."));
+
+    text("Người gửi chứa", "from", "ví dụ: @domain.com, ketoan@");
+    text("Người gửi KHÔNG chứa", "notFrom", "ví dụ: @congty.vn");
+    text("Gửi tới / CC chứa", "to", "ví dụ: hotro@congty.vn");
+    text("Tiêu đề chứa", "subject", "ví dụ: hóa đơn, báo giá");
+    text("Tiêu đề KHÔNG chứa", "notSubject", "ví dụ: quảng cáo");
+    text("Nội dung thư chứa", "body", "ví dụ: hợp đồng, thanh toán");
+
+    const choose = (label, key, options, note) => {
+      const row = el("div", "hmail-ai-row");
+      row.append(el("span", "hmail-flow-label", label));
+      const sel = el("select", "hmail-ai-field");
+      for (const [val, lbl] of options) {
+        const opt = el("option", null, lbl);
+        opt.value = val;
+        sel.appendChild(opt);
+      }
+      sel.value = rule[key] || options[0][0];
+      sel.addEventListener("change", () => {
+        rule[key] = sel.value;
+        save();
+      });
+      row.appendChild(sel);
+      box.appendChild(row);
+      if (note) {
+        box.appendChild(el("div", "hmail-ai-hint", note));
+      }
+      return sel;
+    };
+
+    const number = (label, key, unit) => {
+      const row = el("div", "hmail-ai-row");
+      row.append(el("span", "hmail-flow-label", label));
+      const field = el("input", "hmail-ai-field");
+      field.type = "number";
+      field.min = "0";
+      field.style.maxWidth = "90px";
+      field.value = rule[key] || 0;
+      field.addEventListener("change", () => {
+        rule[key] = Math.max(0, parseInt(field.value, 10) || 0);
+        save();
+      });
+      row.append(field, el("span", "hmail-flow-label", unit));
+      box.appendChild(row);
+      return field;
+    };
 
     const check = (label, key, note) => {
       const wrap = el("label", "hmail-flow-check");
@@ -577,25 +685,143 @@ var hMailFlowUI = {
       return input;
     };
     check("Có tệp đính kèm", "hasAttachment");
+    text("Đuôi tệp đính kèm", "attachExt", "ví dụ: pdf, xlsx (để trống = mọi loại)");
     check("Máy chủ đánh dấu là thư rác hoặc mã độc", "serverSpam");
+    check("Chỉ thư chưa đọc", "unreadOnly");
 
+    choose("Thư từ danh sách gửi", "listMail", [
+      ["any", "— không xét —"],
+      ["yes", "Có (bản tin, danh sách, có nút huỷ đăng ký)"],
+      ["no", "Không (thư người thật gửi)"],
+    ]);
+    choose("Người gửi trong danh bạ", "knownContact", [
+      ["any", "— không xét —"],
+      ["yes", "Đã có trong sổ địa chỉ"],
+      ["no", "Chưa có trong sổ địa chỉ"],
+    ]);
+
+    number("Kích thước từ", "minKB", "KB trở lên (0 = không xét)");
     // Điều kiện tuổi — để dọn dẹp thư cũ.
-    const ageRow = el("div", "hmail-ai-row");
-    ageRow.append(el("span", "hmail-flow-label", "Chỉ thư cũ hơn"));
-    const age = el("input", "hmail-ai-field");
-    age.type = "number";
-    age.min = "0";
-    age.style.maxWidth = "90px";
-    age.value = rule.olderThanDays || 0;
-    age.addEventListener("change", () => {
-      rule.olderThanDays = Math.max(0, parseInt(age.value, 10) || 0);
-      save();
-    });
-    ageRow.append(age, el("span", "hmail-flow-label",
-      "ngày (0 = không lọc theo tuổi)"));
-    box.appendChild(ageRow);
+    number("Chỉ thư cũ hơn", "olderThanDays", "ngày (0 = không lọc theo tuổi)");
 
-    box.appendChild(el("div", "hmail-flow-part", "…và AI trả lời “có” cho:"));
+    // --- AI đọc hiểu -------------------------------------------------------
+    box.appendChild(el("div", "hmail-flow-part", "…và AI đọc hiểu thư:"));
+    rule.ai = rule.ai || {
+      on: false, categories: [], intents: [], sentiments: [],
+      minUrgency: 0, needsReply: "any", topic: "",
+    };
+    const ai = rule.ai;
+
+    const aiOn = el("label", "hmail-flow-check");
+    const aiToggle = el("input");
+    aiToggle.type = "checkbox";
+    aiToggle.checked = !!ai.on;
+    aiToggle.addEventListener("change", () => {
+      ai.on = aiToggle.checked;
+      save();
+      this.refresh(win);
+    });
+    aiOn.append(aiToggle,
+      el("span", null, "Cho AI đọc thư và xét theo ý nghĩa"));
+    box.appendChild(aiOn);
+    box.appendChild(el("div", "hmail-ai-hint",
+      "Tắt thì quy tắc chạy hoàn toàn miễn phí, chỉ so khớp chữ. Bật thì AI " +
+      "đọc mỗi thư đúng một lần — nó rút ra loại thư, ý định người gửi, mức " +
+      "khẩn, thái độ và chủ đề trong cùng một lượt hỏi, rồi các điều kiện " +
+      "dưới đây xét trên kết quả đó. Kết quả được lưu lại trong thư, nên " +
+      "quy tắc khác hay lần chạy sau không tốn thêm đồng nào."));
+
+    if (ai.on) {
+      const chips = (label, key, values, note) => {
+        box.appendChild(el("div", "hmail-flow-label", label));
+        const wrap = el("div", "hmail-flow-chips");
+        for (const value of values) {
+          const chip = el("label", "hmail-flow-chip");
+          const input = el("input");
+          input.type = "checkbox";
+          input.checked = (ai[key] || []).includes(value);
+          input.addEventListener("change", () => {
+            const set = new Set(ai[key] || []);
+            input.checked ? set.add(value) : set.delete(value);
+            ai[key] = [...set];
+            save();
+          });
+          chip.append(input, el("span", null, value));
+          wrap.appendChild(chip);
+        }
+        box.appendChild(wrap);
+        if (note) {
+          box.appendChild(el("div", "hmail-ai-hint", note));
+        }
+      };
+
+      chips("Loại thư", "categories", hMailFlow.CATEGORIES,
+            "Không chọn gì = mọi loại.");
+      chips("Người gửi muốn gì", "intents", hMailFlow.INTENTS);
+      chips("Thái độ trong thư", "sentiments", hMailFlow.SENTIMENTS,
+            "Hữu ích cho quy tắc kiểu “khiếu nại giận dữ thì gắn cờ ngay”.");
+
+      const urgRow = el("div", "hmail-ai-row");
+      urgRow.append(el("span", "hmail-flow-label", "Mức khẩn tối thiểu"));
+      const urg = el("select", "hmail-ai-field");
+      for (const [val, lbl] of [
+        [0, "— không xét —"],
+        [2, "2 — hơi gấp"],
+        [3, "3 — bình thường trở lên"],
+        [4, "4 — gấp"],
+        [5, "5 — phải xử lý ngay"],
+      ]) {
+        const opt = el("option", null, lbl);
+        opt.value = String(val);
+        urg.appendChild(opt);
+      }
+      urg.value = String(ai.minUrgency || 0);
+      urg.addEventListener("change", () => {
+        ai.minUrgency = parseInt(urg.value, 10) || 0;
+        save();
+      });
+      urgRow.appendChild(urg);
+      box.appendChild(urgRow);
+
+      const replyRow = el("div", "hmail-ai-row");
+      replyRow.append(el("span", "hmail-flow-label", "Thư có cần trả lời"));
+      const needs = el("select", "hmail-ai-field");
+      for (const [val, lbl] of [
+        ["any", "— không xét —"],
+        ["yes", "Có, người gửi đang chờ hồi âm"],
+        ["no", "Không cần trả lời"],
+      ]) {
+        const opt = el("option", null, lbl);
+        opt.value = val;
+        needs.appendChild(opt);
+      }
+      needs.value = ai.needsReply || "any";
+      needs.addEventListener("change", () => {
+        ai.needsReply = needs.value;
+        save();
+      });
+      replyRow.appendChild(needs);
+      box.appendChild(replyRow);
+
+      const topicRow = el("div", "hmail-ai-row");
+      topicRow.append(el("span", "hmail-flow-label", "Chủ đề"));
+      const topic = el("input", "hmail-ai-field");
+      topic.value = ai.topic || "";
+      topic.placeholder = "ví dụ: tuyển dụng, hợp đồng thuê nhà";
+      topic.addEventListener("change", () => {
+        ai.topic = topic.value.trim();
+        save();
+      });
+      topicRow.appendChild(topic);
+      box.appendChild(topicRow);
+      box.appendChild(el("div", "hmail-ai-hint",
+        "Xét trên chủ đề AI rút ra được, không phải trên chữ có trong thư — " +
+        "một thư nói về việc thuê văn phòng vẫn khớp “hợp đồng thuê nhà” dù " +
+        "không có chữ nào trùng."));
+    }
+
+    box.appendChild(el("div", "hmail-flow-part",
+                       "…và AI trả lời “có” cho câu hỏi riêng:"));
     const ask = el("textarea", "hmail-ai-field");
     ask.rows = 2;
     ask.value = rule.ask || "";
@@ -607,8 +833,9 @@ var hMailFlowUI = {
     });
     box.appendChild(ask);
     box.appendChild(el("div", "hmail-ai-hint",
-      "Để trống nếu không cần AI đọc — quy tắc sẽ chạy hoàn toàn miễn phí. " +
-      "Câu hỏi chỉ nên trả lời được bằng có hoặc không."));
+      "Dành cho thứ các ô trên không diễn tả được. Đây là một lượt hỏi riêng " +
+      "nữa, nên để trống nếu phần đọc hiểu ở trên đã đủ. Câu hỏi chỉ nên trả " +
+      "lời được bằng có hoặc không."));
 
     // --- then -------------------------------------------------------------
     box.appendChild(el("div", "hmail-flow-part", "…thì làm:"));
@@ -655,6 +882,9 @@ var hMailFlowUI = {
 
     check("Đánh dấu đã đọc", "markRead");
     check("Gắn cờ theo dõi", "flag");
+    check("Gắn nhãn theo loại thư AI xác định", "tagCategory",
+          "Nhãn lấy đúng tên loại (công việc, tài chính, đơn hàng…) và được " +
+          "tạo tự động lần đầu. Chỉ chạy khi phần đọc hiểu ở trên đang bật.");
     check("Nhờ AI tóm tắt và lưu vào thư", "summarize",
           "Bản tóm tắt nằm sẵn trong thư khi bạn mở ra, không hiện lên giữa " +
           "lúc bạn đang làm việc khác.");

@@ -97,12 +97,31 @@ var hMailFlow = {
       name: "Quy tắc mới",
       on: false,
       // cheap half
+      match: "all",            // "all" = mọi điều kiện | "any" = bất kỳ điều kiện
       from: "",
+      notFrom: "",
+      to: "",
       subject: "",
+      notSubject: "",
+      body: "",
       hasAttachment: false,
+      attachExt: "",           // "pdf, docx" — chỉ xét khi có đính kèm
       serverSpam: false,
+      unreadOnly: false,
+      listMail: "any",         // "any" | "yes" | "no" — thư từ danh sách gửi
+      knownContact: "any",     // "any" | "yes" | "no" — người gửi có trong danh bạ
+      minKB: 0,
       olderThanDays: 0,        // 0 = không lọc theo tuổi; >0 = chỉ thư cũ hơn N ngày
       // expensive half
+      ai: {
+        on: false,
+        categories: [],        // xem CATEGORIES
+        intents: [],           // xem INTENTS
+        sentiments: [],        // xem SENTIMENTS
+        minUrgency: 0,         // 0 = không xét; 1..5
+        needsReply: "any",     // "any" | "yes" | "no"
+        topic: "",             // chủ đề, đối chiếu theo nghĩa chứ không theo chữ
+      },
       ask: "",
       // actions
       moveTo: "",
@@ -110,6 +129,7 @@ var hMailFlow = {
       markRead: false,
       flag: false,
       summarize: false,
+      tagCategory: false,
       reply: "",
       send: false,
       cleanup: "",             // "" | "trash" | "archive" | "ai" (dọn dẹp thư cũ)
@@ -138,58 +158,306 @@ var hMailFlow = {
   },
 
   async run(hdr, rules) {
-    const from = String(hdr.mime2DecodedAuthor || hdr.author || "")
-      .toLowerCase();
-    const subject = String(hdr.mime2DecodedSubject || "").toLowerCase();
+    // Shared between rules so a folder run does not fetch the same message,
+    // or ask the model about it, once per rule.
+    const ctx = { verdict: null, raw: null, analysis: null };
 
-    let verdict = null;
     for (const rule of rules) {
       // --- the cheap half -------------------------------------------------
-      if (rule.from && !from.includes(rule.from.toLowerCase())) {
+      if (!await this.matchCheap(hdr, rule, ctx)) {
         continue;
-      }
-      if (rule.subject && !subject.includes(rule.subject.toLowerCase())) {
-        continue;
-      }
-      if (rule.hasAttachment &&
-          !(hdr.flags & Ci.nsMsgMessageFlags.Attachment)) {
-        continue;
-      }
-      if (rule.serverSpam) {
-        if (!verdict) {
-          verdict = await this.verdictOf(hdr);
-        }
-        if (!verdict.spam && !verdict.virus) {
-          continue;
-        }
-      }
-      // Tuổi thư — dọn dẹp thư cũ: chỉ khớp nếu thư cũ hơn N ngày.
-      if (rule.olderThanDays > 0) {
-        const ageDays = (Date.now() - (hdr.dateInSeconds || 0) * 1000) / 86400000;
-        if (ageDays < rule.olderThanDays) {
-          continue;
-        }
       }
 
       // --- the expensive half ---------------------------------------------
-      if (rule.ask) {
+      if (this.usesAI(rule)) {
         if (!this.budgetLeft()) {
           this.note(hdr, rule, "bỏ qua — đã chạm giới hạn số lượt hỏi AI " +
                                "trong một giờ");
           continue;
         }
-        const yes = await this.askModel(hdr, rule.ask);
-        if (!yes) {
-          continue;
+        if (this.usesAnalysis(rule)) {
+          ctx.analysis = ctx.analysis || await this.analyze(hdr);
+          if (!this.matchAnalysis(ctx.analysis, rule)) {
+            continue;
+          }
+        }
+        if (rule.ask) {
+          const yes = await this.askModel(hdr, rule.ask);
+          if (!yes) {
+            continue;
+          }
         }
       }
 
-      await this.apply(hdr, rule);
+      await this.apply(hdr, rule, ctx.analysis);
       // One rule per message: two rules moving the same message to two
       // folders is a race, and the second one would act on a message that is
       // no longer where it thinks it is.
       return;
     }
+  },
+
+  // ------------------------------------------------------- nửa rẻ: so khớp
+
+  /**
+   * The string half of a rule. Each condition the user filled in becomes one
+   * test; blank fields are not conditions and do not count either way.
+   *
+   * `match: "any"` exists because the useful rules are rarely a single
+   * conjunction — "from the bank OR the subject says invoice" needs one rule,
+   * not two that then both fire on the same message.
+   */
+  async matchCheap(hdr, rule, ctx = {}) {
+    const from = String(hdr.mime2DecodedAuthor || hdr.author || "")
+      .toLowerCase();
+    const to = [hdr.mime2DecodedRecipients, hdr.ccList]
+      .filter(Boolean).join(", ").toLowerCase();
+    const subject = String(hdr.mime2DecodedSubject || "").toLowerCase();
+    const any = rule.match === "any";
+    const tests = [];
+
+    const has = (haystack, needle) =>
+      needle.split(",").map(s => s.trim().toLowerCase()).filter(Boolean)
+        .some(s => haystack.includes(s));
+
+    if (rule.from) {
+      tests.push(has(from, rule.from));
+    }
+    if (rule.notFrom) {
+      tests.push(!has(from, rule.notFrom));
+    }
+    if (rule.to) {
+      tests.push(has(to, rule.to));
+    }
+    if (rule.subject) {
+      tests.push(has(subject, rule.subject));
+    }
+    if (rule.notSubject) {
+      tests.push(!has(subject, rule.notSubject));
+    }
+    if (rule.hasAttachment) {
+      tests.push(!!(hdr.flags & Ci.nsMsgMessageFlags.Attachment));
+    }
+    if (rule.unreadOnly) {
+      tests.push(!hdr.isRead);
+    }
+    if (rule.minKB > 0) {
+      tests.push((hdr.messageSize || 0) / 1024 >= rule.minKB);
+    }
+    if (rule.olderThanDays > 0) {
+      const days = (Date.now() - (hdr.dateInSeconds || 0) * 1000) / 86400000;
+      tests.push(days >= rule.olderThanDays);
+    }
+    if (rule.knownContact && rule.knownContact !== "any") {
+      const known = this.isKnown(from);
+      tests.push(rule.knownContact === "yes" ? known : !known);
+    }
+
+    // These read the message off disk, so they run only when asked for, and
+    // only after the free tests have had their say.
+    const needsBody = rule.body ||
+                      (rule.attachExt && rule.hasAttachment) ||
+                      (rule.listMail && rule.listMail !== "any") ||
+                      rule.serverSpam;
+    if (needsBody) {
+      try {
+        ctx.raw = ctx.raw || await hMailInsight.raw(hdr);
+      } catch (e) {
+        ctx.raw = "";
+      }
+      const headers = hMailInsight.headers(ctx.raw || "");
+      if (rule.serverSpam) {
+        ctx.verdict = ctx.verdict ||
+          hMailInsight.serverVerdict(headers);
+        tests.push(!!(ctx.verdict.spam || ctx.verdict.virus));
+      }
+      if (rule.listMail && rule.listMail !== "any") {
+        const isList = !!(headers["list-unsubscribe"] || headers["list-id"] ||
+                          headers["precedence"]);
+        tests.push(rule.listMail === "yes" ? isList : !isList);
+      }
+      if (rule.body) {
+        const text = hMailInsight.plainBody(ctx.raw || "").toLowerCase();
+        tests.push(has(text, rule.body));
+      }
+      if (rule.attachExt && rule.hasAttachment) {
+        const names = (ctx.raw || "").match(/filename\*?=[^\r\n;]+/gi) || [];
+        const joined = names.join(" ").toLowerCase();
+        tests.push(rule.attachExt.split(",").map(s => s.trim().toLowerCase())
+          .filter(Boolean)
+          .some(ext => joined.includes("." + ext.replace(/^\./, ""))));
+      }
+    }
+
+    if (!tests.length) {
+      // No conditions at all means every message, which is what "run this on
+      // the whole folder" is for. It is only dangerous with an action, and
+      // the action side already asks twice.
+      return true;
+    }
+    return any ? tests.some(Boolean) : tests.every(Boolean);
+  },
+
+  /** Người gửi đã có trong sổ địa chỉ chưa. */
+  isKnown(from) {
+    try {
+      const addr = (from.match(/[\w.+-]+@[\w.-]+/) || [""])[0];
+      if (!addr) {
+        return false;
+      }
+      return !!MailServices.ab.cardForEmailAddress(addr);
+    } catch (e) {
+      return false;
+    }
+  },
+
+  // ----------------------------------------------- nửa đắt: AI đọc hiểu thư
+
+  /** Bảng phân loại — cố định để quy tắc còn so khớp được. */
+  CATEGORIES: [
+    "công việc", "cá nhân", "tài chính", "đơn hàng", "tiếp thị",
+    "thông báo hệ thống", "lừa đảo", "thư rác", "khác",
+  ],
+  INTENTS: [
+    "yêu cầu hành động", "hỏi thông tin", "thông báo", "xác nhận",
+    "nhắc nhở", "mời họp", "khiếu nại", "chào hàng", "khác",
+  ],
+  SENTIMENTS: ["tích cực", "trung tính", "tiêu cực", "giận dữ"],
+
+  usesAnalysis(rule) {
+    const ai = rule.ai;
+    if (!ai || !ai.on) {
+      return false;
+    }
+    return !!(ai.categories?.length || ai.intents?.length ||
+              ai.sentiments?.length || ai.minUrgency > 0 ||
+              (ai.needsReply && ai.needsReply !== "any") || ai.topic);
+  },
+
+  usesAI(rule) {
+    return !!rule.ask || this.usesAnalysis(rule);
+  },
+
+  /**
+   * One reading of the message, in one call, producing every field a rule can
+   * test. Asking separately per condition would multiply the bill by the
+   * number of conditions for no more information.
+   *
+   * The result is kept on the message, so a second rule — or a second run
+   * over the same folder next week — costs nothing.
+   */
+  async analyze(hdr) {
+    try {
+      const cached = hdr.getStringProperty("hmail-analysis");
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (e) {}
+
+    this.calls.push(Date.now());
+    try {
+      const text = await hMailAI.messageText(hdr);
+      const answer = await hMailAI.ask([{
+        role: "user",
+        text:
+          "Đọc email dưới đây và trả về DUY NHẤT một đối tượng JSON, không " +
+          "kèm giải thích, không kèm dấu ```:\n" +
+          `{"category": một trong [${this.CATEGORIES.join(", ")}],\n` +
+          ` "intent": một trong [${this.INTENTS.join(", ")}],\n` +
+          ` "sentiment": một trong [${this.SENTIMENTS.join(", ")}],\n` +
+          ` "urgency": số nguyên 1-5 (5 = phải xử lý ngay),\n` +
+          ` "needsReply": true/false,\n` +
+          ` "deadline": "mô tả hạn chót nếu thư có nhắc, không thì null",\n` +
+          ` "topics": ["2-5 chủ đề chính, mỗi chủ đề vài từ"],\n` +
+          ` "summary": "tóm tắt 1-2 câu bằng tiếng Việt",\n` +
+          ` "confidence": số thực 0-1 (mức chắc chắn của bạn)}\n\n---\n` + text,
+      }]);
+      const data = this.parseJSON(answer);
+      if (!data) {
+        return null;
+      }
+      const analysis = {
+        category: this.pick(data.category, this.CATEGORIES),
+        intent: this.pick(data.intent, this.INTENTS),
+        sentiment: this.pick(data.sentiment, this.SENTIMENTS),
+        urgency: Math.min(5, Math.max(1, parseInt(data.urgency, 10) || 3)),
+        needsReply: data.needsReply === true || data.needsReply === "true",
+        deadline: data.deadline || null,
+        topics: Array.isArray(data.topics) ? data.topics.slice(0, 5) : [],
+        summary: String(data.summary || "").slice(0, 600),
+        confidence: Math.min(1, Math.max(0, Number(data.confidence) || 0.5)),
+      };
+      try {
+        hdr.setStringProperty("hmail-analysis", JSON.stringify(analysis));
+      } catch (e) {}
+      return analysis;
+    } catch (e) {
+      Cu.reportError("hMail flow: không phân tích được thư: " + e);
+      return null;
+    }
+  },
+
+  /** Models wrap JSON in prose and fences no matter how firmly you ask. */
+  parseJSON(answer) {
+    const raw = String(answer || "");
+    const body = raw.replace(/```(?:json)?/gi, "");
+    const start = body.indexOf("{");
+    const end = body.lastIndexOf("}");
+    if (start < 0 || end <= start) {
+      return null;
+    }
+    try {
+      return JSON.parse(body.slice(start, end + 1));
+    } catch (e) {
+      return null;
+    }
+  },
+
+  /** Kéo câu trả lời tự do về đúng một giá trị trong bảng. */
+  pick(value, list) {
+    const v = String(value || "").toLowerCase().trim();
+    return list.find(x => v === x) || list.find(x => v.includes(x)) ||
+           list[list.length - 1];
+  },
+
+  matchAnalysis(analysis, rule) {
+    if (!analysis) {
+      // Không đọc được thì không hành động. Đoán mò trên thư của người ta là
+      // cách nhanh nhất để mất một lá thư quan trọng.
+      return false;
+    }
+    const ai = rule.ai || {};
+    if (ai.categories?.length && !ai.categories.includes(analysis.category)) {
+      return false;
+    }
+    if (ai.intents?.length && !ai.intents.includes(analysis.intent)) {
+      return false;
+    }
+    if (ai.sentiments?.length &&
+        !ai.sentiments.includes(analysis.sentiment)) {
+      return false;
+    }
+    if (ai.minUrgency > 0 && analysis.urgency < ai.minUrgency) {
+      return false;
+    }
+    if (ai.needsReply === "yes" && !analysis.needsReply) {
+      return false;
+    }
+    if (ai.needsReply === "no" && analysis.needsReply) {
+      return false;
+    }
+    if (ai.topic) {
+      // Chủ đề đối chiếu theo nghĩa: model đã rút ra topics và summary, nên
+      // so ở đây là so trên thứ nó hiểu chứ không phải trên chữ trong thư.
+      const hay = [...(analysis.topics || []), analysis.summary]
+        .join(" ").toLowerCase();
+      const wanted = ai.topic.split(",").map(s => s.trim().toLowerCase())
+        .filter(Boolean);
+      if (!wanted.some(w => hay.includes(w))) {
+        return false;
+      }
+    }
+    return true;
   },
 
   async verdictOf(hdr) {
@@ -231,7 +499,7 @@ var hMailFlow = {
 
   // ---------------------------------------------------------------- actions
 
-  async apply(hdr, rule) {
+  async apply(hdr, rule, analysis = null) {
     const done = [];
     const folder = hdr.folder;
 
@@ -250,8 +518,21 @@ var hMailFlow = {
             .filter(Boolean).join(" "));
         done.push(`gắn nhãn "${rule.tag}"`);
       }
+      // Nhãn theo phân loại của AI — chỉ khi quy tắc đã cho AI đọc thư, nên
+      // không tốn thêm lượt hỏi nào.
+      if (rule.tagCategory && analysis?.category) {
+        const key = this.tagKeyFor(analysis.category);
+        if (key) {
+          hdr.setStringProperty("keywords",
+            [hdr.getStringProperty("keywords"), key]
+              .filter(Boolean).join(" "));
+          done.push(`gắn nhãn "${analysis.category}"`);
+        }
+      }
       if (rule.summarize) {
-        const summary = await this.summarize(hdr);
+        // Bản phân tích đã có sẵn phần tóm tắt; hỏi lại là trả tiền hai lần
+        // cho cùng một câu trả lời.
+        const summary = analysis?.summary || await this.summarize(hdr);
         if (summary) {
           // Kept on the message rather than shown: the summary is there when
           // the message is opened, and nothing pops up while the user is
@@ -316,6 +597,26 @@ var hMailFlow = {
       } else {
         done.push("không tìm thấy thư mục Lưu trữ");
       }
+    }
+  },
+
+  /**
+   * Nhãn ứng với một phân loại của AI, tạo mới nếu chưa có. Dùng tên phân
+   * loại làm khoá để chạy lại không sinh ra nhãn trùng.
+   */
+  tagKeyFor(category) {
+    try {
+      const key = "hmail" + category.normalize("NFD")
+        .replace(/[̀-ͯ]/g, "")
+        .replace(/[^a-z]/gi, "").toLowerCase();
+      const existing = MailServices.tags.getAllTags()
+        .find(t => t.key === key);
+      if (!existing) {
+        MailServices.tags.addTagForKey(key, category, null, "");
+      }
+      return key;
+    } catch (e) {
+      return "";
     }
   },
 
@@ -513,26 +814,49 @@ var hMailFlow = {
     // The cheap half first, on every message, before a single call is made.
     const candidates = [];
     for (const hdr of folder.msgDatabase.enumerateMessages()) {
-      const from = String(hdr.mime2DecodedAuthor || "").toLowerCase();
-      const subject = String(hdr.mime2DecodedSubject || "").toLowerCase();
-      if (rule.from && !from.includes(rule.from.toLowerCase())) {
-        continue;
+      if (await this.matchCheap(hdr, rule, {})) {
+        candidates.push(hdr);
       }
-      if (rule.subject && !subject.includes(rule.subject.toLowerCase())) {
-        continue;
-      }
-      if (rule.hasAttachment &&
-          !(hdr.flags & Ci.nsMsgMessageFlags.Attachment)) {
-        continue;
-      }
-      // Tuổi thư — dọn dẹp thư cũ: chỉ lấy thư cũ hơn N ngày.
-      if (rule.olderThanDays > 0) {
-        const ageDays = (Date.now() - (hdr.dateInSeconds || 0) * 1000) / 86400000;
-        if (ageDays < rule.olderThanDays) {
+    }
+
+    // A rule whose AI half reads the message rather than answering a yes/no
+    // question: each message is analysed once — and the analysis is kept on
+    // the message, so a second rule or a later run pays nothing for it.
+    if (this.usesAnalysis(rule)) {
+      for (const hdr of candidates) {
+        if (shouldStop()) {
+          stoppedFor = "người dùng dừng";
+          break;
+        }
+        if (this.spent(since) >= cap) {
+          stoppedFor = `chạm mức trần ${cap} USD`;
+          break;
+        }
+        const analysis = await this.analyze(hdr);
+        if (!this.matchAnalysis(analysis, rule)) {
+          onProgress(++done, candidates.length, this.spent(since));
           continue;
         }
+        if (analysis.confidence >= this.CONFIDENT) {
+          await this.apply(hdr, rule, analysis);
+          acted.push(hdr);
+        } else {
+          review.push({
+            hdr,
+            from: String(hdr.mime2DecodedAuthor || ""),
+            subject: String(hdr.mime2DecodedSubject || ""),
+            confidence: analysis.confidence,
+            why: `${analysis.category} · ${analysis.intent} — ` +
+                 analysis.summary,
+          });
+        }
+        onProgress(++done, candidates.length, this.spent(since));
+        await new Promise(r => win.setTimeout(r, 0));
       }
-      candidates.push(hdr);
+      return {
+        acted, review, total: candidates.length,
+        spent: this.spent(since), stoppedFor,
+      };
     }
 
     if (!rule.ask) {
