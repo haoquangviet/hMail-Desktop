@@ -123,6 +123,10 @@ var hMailAI = {
       model: "phi-3.5-mini", key: false, priceIn: 0, priceOut: 0 },
     { id: "custom", label: "Khác — tự nhập địa chỉ", provider: "openai",
       endpoint: "", model: "", key: true, priceIn: 0, priceOut: 0 },
+    // Not a service at all: the model runs inside hMail. No address, no key,
+    // no cost, and the message never leaves the machine.
+    { id: "local", label: "AI trên máy (không cần API key)", provider: "local",
+      endpoint: "", model: "", key: false, priceIn: 0, priceOut: 0 },
   ],
 
   /** Which service is in use. Each keeps its own settings and its own key. */
@@ -496,6 +500,9 @@ var hMailAI = {
     if (this.needsKey() && !key) {
       throw Object.assign(new Error("chưa có API key"), { code: "no_key" });
     }
+    if (this.provider() === "local") {
+      return this.callLocal(contents);
+    }
     return this.provider() === "openai"
       ? this.callOpenAICompatible(contents, tools, key)
       : this.callGemini(contents, tools, key);
@@ -521,6 +528,39 @@ var hMailAI = {
         { status: res.status, code: err.status || err.type });
     }
     return body;
+  },
+
+  /**
+   * The on-device model. It cannot call the assistant's tools — a half-billion
+   * parameter model asked to emit a function call produces something that
+   * looks like one and is not — so it answers in prose and nothing else.
+   *
+   * If the feature has not been switched on, the error carries code
+   * "local_off" and the panel offers to open the setup page rather than
+   * showing a failure the user cannot act on.
+   */
+  async callLocal(contents) {
+    if (typeof hMailLocalAI === "undefined") {
+      throw Object.assign(new Error("AI trên máy chưa sẵn sàng"),
+                          { code: "local_off" });
+    }
+    const turns = contents.map(c => ({
+      role: c.role === "model" ? "assistant" : "user",
+      text: (c.parts || []).map(p => p.text || "").join(" ").trim(),
+    })).filter(t => t.text);
+
+    const text = await hMailLocalAI.generate(turns);
+    // Token counts are meaningless here — nothing is billed — but the usage
+    // line still wants numbers, and characters/4 is the usual rough guide.
+    const spent = Math.round(
+      turns.reduce((n, t) => n + t.text.length, 0) / 4);
+    return {
+      parts: [{ text }],
+      usage: {
+        promptTokenCount: spent,
+        candidatesTokenCount: Math.round(text.length / 4),
+      },
+    };
   },
 
   async callGemini(contents, tools, key) {

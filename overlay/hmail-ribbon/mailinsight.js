@@ -562,17 +562,7 @@ var hMailInsight = {
     }
 
     // --- xác thực ---------------------------------------------------------
-    const auth = (headers.get("authentication-results") || []).join(" ")
-      .toLowerCase();
-    const spfHeader = this.first(headers, "received-spf").toLowerCase();
-    const check = (name, pattern) => {
-      const m = pattern.exec(auth);
-      return m ? m[1] : "";
-    };
-    const dkim = check("dkim", /dkim=(\w+)/);
-    const spf = check("spf", /spf=(\w+)/) ||
-      (/^\s*(pass|fail|softfail|neutral|none)/.exec(spfHeader)?.[1] || "");
-    const dmarc = check("dmarc", /dmarc=(\w+)/);
+    const { dkim, spf, dmarc, raw: auth, spfHeader } = this.authResults(headers);
 
     out.facts.auth = { dkim, spf, dmarc };
     for (const [label, value] of [["DKIM", dkim], ["SPF", spf],
@@ -587,9 +577,28 @@ var hMailInsight = {
     }
 
     // --- cảnh báo do máy chủ gắn sẵn --------------------------------------
-    const spamFlag = this.first(headers, "x-spam-flag").toLowerCase();
-    if (spamFlag.startsWith("yes")) {
+    const verdict = this.serverVerdict(headers);
+    out.facts.verdict = verdict;
+    if (verdict.virus) {
+      note("danger",
+        "Bộ lọc của máy chủ xếp thư này vào loại chứa mã độc" +
+        (verdict.evidence ? ` (${verdict.evidence})` : "") +
+        ". Đừng mở tệp đính kèm hay bấm liên kết trong thư.");
+    } else if (verdict.spam) {
       note("warn", "Máy chủ đã đánh dấu thư này là thư rác.");
+    }
+    if (verdict.action && verdict.action !== "accept") {
+      note(verdict.virus ? "danger" : "warn",
+        `Máy chủ đề nghị xử lý thư này ở mức "${verdict.action}" — ` +
+        "thư vẫn được chuyển về hộp thư của bạn nên bạn tự quyết định.");
+    }
+    if (verdict.iprev === "fail") {
+      note("warn", "Máy chủ gửi không có tên miền ngược hợp lệ (iprev=fail) " +
+                   "— dấu hiệu thường thấy ở nguồn phát tán thư rác.");
+    }
+    if (verdict.senderWarning) {
+      note("warn", `Máy chủ cảnh báo về người gửi: ` +
+                   verdict.senderWarning.slice(0, 160));
     }
     const spamStatus = this.first(headers, "x-spam-status");
     const score = /score=([-\d.]+)/i.exec(spamStatus)?.[1];
@@ -687,11 +696,77 @@ var hMailInsight = {
         (bounce.recipient ? ` (${bounce.recipient})` : ""));
     }
 
-    out.summary = this.summarize(hdr, body);
-    out.facts.dates = this.dates(body);
-    out.facts.amounts = this.amounts(body);
-    out.contact = this.contact(headers, body, hdr);
+    // Wrapped on purpose: these are the "what is this about" half. If one of
+    // them throws on an odd message, the warnings above must still reach the
+    // user — a silent analysis is worse than an incomplete one.
+    try {
+      out.summary = this.summarize(hdr, body);
+      out.facts.dates = this.dates(body);
+      out.facts.amounts = this.amounts(body);
+      out.contact = this.contact(headers, body, hdr);
+    } catch (e) {
+      Cu.reportError("hMail insight: đọc nội dung thất bại: " + e);
+    }
     return out;
+  },
+
+  /**
+   * SPF, DKIM and DMARC as the receiving server reported them. Split out so
+   * anything else that needs the verdict — the sender avatars, for one — can
+   * read it without repeating the parsing.
+   */
+  authResults(headers) {
+    const raw = (headers.get("authentication-results") || []).join(" ")
+      .toLowerCase();
+    const spfHeader = this.first(headers, "received-spf").toLowerCase();
+    const check = pattern => pattern.exec(raw)?.[1] || "";
+    return {
+      raw,
+      spfHeader,
+      dkim: check(/dkim=(\w+)/),
+      spf: check(/spf=(\w+)/) ||
+        (/^\s*(pass|fail|softfail|neutral|none)/.exec(spfHeader)?.[1] || ""),
+      dmarc: check(/dmarc=(\w+)/),
+    };
+  },
+
+  /**
+   * What the receiving server's own filter concluded. Every filter writes its
+   * verdict into headers of its own naming, and a message that arrives with
+   * "X-Spampanel-Class: virus" and "X-Recommended-Action: reject" has already
+   * been judged — hMail should say so rather than start from scratch.
+   *
+   * The recommended action is reported, not obeyed: the message is already in
+   * the mailbox, so "reject" is advice about what the server would have done,
+   * not something left to do.
+   */
+  serverVerdict(headers) {
+    const value = name => this.first(headers, name).trim();
+    const cls = (value("x-spampanel-class") || value("x-spam-class") ||
+                 value("x-cm-analysis") || "").toLowerCase();
+    const flag = value("x-spam-flag").toLowerCase();
+    const status = value("x-spam-status");
+    const level = value("x-spam-level");
+    const auth = this.authResults(headers);
+
+    const score = parseFloat(
+      /score=([-\d.]+)/i.exec(status)?.[1] ||
+      /^\s*[-\d.]+/.exec(value("x-spam-score"))?.[0] || "NaN");
+
+    return {
+      class: cls,
+      virus: /virus|malware|phish/.test(cls) ||
+             /^yes/.test(value("x-virus-flag").toLowerCase()),
+      spam: /spam|bulk/.test(cls) || flag.startsWith("yes") ||
+            /^yes/i.test(status) || (level.match(/\*/g) || []).length >= 5 ||
+            (Number.isFinite(score) && score >= 5),
+      score: Number.isFinite(score) ? score : null,
+      action: (value("x-recommended-action") ||
+               value("x-spam-action")).toLowerCase(),
+      evidence: value("x-spampanel-evidence") || value("x-virus-name"),
+      iprev: /iprev=(\w+)/.exec(auth.raw)?.[1] || "",
+      senderWarning: value("x-sender-warning"),
+    };
   },
 
   // ----------------------------------------------------------- liên hệ
@@ -711,10 +786,13 @@ var hMailInsight = {
       return null;
     }
 
-    // The display name, with the quoting and the address stripped off.
-    let name = from.replace(/<[^>]*>/g, "").replace(/^"|"$/g, "").trim();
+    // The display name. Thunderbird's decoded copy comes first: the raw
+    // header carries it as an RFC 2047 encoded word — "=?UTF-8?Q?Quy=E1..."
+    // — which is not a name anybody wants filed in their address book.
+    let name = String(hdr?.mime2DecodedAuthor || "")
+      .replace(/<[^>]*>/g, "").replace(/^"|"$/g, "").trim();
     if (!name || name.includes("@")) {
-      name = String(hdr?.mime2DecodedAuthor || "")
+      name = this.decodeWords(from)
         .replace(/<[^>]*>/g, "").replace(/^"|"$/g, "").trim();
     }
     if (name.includes("@")) {
@@ -775,6 +853,34 @@ var hMailInsight = {
       return null;
     }
     return { name, email, org, title, phones, site, address };
+  },
+
+  /**
+   * RFC 2047 encoded words, as they appear in raw headers:
+   *   =?UTF-8?Q?Quy=E1=BA=BFt_Tr=E1=BA=A7n?=
+   *   =?UTF-8?B?UXV54bq/dCBUcuG6p24=?=
+   */
+  decodeWords(text) {
+    if (!text || !text.includes("=?")) {
+      return text;
+    }
+    return text.replace(
+      /=\?([\w.-]+)\?([BbQq])\?([^?]*)\?=/g,
+      (match, charset, encoding, data) => {
+        try {
+          let bytes;
+          if (encoding.toUpperCase() === "B") {
+            bytes = atob(data);
+          } else {
+            bytes = data.replace(/_/g, " ").replace(
+              /=([0-9A-F]{2})/gi,
+              (_m, hex) => String.fromCharCode(parseInt(hex, 16)));
+          }
+          return this.decodeBytes(bytes, charset);
+        } catch (e) {
+          return match;
+        }
+      }).replace(/\?=\s+=\?/g, "");
   },
 
   /** Is this address already filed somewhere? */

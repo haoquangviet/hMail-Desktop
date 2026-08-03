@@ -53,6 +53,35 @@ var hMailLocalAI = {
     },
   ],
 
+  /**
+   * Models that write, as opposed to the ones above that only turn text into
+   * vectors. A vector model cannot answer a question or draft a reply, so
+   * running the assistant on this machine needs one of these as well.
+   *
+   * These are small on purpose. A model that fits in the memory of an office
+   * laptop will not write like Gemini; it summarises and drafts short replies
+   * in Vietnamese acceptably, and it never sends the message anywhere.
+   */
+  CHAT_MODELS: [
+    {
+      id: "Xenova/Qwen1.5-0.5B-Chat",
+      dtype: "q4",
+      label: "Qwen 0.5B — nhẹ nhất",
+      size: "khoảng 350 MB",
+      note: "Chạy được trên hầu hết máy. Trả lời ngắn, đủ dùng cho tóm tắt.",
+    },
+    {
+      id: "Xenova/Qwen1.5-1.8B-Chat",
+      dtype: "q4",
+      label: "Qwen 1.8B — cân bằng",
+      size: "khoảng 1,1 GB",
+      note: "Viết tiếng Việt tự nhiên hơn. Cần khoảng 4 GB RAM trống.",
+    },
+  ],
+
+  CHAT_ENABLED_PREF: "hmail.localai.chat.enabled",
+  CHAT_MODEL_PREF: "hmail.localai.chat.model",
+
   // ------------------------------------------------------------ cấu hình
 
   pref(name, fallback) {
@@ -184,6 +213,110 @@ var hMailLocalAI = {
       await this._engine?.terminate?.();
     } catch (e) {}
     this._engine = null;
+    try {
+      await this._chatEngine?.terminate?.();
+    } catch (e) {}
+    this._chatEngine = null;
+  },
+
+  // ------------------------------------------------------- trả lời tại chỗ
+
+  chatModel() {
+    const id = this.pref(this.CHAT_MODEL_PREF, this.CHAT_MODELS[0].id);
+    return this.CHAT_MODELS.find(m => m.id === id) || this.CHAT_MODELS[0];
+  },
+
+  chatReady() {
+    return this.pref(this.CHAT_ENABLED_PREF, false);
+  },
+
+  /** Leave the machine enough cores to stay usable while the model runs. */
+  threads(win) {
+    const cores = this.capability(win).cores || 2;
+    return Math.max(1, Math.min(4, cores - 1));
+  },
+
+  async chatEngine(onProgress) {
+    if (this._chatEngine) {
+      return this._chatEngine;
+    }
+    const { createEngine } = ChromeUtils.importESModule(
+      "chrome://global/content/ml/EngineProcess.sys.mjs");
+    const model = this.chatModel();
+    this._chatEngine = await createEngine(
+      {
+        taskName: "text-generation",
+        featureId: "hmail-local-chat",
+        modelId: model.id,
+        modelRevision: "main",
+        dtype: model.dtype,
+        timeoutMS: -1,
+        numThreads: this.threads(),
+      },
+      data => {
+        if (!onProgress) {
+          return;
+        }
+        try {
+          if (data?.total) {
+            onProgress(Math.round((data.currentBytes || 0) / data.total * 100));
+          } else if (typeof data?.progress === "number") {
+            onProgress(Math.round(data.progress));
+          }
+        } catch (e) {}
+      });
+    return this._chatEngine;
+  },
+
+  /**
+   * Answer a conversation on this machine. `turns` uses the same shape the
+   * rest of the assistant speaks: [{role, text}].
+   */
+  async generate(turns, { maxTokens = 512 } = {}) {
+    if (!this.chatReady()) {
+      throw Object.assign(new Error("AI trên máy chưa được bật"),
+                          { code: "local_off" });
+    }
+    const engine = await this.chatEngine();
+    const messages = turns.map(t => ({
+      role: t.role === "assistant" ? "assistant" : "user",
+      content: String(t.text || ""),
+    }));
+    const out = await engine.run({
+      args: [messages],
+      options: {
+        max_new_tokens: maxTokens,
+        do_sample: false,
+        return_full_text: false,
+      },
+    });
+    return this.answerText(out);
+  },
+
+  /** The runtime returns a few different shapes depending on the pipeline. */
+  answerText(out) {
+    const pick = value => {
+      if (typeof value === "string") {
+        return value;
+      }
+      if (Array.isArray(value)) {
+        return pick(value[value.length - 1]);
+      }
+      if (value && typeof value === "object") {
+        if (typeof value.generated_text === "string") {
+          return value.generated_text;
+        }
+        if (Array.isArray(value.generated_text)) {
+          const last = value.generated_text[value.generated_text.length - 1];
+          return typeof last === "string" ? last : (last?.content || "");
+        }
+        if (typeof value.content === "string") {
+          return value.content;
+        }
+      }
+      return "";
+    };
+    return pick(out).trim();
   },
 
   /** One vector for one piece of text. */

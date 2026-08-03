@@ -3276,222 +3276,6 @@ unified-toolbar-customization {
     background-color: color-mix(in srgb, CanvasText 10%, transparent) !important;
 }
 
-/* =====================================================
-   SETTINGS PAGE — stop the sideways scroll.
-
-   #prefBox and #preferencesContainer are XUL boxes, and a XUL box will not
-   shrink a child below its intrinsic width. One long value — the start-page
-   URL is an absolute file:// path — was enough to push the whole pane wider
-   than the window, so the category list scrolled off the left edge and every
-   label came out clipped. Telling the containers they may shrink, and the
-   text fields that they may be narrower than their content, keeps the page
-   inside the window whatever is typed into it.
-   ===================================================== */
-#prefBox,
-#preferencesContainer,
-#preferencesContainer .paneDeckContainer,
-#preferencesContainer #paneDeck {
-    min-width: 0 !important;
-    max-width: 100% !important;
-}
-
-#preferencesContainer {
-    overflow-x: hidden !important;
-}
-
-#preferencesContainer groupbox,
-#preferencesContainer .subcategory,
-#preferencesContainer hbox,
-#preferencesContainer vbox {
-    min-width: 0 !important;
-}
-
-#preferencesContainer input[type="text"],
-#preferencesContainer input[type="url"],
-#preferencesContainer input[type="number"],
-#preferencesContainer input[type="email"],
-#preferencesContainer menulist,
-#preferencesContainer select,
-#preferencesContainer textarea {
-    min-width: 0 !important;
-    max-width: 100% !important;
-}
-
-/* Long labels wrap instead of widening the pane. */
-#preferencesContainer label,
-#preferencesContainer description {
-    overflow-wrap: anywhere;
-}
-
-/* "Nhờ AI viết": a spinner in the button, and no second request while the
-   first one is still out. */
-.hmail-quickreply-spin {
-    display: none;
-    width: 11px;
-    height: 11px;
-    margin-inline-start: 6px;
-    vertical-align: -1px;
-    border: 2px solid color-mix(in srgb, currentColor 25%, transparent);
-    border-block-start-color: currentColor;
-    border-radius: 50%;
-    animation: hmail-spin 0.7s linear infinite;
-}
-
-.hmail-quickreply-link.busy .hmail-quickreply-spin {
-    display: inline-block;
-}
-
-.hmail-quickreply-link[disabled] {
-    opacity: 0.55;
-    pointer-events: none;
-}
-
-@keyframes hmail-spin {
-    to { transform: rotate(360deg); }
-}
-
-
-/* =====================================================
-   MESSAGE LIST — selected row must stay readable.
-
-   The base theme paints the selected row with the full accent while leaving
-   the text at its normal dark colour, so the subject sank into the blue.
-   Outlook fills the row with a wash of the accent instead and keeps the text
-   as it was; only the current-row marker needs to be strong.
-   ===================================================== */
-#threadTree tr[selected],
-#threadTree tr[data-properties~="selected"],
-#threadTree tr.selected,
-#threadTree:focus tr[selected],
-#threadTree:focus-within tr[selected] {
-    background-color: color-mix(in srgb, var(--hmail-accent) 12%, Canvas) !important;
-    color: CanvasText !important;
-}
-
-#threadTree tr[selected] .card-container,
-#threadTree tr[data-properties~="selected"] .card-container,
-#threadTree:focus tr[selected] .card-container,
-#threadTree:focus-within tr[selected] .card-container {
-    background-color: transparent !important;
-    color: CanvasText !important;
-}
-
-/* Every line inside the row follows the row, including the parts the theme
-   coloured separately. */
-#threadTree tr[selected] .subject,
-#threadTree tr[selected] .sender,
-#threadTree tr[selected] .date,
-#threadTree tr[selected] .correspondent,
-#threadTree tr[selected] .tag-icon,
-#threadTree:focus tr[selected] .subject,
-#threadTree:focus tr[selected] .sender,
-#threadTree:focus tr[selected] .date,
-#threadTree:focus tr[selected] .correspondent {
-    color: inherit !important;
-}
-
-/* The row the keyboard is on keeps a visible marker, since the fill alone is
-   now too soft to tell "current" from "also selected". */
-#threadTree tr[data-properties~="current"] .card-container,
-#threadTree tr.current .card-container {
-    box-shadow: inset 3px 0 0 var(--hmail-accent) !important;
-}
-
-/* --- the contact found in the sign-off --- */
-.hmail-ai-contact {
-    margin-block-start: 2px;
-    padding-block-start: 8px;
-    border-block-start: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 0.88em;
-}
-
-.hmail-ai-contact-head {
-    font-weight: 600;
-    margin-block-end: 2px;
-}
-
-.hmail-ai-contact-line {
-    display: flex;
-    gap: 8px;
-    align-items: baseline;
-    min-width: 0;
-}
-
-.hmail-ai-contact-label {
-    flex: 0 0 74px;
-    opacity: 0.6;
-}
-
-.hmail-ai-contact-value {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow-wrap: anywhere;
-}
-
-.hmail-ai-contact-actions {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    margin-block-start: 6px;
-}
-
-.hmail-ai-contact-actions .hmail-ai-field {
-    flex: 1 1 0;
-    min-width: 0;
-}
-
-.hmail-ai-contact-actions .hmail-ai-action {
-    appearance: none !important;
-    -moz-appearance: none !important;
-    flex: 0 0 auto;
-    padding: 7px 12px !important;
-    border: 1px solid var(--hmail-accent) !important;
-    border-radius: 3px !important;
-    background-color: var(--hmail-accent) !important;
-    color: #fff !important;
-    font: inherit !important;
-    font-size: 0.95em !important;
-    cursor: pointer !important;
-    box-shadow: 0 1px 3px color-mix(in srgb, CanvasText 15%, transparent);
-}
-
-.hmail-ai-contact-actions .hmail-ai-action:hover {
-    background-color: var(--hmail-accent-hover) !important;
-}
-
-.hmail-ai-contact-actions .hmail-ai-action[disabled] {
-    opacity: 0.5;
-    pointer-events: none;
-}
-
-.hmail-ai-contact-status:empty {
-    display: none;
-}
-
-.hmail-ai-contact-status {
-    margin-block-start: 4px;
-    opacity: 0.75;
-    font-size: 0.95em;
-}
-
-/* The distribution blurb on the Settings page. Thunderbird unhides it with an
-   inline display:block, and a XUL description laid out as a block takes the
-   full width of its one long line — which is what was dragging the whole
-   Settings page sideways. As an inline-block bounded by the pane it stays
-   inside the window and wraps. */
-#preferencesContainer #distribution,
-#preferencesContainer #distributionId,
-#distribution.text-blurb {
-    display: inline-block !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
-    white-space: normal !important;
-    overflow-wrap: anywhere !important;
-    text-overflow: clip !important;
-}
 
 
 /* =====================================================
@@ -3537,4 +3321,120 @@ unified-toolbar-customization {
 #threadTree tr[selected="true"] .subject a,
 #threadTree tr[selected="true"] a {
     color: var(--hmail-accent) !important;
+}
+
+/* =====================================================
+   SENDER IDENTITY IN THE MESSAGE LIST
+   A display name is written by the sender, so it proves nothing. The address
+   the message actually came from gets a line of its own, and an avatar goes
+   beside it.
+   ===================================================== */
+#threadTree tr.card-layout .card-container {
+    align-items: start;
+}
+
+.hmail-card-avatar {
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    margin-inline-end: 8px;
+    margin-block-start: 2px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #fff;
+    background-color: hsl(var(--hmail-avatar-hue, 210) 42% 46%);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    user-select: none;
+}
+
+/* A real picture — an address book photo or a BIMI logo — sits on white and
+   is contained, never cropped: a brand mark must not be trimmed. */
+.hmail-card-avatar.logo {
+    background-color: #fff;
+    background-size: contain;
+    border: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+}
+
+/* A logo backed by a valid mark certificate carries a small tick. */
+.hmail-card-avatar.verified {
+    position: relative;
+}
+
+.hmail-card-avatar.verified::after {
+    content: "";
+    position: absolute;
+    inset-block-end: -1px;
+    inset-inline-end: -1px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #348d00;
+    border: 2px solid Canvas;
+    background-image: url("chrome://global/skin/icons/check.svg");
+    background-size: 8px 8px;
+    background-position: center;
+    background-repeat: no-repeat;
+    -moz-context-properties: fill;
+    fill: #fff;
+}
+
+.hmail-card-id {
+    margin-block-start: 1px;
+}
+
+.hmail-card-address {
+    font-size: 0.78rem;
+    opacity: 0.62;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.hmail-card-id[hidden] {
+    display: none !important;
+}
+
+/* The ribbon meets the rounded window edge on the left. */
+#hmail-ribbon {
+    border-start-start-radius: 3px;
+    border-end-start-radius: 3px;
+}
+
+/* Only the row that is actually selected carries the marker. An account row
+   with a selected folder under it was drawing a bar of its own, so two rows
+   looked active at once. */
+#folderTree li:not(.selected):not([data-selected]) > .container {
+    box-shadow: none !important;
+}
+
+/* Server-filter rules page: one card per verdict. */
+.hmail-filter-rule {
+    border: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+    border-radius: 3px;
+    padding: 10px 12px;
+    margin-block: 8px;
+    box-shadow: 0 1px 3px color-mix(in srgb, CanvasText 10%, transparent);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.hmail-filter-name {
+    font-weight: 600;
+}
+
+.hmail-filter-rule .hmail-ai-row {
+    margin-block-start: 6px;
+}
+
+.hmail-filter-rule select[hidden] {
+    display: none !important;
 }

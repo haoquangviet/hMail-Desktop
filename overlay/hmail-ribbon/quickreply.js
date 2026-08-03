@@ -65,6 +65,7 @@ var hMailQuickReply = {
         return;
       }
       if (!doc || doc.getElementById(this.ID)) {
+        this._applyReserve?.();
         return;
       }
       const host = doc.getElementById("singleMessage") ||
@@ -90,26 +91,36 @@ var hMailQuickReply = {
 
   /**
    * The bar is pinned to the bottom of the message pane, so it covers
-   * whatever the message ends with — a signature, a logo, the last line of a
-   * quote. The browser that renders the message is pushed up by exactly the
-   * height of the bar. It has to be the browser and not the column above it:
-   * #singleMessage carries the header, and padding on it opens a gap between
-   * the subject and the message instead of below it.
+   * whatever the message ends with. The space is given back inside the
+   * message document itself — padding on its body — rather than by pushing
+   * the browser element up. A margin on the browser left a strip of the
+   * window showing through below the message, which is not part of the page
+   * the user is reading; padding on the body is.
    */
   reserveSpace(win, doc, box) {
     const pane = doc.getElementById("messagepane");
     const apply = () => {
       try {
         const height = Math.round(box.getBoundingClientRect().height);
-        if (!height || !pane) {
+        if (!height) {
           return;
         }
         doc.documentElement.style.setProperty(
           "--hmail-quickreply-height", `${height}px`);
-        pane.style.marginBlockEnd = `${height}px`;
+        // userContent.css reads this from the message document.
+        const inner = pane?.contentDocument?.documentElement;
+        inner?.style.setProperty("--hmail-quickreply-reserve", `${height}px`);
+        if (pane) {
+          pane.style.marginBlockEnd = "";
+        }
       } catch (e) {}
     };
     apply();
+    // The message document is replaced for every message, so the reserve has
+    // to be written again each time it loads.
+    try {
+      pane?.addEventListener("load", apply, true);
+    } catch (e) {}
     try {
       const observer = new win.ResizeObserver(apply);
       observer.observe(box);
@@ -118,6 +129,7 @@ var hMailQuickReply = {
     } catch (e) {
       // No observer: the initial reservation still covers the common case.
     }
+    this._applyReserve = apply;
   },
 
   /** Give the space back when the bar goes away. */
@@ -125,7 +137,10 @@ var hMailQuickReply = {
     try {
       this._spaceObserver?.disconnect();
       this._spaceObserver = null;
+      this._applyReserve = null;
       const pane = doc.getElementById("messagepane");
+      pane?.contentDocument?.documentElement?.style
+        .removeProperty("--hmail-quickreply-reserve");
       if (pane) {
         pane.style.marginBlockEnd = "";
       }

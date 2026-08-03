@@ -1,0 +1,71 @@
+/* hMail Desktop — sửa giao diện cho các tài liệu nằm trong <browser>
+ * MIT License, Copyright (c) 2026 HQV Software
+ *
+ * userChrome.css only reaches the top-level chrome document. The Settings
+ * page, the account wizard and anything else Thunderbird loads inside a
+ * <browser> are separate documents, and no rule in userChrome.css has ever
+ * applied to them — which is why the Settings page kept scrolling sideways
+ * however many times the rules were written there.
+ *
+ * hmail.cfg registers this file with nsIStyleSheetService as a user sheet, so
+ * it reaches every document in the application. A user sheet's !important
+ * rules also beat an author's inline style, which is what it takes to undo
+ * the display:block Thunderbird writes onto the distribution blurb.
+ */
+
+/* =====================================================
+   SETTINGS PAGE — keep it inside the window.
+   ===================================================== */
+
+/* XUL boxes do not shrink a child below its intrinsic width, so one long
+   value — the start page is an absolute file:// path — pushed the whole page
+   wider than the window and the category list scrolled off the left edge. */
+#prefBox,
+#preferencesContainer,
+#preferencesContainer .paneDeckContainer,
+#preferencesContainer #paneDeck {
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
+
+#preferencesContainer {
+    overflow-x: hidden !important;
+}
+
+#preferencesContainer groupbox,
+#preferencesContainer .subcategory,
+#preferencesContainer hbox,
+#preferencesContainer vbox,
+#preferencesContainer fieldset {
+    min-width: 0 !important;
+}
+
+#preferencesContainer input,
+#preferencesContainer menulist,
+#preferencesContainer select,
+#preferencesContainer textarea {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+#preferencesContainer label,
+#preferencesContainer description {
+    overflow-wrap: anywhere;
+}
+
+/* The distribution blurb. Thunderbird unhides it with an inline
+   display:block, and a XUL description laid out as a block takes the whole
+   width of its single long line. Inline-block bounded by the pane wraps
+   instead. */
+#distribution,
+#distributionId,
+description.text-blurb {
+    display: inline-block !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    text-overflow: clip !important;
+    line-height: 1.45 !important;
+}

@@ -348,6 +348,8 @@ var hMailRibbon = {
               fn: win => win.openPreferencesTab() },
             { id: "h-local-ai", label: "AI trên máy", icon: "ai",
               fn: win => win.hMailLocalAIUI.openTab(win) },
+            { id: "h-server-filter", label: "Lọc theo máy chủ", icon: "filter",
+              fn: win => win.hMailServerFilter.openTab(win) },
             { id: "h-addons", label: "Tiện ích", icon: "extention",
               fn: win => win.openAddonsMgr("addons://list/extension") },
           ],
