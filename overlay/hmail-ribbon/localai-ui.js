@@ -205,8 +205,134 @@ var hMailLocalAIUI = {
     results.id = "hmail-localai-results";
     page.appendChild(results);
 
+    // --- 4. trò chuyện ----------------------------------------------------
+    // The model above turns text into numbers; it cannot write a sentence.
+    // Answering questions and drafting replies on this machine needs a
+    // second, much larger model, so it is a separate decision with its own
+    // download.
+    page.appendChild(el("div", "hmail-ai-section", "4. Trả lời trên máy"));
+    page.appendChild(el("div", "hmail-ai-hint",
+      "Mô hình ở mục 1 chỉ biến thư thành dãy số để so sánh ý nghĩa — nó " +
+      "không viết được câu nào. Muốn tóm tắt hay soạn thư trả lời ngay trên " +
+      "máy, cần thêm một mô hình sinh văn bản. Nó lớn hơn nhiều và viết " +
+      "không bằng các dịch vụ trả phí, nhưng thư không rời khỏi máy và không " +
+      "tốn đồng nào."));
+
+    const chatPicker = el("div", "hmail-localai-models");
+    for (const model of hMailLocalAI.CHAT_MODELS) {
+      const item = el("label", "hmail-localai-model");
+      const radio = el("input");
+      radio.type = "radio";
+      radio.name = "hmail-localai-chat-model";
+      radio.value = model.id;
+      radio.checked = hMailLocalAI.chatModel().id === model.id;
+      const text = el("span", "hmail-localai-model-text");
+      text.append(
+        el("span", "hmail-localai-model-name", model.label),
+        el("span", "hmail-localai-model-size", model.size),
+        el("span", "hmail-localai-model-note", model.note));
+      item.append(radio, text);
+      chatPicker.appendChild(item);
+    }
+    page.appendChild(chatPicker);
+
+    const chatActions = el("div", "hmail-ai-actions");
+    const chatOn = el("button", "hmail-ai-btn primary",
+                      "Tải về và bật trả lời trên máy");
+    chatOn.id = "hmail-localai-chat-activate";
+    chatOn.addEventListener("click", () => this.activateChat(win));
+    const chatOff = el("button", "hmail-ai-btn", "Tắt trả lời trên máy");
+    chatOff.id = "hmail-localai-chat-off";
+    chatOff.addEventListener("click", () => this.deactivateChat(win));
+    chatActions.append(chatOn, chatOff);
+    page.appendChild(chatActions);
+
+    const chatStatus = el("div", "hmail-ai-status", "");
+    chatStatus.id = "hmail-localai-chat-status";
+    page.appendChild(chatStatus);
+
+    const chatBar = el("div", "hmail-merge-bar");
+    chatBar.id = "hmail-localai-chat-bar";
+    chatBar.hidden = true;
+    chatBar.appendChild(el("div", "hmail-merge-bar-fill"));
+    page.appendChild(chatBar);
+
     win.setTimeout(() => this.refresh(win), 0);
     return page;
+  },
+
+  /**
+   * Download and prove the writing model. "Prove" matters: a model that
+   * loads but produces nothing usable should not be reported as working, so
+   * it is asked a question in Vietnamese and the answer is shown.
+   */
+  async activateChat(win) {
+    const doc = win.document;
+    const chosen = [...doc.querySelectorAll(
+      "input[name='hmail-localai-chat-model']")].find(r => r.checked);
+    if (chosen) {
+      Services.prefs.setCharPref(hMailLocalAI.CHAT_MODEL_PREF, chosen.value);
+    }
+    const model = hMailLocalAI.chatModel();
+
+    if (!Services.prompt.confirm(win, "AI trên máy",
+          `Tải ${model.label} (${model.size}) về máy?
+
+` +
+          "Mô hình được tải từ kho mô hình của Mozilla và lưu trong hồ sơ " +
+          "của bạn. Sau khi tải xong, mọi câu hỏi và câu trả lời đều chạy " +
+          "trên máy này, không gửi đi đâu.")) {
+      return;
+    }
+
+    const bar = doc.getElementById("hmail-localai-chat-bar");
+    const fill = bar.firstChild;
+    bar.hidden = false;
+    fill.style.width = "0%";
+    doc.getElementById("hmail-localai-chat-activate").disabled = true;
+    this.say(win, "hmail-localai-chat-status",
+      `Đang tải ${model.label} (${model.size})… lần đầu có thể mất vài phút.`);
+
+    try {
+      Services.prefs.setBoolPref(hMailLocalAI.CHAT_ENABLED_PREF, true);
+      await hMailLocalAI.chatEngine(percent => {
+        fill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+      });
+      this.say(win, "hmail-localai-chat-status",
+        "Đã tải xong, đang thử viết một câu…");
+      const answer = await hMailLocalAI.generate(
+        [{ role: "user", text: "Chào bạn, hãy trả lời ngắn bằng tiếng Việt: " +
+                               "một email xác nhận đơn hàng thường có gì?" }],
+        { maxTokens: 120 });
+      if (!answer) {
+        throw new Error("mô hình không trả lời");
+      }
+      bar.hidden = true;
+      this.say(win, "hmail-localai-chat-status",
+        `Đã bật. Thử nghiệm trả về: “${answer.slice(0, 220)}”. Chọn "AI trên ` +
+        `máy" trong cài đặt trợ lý để dùng.`);
+    } catch (e) {
+      bar.hidden = true;
+      Services.prefs.setBoolPref(hMailLocalAI.CHAT_ENABLED_PREF, false);
+      this.say(win, "hmail-localai-chat-status",
+        "Không bật được: " + (e.message || e));
+    } finally {
+      const button = doc.getElementById("hmail-localai-chat-activate");
+      if (button) {
+        button.disabled = false;
+      }
+      this.refresh(win);
+    }
+  },
+
+  async deactivateChat(win) {
+    Services.prefs.setBoolPref(hMailLocalAI.CHAT_ENABLED_PREF, false);
+    try {
+      await hMailLocalAI._chatEngine?.terminate?.();
+    } catch (e) {}
+    hMailLocalAI._chatEngine = null;
+    this.say(win, "hmail-localai-chat-status", "Đã tắt trả lời trên máy.");
+    this.refresh(win);
   },
 
   say(win, id, text) {
@@ -230,6 +356,15 @@ var hMailLocalAIUI = {
     doc.getElementById("hmail-localai-activate").hidden = on;
     doc.getElementById("hmail-localai-off").hidden = !on;
     doc.getElementById("hmail-localai-index").hidden = !on;
+
+    const chatOn = hMailLocalAI.chatReady();
+    doc.getElementById("hmail-localai-chat-activate").hidden = chatOn;
+    doc.getElementById("hmail-localai-chat-off").hidden = !chatOn;
+    if (chatOn && !doc.getElementById("hmail-localai-chat-status").textContent) {
+      this.say(win, "hmail-localai-chat-status",
+        `Đang bật — ${hMailLocalAI.chatModel().label}. Chọn "AI trên máy" ` +
+        "trong cài đặt trợ lý để dùng.");
+    }
   },
 
   chosen(win) {

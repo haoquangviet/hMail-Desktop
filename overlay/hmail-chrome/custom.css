@@ -3177,8 +3177,13 @@ unified-toolbar-customization {
     /* Vietnamese stacks a tone mark above a vowel mark, so a line box sized
        for Latin text clips the bottom of "ở" and "ầ". */
     line-height: 1.6 !important;
-    min-height: 34px;
+    min-height: 36px;
+    height: auto !important;
+    white-space: normal !important;
     overflow: visible !important;
+    /* A XUL button box crops its label to the content box; hMail's buttons
+       are plain HTML, but the theme's button rules reach them anyway. */
+    -moz-box-align: center;
     cursor: pointer !important;
     box-shadow: 0 1px 3px color-mix(in srgb, CanvasText 15%, transparent);
     transition: background-color 0.12s ease;
@@ -3459,32 +3464,57 @@ unified-toolbar-customization {
     display: none !important;
 }
 
-/* A warning says what to do about it, and gives the buttons to do it. */
+/* A warning says what to do about it, and gives the buttons to do it —
+   grouped, small, and on one line: five loose buttons wrapping over two rows
+   read as five equal choices, which they are not. */
 .hmail-warning-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    margin: 4px 3px 2px;
+    align-items: center;
+    gap: 10px;
+    margin: 5px 3px 2px;
+}
+
+.hmail-warning-group {
+    display: inline-flex;
+}
+
+/* Segmented: the buttons in a group share edges, so the group reads as one
+   control with several settings. */
+.hmail-warning-group .hmail-warning-action + .hmail-warning-action {
+    margin-inline-start: -1px;
+    border-start-start-radius: 0 !important;
+    border-end-start-radius: 0 !important;
+}
+
+.hmail-warning-group .hmail-warning-action:not(:last-child) {
+    border-start-end-radius: 0 !important;
+    border-end-end-radius: 0 !important;
 }
 
 .hmail-warning-action {
     appearance: none !important;
     -moz-appearance: none !important;
-    padding: 4px 10px !important;
+    padding: 2px 9px !important;
+    min-height: 24px;
+    line-height: 1.5 !important;
     border: 1px solid color-mix(in srgb, CanvasText 22%, transparent) !important;
     border-radius: 3px !important;
     background-color: Canvas !important;
     color: inherit !important;
     font: inherit !important;
-    font-size: 0.92em !important;
+    font-size: 0.86em !important;
+    white-space: nowrap;
     cursor: pointer !important;
-    box-shadow: 0 1px 2px color-mix(in srgb, CanvasText 10%, transparent);
 }
 
 .hmail-warning-action:hover {
-    background-color: color-mix(in srgb, CanvasText 7%, Canvas) !important;
-    border-color: color-mix(in srgb, CanvasText 35%, transparent) !important;
+    background-color: color-mix(in srgb, CanvasText 8%, Canvas) !important;
+    border-color: color-mix(in srgb, CanvasText 38%, transparent) !important;
+    position: relative;
+    z-index: 1;
 }
+
 
 /* The card layout paints its selection from these variables and from
    :focus-within, which beat the plain row rules written earlier. A message

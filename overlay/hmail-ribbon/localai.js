@@ -246,7 +246,11 @@ var hMailLocalAI = {
     this._chatEngine = await createEngine(
       {
         taskName: "text-generation",
-        featureId: "hmail-local-chat",
+        // featureId comes from a fixed list in EngineProcess.sys.mjs; a name
+        // of our own is rejected outright. "about-inference" is the
+        // general-purpose slot — the one Firefox's own about:inference page
+        // uses to run arbitrary models and tasks.
+        featureId: "about-inference",
         modelId: model.id,
         modelRevision: "main",
         dtype: model.dtype,

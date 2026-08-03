@@ -348,7 +348,14 @@ var hMailInsight = {
       return null;
     }
     const row = el("div", "hmail-warning-actions");
-    const add = (label, title, fn) => {
+    // Two groups on one line: what to do with the message, then where to look
+    // into it. Five loose buttons wrapping over two rows read as five equal
+    // choices, which they are not.
+    const decide = el("div", "hmail-warning-group");
+    const inspect = el("div", "hmail-warning-group");
+    row.append(decide, inspect);
+
+    const add = (label, title, fn, group = decide) => {
       const b = el("button", "hmail-warning-action", label);
       if (title) {
         b.title = title;
@@ -360,7 +367,7 @@ var hMailInsight = {
           Cu.reportError("hMail warning action failed: " + e);
         }
       });
-      row.appendChild(b);
+      group.appendChild(b);
     };
 
     const verdict = result.facts?.verdict || {};
@@ -395,20 +402,23 @@ var hMailInsight = {
     }
 
     if (result.bounce || verdict.action || verdict.spam || verdict.virus) {
-      add("Thiết lập lọc theo máy chủ",
+      add("Lọc theo máy chủ",
           "Chọn hMail phải làm gì với thư mà máy chủ đã đánh dấu",
-          () => win.hMailServerFilter?.openTab(win));
+          () => win.hMailServerFilter?.openTab(win), inspect);
     }
 
-    add("Xem đầu thư", "Mở toàn bộ phần đầu thư để tự kiểm tra",
-        () => this.showSource(win, hdr));
+    add("Đầu thư", "Mở toàn bộ phần đầu thư để tự kiểm tra",
+        () => this.showSource(win, hdr), inspect);
 
     // open(), not toggle(): the assistant is usually already on screen when
     // the warning is read, and toggling shut it — so the button appeared to
     // do nothing until it was pressed a second time.
-    add("Hỏi trợ lý", "Mở bảng trợ lý cho thư này",
-        () => win.hMailAI?.open(win));
+    add("Trợ lý", "Mở bảng trợ lý cho thư này",
+        () => win.hMailAI?.open(win), inspect);
 
+    if (!decide.children.length) {
+      decide.remove();
+    }
     return row.children.length ? row : null;
   },
 
