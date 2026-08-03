@@ -3473,8 +3473,8 @@ unified-toolbar-customization {
 }
 
 /* A warning says what to do about it, and gives the buttons to do it —
-   grouped, small, and on one line: five loose buttons wrapping over two rows
-   read as five equal choices, which they are not. */
+   grouped, borderless, lifted off the bar by a light shadow. Outlines around
+   six small buttons put more lines on screen than the buttons are worth. */
 .hmail-warning-actions {
     display: flex;
     flex-wrap: wrap;
@@ -3485,30 +3485,28 @@ unified-toolbar-customization {
 
 .hmail-warning-group {
     display: inline-flex;
+    border-radius: 3px;
+    background-color: Canvas;
+    box-shadow: 0 1px 3px color-mix(in srgb, CanvasText 20%, transparent);
+    overflow: hidden;
 }
 
-/* Segmented: the buttons in a group share edges, so the group reads as one
-   control with several settings. */
+/* Inside a group the buttons are separated by a hairline, not a border each:
+   the group reads as one control with several settings. */
 .hmail-warning-group .hmail-warning-action + .hmail-warning-action {
-    margin-inline-start: -1px;
-    border-start-start-radius: 0 !important;
-    border-end-start-radius: 0 !important;
-}
-
-.hmail-warning-group .hmail-warning-action:not(:last-child) {
-    border-start-end-radius: 0 !important;
-    border-end-end-radius: 0 !important;
+    border-inline-start: 1px solid
+        color-mix(in srgb, CanvasText 12%, transparent) !important;
 }
 
 .hmail-warning-action {
     appearance: none !important;
     -moz-appearance: none !important;
-    padding: 2px 9px !important;
+    padding: 3px 10px !important;
     min-height: 24px;
     line-height: 1.5 !important;
-    border: 1px solid color-mix(in srgb, CanvasText 22%, transparent) !important;
-    border-radius: 3px !important;
-    background-color: Canvas !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background-color: transparent !important;
     color: inherit !important;
     font: inherit !important;
     font-size: 0.86em !important;
@@ -3517,11 +3515,13 @@ unified-toolbar-customization {
 }
 
 .hmail-warning-action:hover {
-    background-color: color-mix(in srgb, CanvasText 8%, Canvas) !important;
-    border-color: color-mix(in srgb, CanvasText 38%, transparent) !important;
-    position: relative;
-    z-index: 1;
+    background-color: color-mix(in srgb, CanvasText 9%, Canvas) !important;
 }
+
+.hmail-warning-action:active {
+    background-color: color-mix(in srgb, CanvasText 15%, Canvas) !important;
+}
+
 
 
 /* The card layout paints its selection from these variables and from

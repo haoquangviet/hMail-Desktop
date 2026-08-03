@@ -83,25 +83,40 @@ var hMailLocalAI = {
   /**
    * Where models are fetched from.
    *
-   * Mozilla's hub is a narrow, curated mirror: of the writing models worth
-   * having, only Qwen 0.5B is on it, and the 1.8B one is not. Gecko reads the
-   * root from browser.ml.modelHubRootUrl, so hMail can point it at a mirror
-   * of its own — a GitHub release holds files up to 2 GB — and offer models
-   * the hub does not carry.
-   *
-   * Left at the default for now: the hub costs hMail nothing to use and is
-   * already trusted by the runtime. Setting hmail.localai.mirror switches it.
+   * Hugging Face is the source every one of these models is published to;
+   * Mozilla's hub is a narrow mirror of a handful of them, and asking it for
+   * anything else returns a 404 about a file that was never uploaded. Gecko
+   * knows huggingface.co as a hub (see ModelHub.sys.mjs) and takes the root
+   * from a preference, so hMail points at the source and keeps Mozilla's
+   * mirror as the fallback for networks where Hugging Face is unreachable.
    */
   HUB_PREF: "browser.ml.modelHubRootUrl",
+  TEMPLATE_PREF: "browser.ml.modelHubUrlTemplate",
+
+  HUBS: [
+    { root: "https://huggingface.co/", template: "{model}/resolve/{revision}",
+      label: "Hugging Face" },
+    { root: "https://model-hub.mozilla.org/", template: "{model}/{revision}",
+      label: "kho của Mozilla" },
+  ],
+
+  /** @param {number} index which entry of HUBS to use. */
+  useHub(index) {
+    const hub = this.HUBS[Math.min(index, this.HUBS.length - 1)];
+    try {
+      const override = this.pref(this.MIRROR_PREF, "");
+      Services.prefs.setCharPref(this.HUB_PREF, override || hub.root);
+      if (!override) {
+        Services.prefs.setCharPref(this.TEMPLATE_PREF, hub.template);
+      }
+    } catch (e) {}
+    return hub;
+  },
+
   MIRROR_PREF: "hmail.localai.mirror",
 
   applyMirror() {
-    try {
-      const mirror = this.pref(this.MIRROR_PREF, "");
-      if (mirror) {
-        Services.prefs.setCharPref(this.HUB_PREF, mirror);
-      }
-    } catch (e) {}
+    this.useHub(0);
   },
 
   // ------------------------------------------------------------ cấu hình
@@ -263,7 +278,26 @@ var hMailLocalAI = {
     if (this._chatEngine) {
       return this._chatEngine;
     }
-    this.applyMirror();
+    // Try the source, then the mirror: some corporate networks reach one and
+    // not the other, and a download that fails for a reason the user cannot
+    // see is worse than a slower one that works.
+    for (let hub = 0; hub < this.HUBS.length; hub++) {
+      try {
+        this.useHub(hub);
+        return await this.startChatEngine(onProgress);
+      } catch (e) {
+        if (hub === this.HUBS.length - 1) {
+          throw e;
+        }
+        Cu.reportError(
+          `hMail: ${this.HUBS[hub].label} không dùng được (${e.message || e}), ` +
+          `thử ${this.HUBS[hub + 1].label}`);
+      }
+    }
+    return null;
+  },
+
+  async startChatEngine(onProgress) {
     const { createEngine } = ChromeUtils.importESModule(
       "chrome://global/content/ml/EngineProcess.sys.mjs");
     const model = this.chatModel();
