@@ -3356,3 +3356,83 @@ unified-toolbar-customization {
 #threadTree tr.current .card-container {
     box-shadow: inset 3px 0 0 var(--hmail-accent) !important;
 }
+
+/* --- the contact found in the sign-off --- */
+.hmail-ai-contact {
+    margin-block-start: 2px;
+    padding-block-start: 8px;
+    border-block-start: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.88em;
+}
+
+.hmail-ai-contact-head {
+    font-weight: 600;
+    margin-block-end: 2px;
+}
+
+.hmail-ai-contact-line {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    min-width: 0;
+}
+
+.hmail-ai-contact-label {
+    flex: 0 0 74px;
+    opacity: 0.6;
+}
+
+.hmail-ai-contact-value {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.hmail-ai-contact-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-block-start: 6px;
+}
+
+.hmail-ai-contact-actions .hmail-ai-field {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.hmail-ai-contact-actions .hmail-ai-action {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    flex: 0 0 auto;
+    padding: 7px 12px !important;
+    border: 1px solid var(--hmail-accent) !important;
+    border-radius: 3px !important;
+    background-color: var(--hmail-accent) !important;
+    color: #fff !important;
+    font: inherit !important;
+    font-size: 0.95em !important;
+    cursor: pointer !important;
+    box-shadow: 0 1px 3px color-mix(in srgb, CanvasText 15%, transparent);
+}
+
+.hmail-ai-contact-actions .hmail-ai-action:hover {
+    background-color: var(--hmail-accent-hover) !important;
+}
+
+.hmail-ai-contact-actions .hmail-ai-action[disabled] {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.hmail-ai-contact-status:empty {
+    display: none;
+}
+
+.hmail-ai-contact-status {
+    margin-block-start: 4px;
+    opacity: 0.75;
+    font-size: 0.95em;
+}

@@ -690,7 +690,165 @@ var hMailInsight = {
     out.summary = this.summarize(hdr, body);
     out.facts.dates = this.dates(body);
     out.facts.amounts = this.amounts(body);
+    out.contact = this.contact(headers, body, hdr);
     return out;
+  },
+
+  // ----------------------------------------------------------- liên hệ
+
+  /**
+   * Who wrote this, and how would you reach them again?
+   *
+   * Everything worth keeping is normally in the sign-off: a company name, an
+   * office address, a phone number, a website. Reading it here means the
+   * details can go into the address book without anyone retyping them, and
+   * without the message leaving the machine.
+   */
+  contact(headers, body, hdr) {
+    const from = this.first(headers, "from") || String(hdr?.author || "");
+    const email = this.address(from);
+    if (!email) {
+      return null;
+    }
+
+    // The display name, with the quoting and the address stripped off.
+    let name = from.replace(/<[^>]*>/g, "").replace(/^"|"$/g, "").trim();
+    if (!name || name.includes("@")) {
+      name = String(hdr?.mime2DecodedAuthor || "")
+        .replace(/<[^>]*>/g, "").replace(/^"|"$/g, "").trim();
+    }
+    if (name.includes("@")) {
+      name = "";
+    }
+
+    // The signature is the tail of the message, before any quoted reply.
+    const unquoted = body
+      .split(/^\s*(?:On .{0,80}wrote:|-----\s*Original Message|Vào .{0,60}đã viết:)/mi)[0];
+    const tail = unquoted.slice(-1600);
+
+    const phones = [];
+    const phonePattern =
+      /(?:tel|phone|mob(?:ile)?|hotline|đt|điện thoại|fax|zalo)\s*[:.]?\s*((?:\+?\d[\d\s().-]{7,20}\d))/gi;
+    let m;
+    while ((m = phonePattern.exec(tail)) !== null && phones.length < 4) {
+      const value = m[1].replace(/[\s.-]+/g, " ").trim();
+      if (!phones.includes(value)) {
+        phones.push(value);
+      }
+    }
+    // A bare +84 number in the sign-off counts even without a label.
+    if (!phones.length) {
+      const bare = /\+84[\d\s().-]{7,16}\d/.exec(tail);
+      if (bare) {
+        phones.push(bare[0].replace(/[\s.-]+/g, " ").trim());
+      }
+    }
+
+    const site = (/(?:website|web|site)\s*[:.]?\s*((?:https?:\/\/)?(?:www\.)?[\w-]+(?:\.[\w-]+){1,3}(?:\/\S*)?)/i
+      .exec(tail)?.[1] ||
+      /\b(www\.[\w-]+(?:\.[\w-]+){1,3})\b/i.exec(tail)?.[1] || "").trim();
+
+    // "Commercial office: Address: Room 701…" — the label often comes twice,
+    // so strip any that survived into the value.
+    const address = (
+      /(?:địa chỉ|dia chi|address|office|văn phòng)\s*[:.]?\s*([^\n]{10,140})/i
+        .exec(tail)?.[1] || "")
+      .replace(/^(?:địa chỉ|dia chi|address|office|văn phòng)\s*[:.]?\s*/i, "")
+      .replace(/[,;\s]+$/, "")
+      .trim();
+
+    // The company: an explicit line if there is one, otherwise a line in the
+    // sign-off carrying a company suffix.
+    let org = (this.first(headers, "organization") || "").trim();
+    if (!org) {
+      org = (/^[^\n]{0,80}\b(?:CO\.,?\s*LTD|CO\.,\s*LTD|COMPANY LIMITED|CORPORATION|JSC|CÔNG TY|LLC|INC\.?|GROUP)\b[^\n]{0,40}/im
+        .exec(tail)?.[0] || "")
+        .replace(/^(?:a\s+member\s+of|thành viên của|trực thuộc)\s+/i, "")
+        .trim();
+    }
+
+    const title = (/(?:chức vụ|title|position|dept|phòng ban)\s*[:.]?\s*([^\n]{3,60})/i
+      .exec(tail)?.[1] || "").trim();
+
+    // Nothing beyond the address itself is not worth offering to save.
+    if (!name && !org && !phones.length && !site && !address) {
+      return null;
+    }
+    return { name, email, org, title, phones, site, address };
+  },
+
+  /** Is this address already filed somewhere? */
+  knownContact(email) {
+    try {
+      return !!MailServices.ab.cardForEmailAddress(email);
+    } catch (e) {
+      return false;
+    }
+  },
+
+  /** Personal address books the user can actually write to. */
+  addressBooks() {
+    const books = [];
+    for (const book of MailServices.ab.directories) {
+      if (!book.readOnly && !book.isRemote) {
+        books.push(book);
+      }
+    }
+    return books;
+  },
+
+  /**
+   * Put the contact in the book. Returns the message to show the user; never
+   * throws, because this runs from a click handler in a panel.
+   */
+  saveContact(contact, bookUri) {
+    try {
+      const books = this.addressBooks();
+      const book = books.find(b => b.URI === bookUri) || books[0];
+      if (!book) {
+        return "Không có sổ địa chỉ nào ghi được.";
+      }
+      const card = Cc["@mozilla.org/addressbook/cardproperty;1"]
+        .createInstance(Ci.nsIAbCard);
+      card.primaryEmail = contact.email;
+      card.displayName = contact.name || contact.org || contact.email;
+
+      // Split "Nguyen Van A" the way the address book expects, but only when
+      // there is a space to split on.
+      const parts = (contact.name || "").split(/\s+/).filter(Boolean);
+      if (parts.length > 1) {
+        card.firstName = parts.slice(0, -1).join(" ");
+        card.lastName = parts[parts.length - 1];
+      } else if (parts.length === 1) {
+        card.firstName = parts[0];
+      }
+
+      if (contact.org) {
+        card.setProperty("Company", contact.org);
+      }
+      if (contact.title) {
+        card.setProperty("JobTitle", contact.title);
+      }
+      if (contact.site) {
+        card.setProperty("WebPage1", contact.site);
+      }
+      if (contact.address) {
+        card.setProperty("WorkAddress", contact.address);
+      }
+      if (contact.phones[0]) {
+        card.setProperty("WorkPhone", contact.phones[0]);
+      }
+      if (contact.phones[1]) {
+        card.setProperty("CellularNumber", contact.phones[1]);
+      }
+      card.setProperty("Notes",
+        `Lưu từ hMail, trích từ thư của ${contact.email}.`);
+
+      book.addCard(card);
+      return `Đã lưu vào "${book.dirName}".`;
+    } catch (e) {
+      return "Không lưu được: " + (e.message || e);
+    }
   },
 
   // --------------------------------------------------------- thư trả về

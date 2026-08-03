@@ -385,7 +385,83 @@ Object.assign(hMailAI, {
       card.appendChild(list);
     }
 
+    const contact = this.contactBlock(win, doc, result.contact);
+    if (contact) {
+      card.appendChild(contact);
+    }
+
     log.insertBefore(card, log.firstChild);
+  },
+
+  /**
+   * The company and contact details found in the sign-off, with an offer to
+   * file them. Nothing is written to the address book without a click: the
+   * details are read out first so the user can see exactly what would be
+   * saved.
+   */
+  contactBlock(win, doc, contact) {
+    if (!contact) {
+      return null;
+    }
+    const el = (t, c, x) => this.el(doc, t, c, x);
+    const box = el("div", "hmail-ai-contact");
+
+    box.appendChild(el("div", "hmail-ai-contact-head", "Liên hệ trong thư"));
+
+    const line = (label, value) => {
+      if (!value || (Array.isArray(value) && !value.length)) {
+        return;
+      }
+      const row = el("div", "hmail-ai-contact-line");
+      row.append(el("span", "hmail-ai-contact-label", label),
+                 el("span", "hmail-ai-contact-value",
+                    Array.isArray(value) ? value.join(" · ") : value));
+      box.appendChild(row);
+    };
+    line("Tên", contact.name);
+    line("Công ty", contact.org);
+    line("Chức danh", contact.title);
+    line("Email", contact.email);
+    line("Điện thoại", contact.phones);
+    line("Địa chỉ", contact.address);
+    line("Website", contact.site);
+
+    const known = hMailInsight.knownContact(contact.email);
+    const status = el("div", "hmail-ai-contact-status",
+      known ? "Địa chỉ này đã có trong danh bạ." : "");
+    const actions = el("div", "hmail-ai-contact-actions");
+
+    if (!known) {
+      const books = hMailInsight.addressBooks();
+      let target = books[0]?.URI || "";
+      // Only ask which book when there is more than one to choose from.
+      if (books.length > 1) {
+        const pick = el("select", "hmail-ai-field");
+        for (const book of books) {
+          const opt = el("option", null, book.dirName);
+          opt.value = book.URI;
+          pick.appendChild(opt);
+        }
+        pick.value = target;
+        pick.addEventListener("change", () => {
+          target = pick.value;
+        });
+        actions.appendChild(pick);
+      }
+
+      const save = el("button", "hmail-ai-action", "Lưu vào danh bạ");
+      save.addEventListener("click", () => {
+        save.setAttribute("disabled", "true");
+        status.textContent = hMailInsight.saveContact(contact, target);
+        if (books.length > 1) {
+          actions.firstChild?.setAttribute("disabled", "true");
+        }
+      });
+      actions.appendChild(save);
+    }
+
+    box.append(actions, status);
+    return box;
   },
 
   addTurn(win, role, text) {
