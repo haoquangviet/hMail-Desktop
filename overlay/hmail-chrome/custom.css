@@ -2073,8 +2073,8 @@ select.hmail-ai-field,
    hairline border all round, a 3px radius, no thick coloured edge. The level
    shows in the border and the title colour. */
 #hmail-warning {
-    margin: 6px 8px 10px;
-    padding: 10px 12px;
+    margin: 0 8px 8px;
+    padding: 3px 5px;
     border-radius: 3px;
     border: 1px solid color-mix(in srgb, #B45309 30%, transparent);
     background-color: color-mix(in srgb, #B45309 8%, Canvas);
@@ -2140,13 +2140,19 @@ select.hmail-ai-field,
 }
 
 .hmail-warning-list {
-    margin: 6px 0 0;
+    margin: 2px 0 3px;
     padding-inline-start: 18px;
 }
 
 .hmail-warning-item {
-    margin-block: 3px;
-    line-height: 1.45;
+    margin-block: 1px;
+    line-height: 1.4;
+}
+
+/* The head sits flush against the tight padding of the bar. */
+.hmail-warning-head {
+    padding-inline-start: 3px;
+    min-height: 24px;
 }
 
 /* =====================================================
@@ -3478,4 +3484,50 @@ unified-toolbar-customization {
     white-space: normal !important;
     overflow-wrap: anywhere !important;
     text-overflow: clip !important;
+}
+
+
+/* =====================================================
+   MESSAGE LIST — the selected row, once and for all.
+
+   The thread pane paints selection from two variables. Overriding the rows
+   was not enough: a message opened inside a collapsed thread is drawn by a
+   different rule and came out solid accent with dark text on it. Changing
+   the variables at the tree changes every rule that reads them.
+   ===================================================== */
+#threadTree,
+#threadTree:focus,
+#threadTree:focus-within,
+#threadTree .card-container,
+#messageBrowser,
+#multiMessage {
+    --selected-item-color: color-mix(in srgb, var(--hmail-accent) 12%, Canvas) !important;
+    --selected-item-text-color: CanvasText !important;
+    --listbox-selected-bg: color-mix(in srgb, var(--hmail-accent) 12%, Canvas) !important;
+    --listbox-selected-text: CanvasText !important;
+}
+
+/* Conversation view: the message a thread is opened on gets the same soft
+   fill, never the full accent. */
+#threadTree tr[data-properties~="selected"],
+#threadTree tr[selected="true"],
+#threadTree tr.selected,
+#threadTree:focus tr[selected="true"],
+#threadTree:focus-within tr[selected="true"] {
+    background-color: color-mix(in srgb, var(--hmail-accent) 12%, Canvas) !important;
+    background-image: none !important;
+    color: CanvasText !important;
+}
+
+#threadTree tr[selected="true"] *,
+#threadTree tr.selected *,
+#threadTree:focus tr[selected="true"] *,
+#threadTree:focus-within tr[selected="true"] * {
+    color: inherit !important;
+}
+
+/* Links inside a selected row keep their own colour — they are still links. */
+#threadTree tr[selected="true"] .subject a,
+#threadTree tr[selected="true"] a {
+    color: var(--hmail-accent) !important;
 }

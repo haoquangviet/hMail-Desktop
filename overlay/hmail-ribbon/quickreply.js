@@ -95,8 +95,12 @@ var hMailQuickReply = {
    * doing it as the bar grows: the input box gets taller as it is typed into.
    */
   reserveSpace(win, doc, box) {
-    const pane = doc.getElementById("messagepane") ||
-                 doc.getElementById("messageBrowser");
+    // Padding on the container, not a margin on the browser: a margin leaves
+    // a band of the window's own background between the message and the
+    // reply box, which reads as a gap in the page. Padding keeps the space
+    // inside the message surface.
+    const host = doc.getElementById("singleMessage") ||
+                 doc.getElementById("messagepane")?.parentNode;
     const apply = () => {
       try {
         const height = Math.round(box.getBoundingClientRect().height);
@@ -105,8 +109,8 @@ var hMailQuickReply = {
         }
         doc.documentElement.style.setProperty(
           "--hmail-quickreply-height", `${height}px`);
-        if (pane) {
-          pane.style.marginBlockEnd = `${height}px`;
+        if (host) {
+          host.style.paddingBlockEnd = `${height}px`;
         }
       } catch (e) {}
     };
@@ -126,10 +130,10 @@ var hMailQuickReply = {
     try {
       this._spaceObserver?.disconnect();
       this._spaceObserver = null;
-      const pane = doc.getElementById("messagepane") ||
-                   doc.getElementById("messageBrowser");
-      if (pane) {
-        pane.style.marginBlockEnd = "";
+      const host = doc.getElementById("singleMessage") ||
+                   doc.getElementById("messagepane")?.parentNode;
+      if (host) {
+        host.style.paddingBlockEnd = "";
       }
       doc.documentElement.style.removeProperty("--hmail-quickreply-height");
     } catch (e) {}
