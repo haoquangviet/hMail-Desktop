@@ -38,6 +38,15 @@
     background-image: none !important;
 }
 
+/* Bỏ đường kẻ + bo góc phía trên ribbon (giáp thanh tab, trông chối mắt). */
+#hmail-ribbon {
+    border-top: none !important;
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+    box-shadow: none !important;
+    margin-top: 0 !important;
+}
+
 #folderTree li > .container > .name {
     font-size: 0.95rem !important;
     font-weight: 400 !important;
