@@ -127,15 +127,24 @@ var hMailQuickReply = {
         // attachment bar on screen that is the attachment bar — reserving
         // inside the message document instead pushed it down behind the
         // reply box, so a message with attachments looked like it had none.
-        const inner = pane?.contentDocument?.documentElement;
+        // Set on the body directly rather than through a variable that
+        // userContent.css reads: that sheet only reaches documents whose URL
+        // matches its @-moz-document list, and a message can be rendered from
+        // more schemes than that list will ever cover. An inline style always
+        // lands.
+        const body = pane?.contentDocument?.body;
         if (lastVisible() === attachments) {
           attachments.style.marginBlockEnd = `${height}px`;
-          inner?.style.setProperty("--hmail-quickreply-reserve", "0px");
+          if (body) {
+            body.style.paddingBottom = "";
+          }
         } else {
           if (attachments) {
             attachments.style.marginBlockEnd = "";
           }
-          inner?.style.setProperty("--hmail-quickreply-reserve", `${height}px`);
+          if (body) {
+            body.style.paddingBottom = `${height + 12}px`;
+          }
         }
         if (pane) {
           pane.style.marginBlockEnd = "";
@@ -166,8 +175,10 @@ var hMailQuickReply = {
       this._spaceObserver = null;
       this._applyReserve = null;
       const pane = doc.getElementById("messagepane");
-      pane?.contentDocument?.documentElement?.style
-        .removeProperty("--hmail-quickreply-reserve");
+      const body = pane?.contentDocument?.body;
+      if (body) {
+        body.style.paddingBottom = "";
+      }
       for (const id of ["messagepane", "attachmentView"]) {
         const node = doc.getElementById(id);
         if (node) {

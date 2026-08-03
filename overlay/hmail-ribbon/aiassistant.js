@@ -573,15 +573,13 @@ var hMailAI = {
     const text = await hMailLocalAI.generate(turns);
     // Token counts are meaningless here — nothing is billed — but the usage
     // line still wants numbers, and characters/4 is the usual rough guide.
-    const spent = Math.round(
-      turns.reduce((n, t) => n + t.text.length, 0) / 4);
-    return {
-      parts: [{ text }],
-      usage: {
-        promptTokenCount: spent,
-        candidatesTokenCount: Math.round(text.length / 4),
-      },
-    };
+    this.recordUsage(
+      Math.round(turns.reduce((n, t) => n + t.text.length, 0) / 4),
+      Math.round(text.length / 4));
+    // The array itself, exactly as callGemini and callOpenAICompatible
+    // return it. Handing back {parts, usage} instead was why ask() said
+    // "parts.filter is not a function".
+    return [{ text }];
   },
 
   async callGemini(contents, tools, key) {

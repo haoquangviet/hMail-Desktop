@@ -53,13 +53,6 @@
     overflow-wrap: break-word !important;
   }
 
-  /* Room at the foot of the message for hMail's quick reply bar, which is
-     pinned over the bottom of the pane. quickreply.js writes the exact
-     height into the variable; the fallback covers the moment before it does. */
-  body {
-    padding-block-end: var(--hmail-quickreply-reserve, 0px) !important;
-  }
-
   /* Anything the sender pinned wider than the pane gets reined in. */
   div, p, blockquote, section, article, span {
     max-width: 100% !important;

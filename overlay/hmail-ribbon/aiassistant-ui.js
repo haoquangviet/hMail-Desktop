@@ -32,9 +32,13 @@ Object.assign(hMailAI, {
     const fmt = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
     const detail = `${fmt(u.in + u.out)} token (${fmt(u.in)} gửi / ` +
                    `${fmt(u.out)} nhận)`;
+    // Which service this exchange went to. The counters are already kept per
+    // service, but this line never said which one, so a number from Gemini
+    // and a number from the on-device model read as one running total.
+    const who = this.serviceDef().label;
     const value = this.cost(u);
-    return value > 0 ? `${detail} · ≈ $${value.toFixed(4)}`
-                     : `${detail} · miễn phí`;
+    return value > 0 ? `${who} · ${detail} · ≈ $${value.toFixed(4)}`
+                     : `${who} · ${detail} · miễn phí`;
   },
 
   /**
@@ -766,10 +770,11 @@ Object.assign(hMailAI, {
     // break every prompt.
     form.appendChild(el("div", "hmail-ai-section", "AI trên máy"));
     form.appendChild(el("div", "hmail-ai-hint",
-      "Mô hình all-MiniLM-L6-v2 chạy hoàn toàn trên máy này: không cần API " +
-      "key, không mất phí, thư không rời khỏi máy. Nó dùng cho tìm kiếm theo " +
-      "ngữ nghĩa chứ không trả lời bằng lời văn, nên vẫn cần một nhà cung " +
-      "cấp ở trên nếu bạn muốn tóm tắt hay soạn thư."));
+      "Hai mô hình khác nhau, cho hai việc khác nhau. Một mô hình nhúng " +
+      "(all-MiniLM-L6-v2) biến thư thành dãy số để tìm theo ngữ nghĩa — nó " +
+      "không viết được câu nào. Một mô hình sinh văn bản (Qwen 2.5) mới là " +
+      "thứ trả lời và soạn thư. Cả hai chạy trên máy này, không cần API key, " +
+      "không mất phí, thư không rời khỏi máy."));
 
     const localState = el("div", "hmail-ai-hint", "");
     form.appendChild(localState);
@@ -785,11 +790,18 @@ Object.assign(hMailAI, {
     form.appendChild(localBtn);
 
     try {
-      const on = Services.prefs.getBoolPref("hmail.localai.enabled", false);
-      const modelId = this.pref("hmail.localai.model", "");
-      localState.textContent = on
-        ? `Đang bật${modelId ? ` — ${modelId}` : ""}.`
-        : "Chưa kích hoạt. Mở trang bên dưới để chọn và tải mô hình về.";
+      const search = Services.prefs.getBoolPref("hmail.localai.enabled", false);
+      const chat = Services.prefs.getBoolPref(
+        "hmail.localai.chat.enabled", false);
+      const chatId = this.pref("hmail.localai.chat.model", "");
+      const lines = [
+        search ? "Tìm theo ngữ nghĩa: đang bật." : "Tìm theo ngữ nghĩa: chưa bật.",
+        chat
+          ? `Trả lời trên máy: đang bật — ${chatId.split("/").pop() || chatId}.`
+          : "Trả lời trên máy: chưa bật — chọn nhà cung cấp này thì chưa có " +
+            "gì trả lời được.",
+      ];
+      localState.textContent = lines.join(" ");
     } catch (e) {}
 
     // --- prices and spend ------------------------------------------------

@@ -3861,3 +3861,11 @@ unified-toolbar-customization {
 .hmail-localai-results > * {
     background-color: Canvas !important;
 }
+
+/* Full width: the on-device AI page is a settings page, not an article, and
+   a 900px column beside an empty half-screen wastes the space the model
+   cards could use. */
+.hmail-localai-page,
+.hmail-import {
+    max-width: none !important;
+}
