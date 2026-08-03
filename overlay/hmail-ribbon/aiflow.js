@@ -312,6 +312,223 @@ var hMailFlow = {
     });
   },
 
+  // =====================================================================
+  // Chạy trên thư mục sẵn có
+  //
+  // Running a rule over mail that has already arrived is a different act
+  // from running it on one message as it lands. It touches thousands of
+  // messages at once, it costs real money, and a mistake is thousands of
+  // mistakes. So it is built around three things the per-message path does
+  // not need: an estimate the user sees before agreeing, batching so the
+  // bill is a fraction of what one call per message would be, and a review
+  // list for everything the model was not sure about.
+  // =====================================================================
+
+  BATCH_SIZE: 10,
+  /** Below this the model's own answer is not acted on; it goes to review. */
+  CONFIDENT: 0.8,
+  BUDGET_PREF: "hmail.flow.budgetUSD",
+  DEFAULT_BUDGET: 5,
+
+  budget() {
+    try {
+      const value = parseFloat(
+        Services.prefs.getCharPref(this.BUDGET_PREF,
+                                   String(this.DEFAULT_BUDGET)));
+      return Number.isFinite(value) && value > 0
+        ? value : this.DEFAULT_BUDGET;
+    } catch (e) {
+      return this.DEFAULT_BUDGET;
+    }
+  },
+
+  /**
+   * What a run would cost, roughly. Deliberately an over-estimate: a number
+   * that turns out low is a broken promise, and a number that turns out high
+   * is a pleasant surprise.
+   */
+  estimate(count) {
+    const perMessage = 1200;          // tokens of prompt, generously
+    const perAnswer = 60;
+    const batches = Math.ceil(count / this.BATCH_SIZE);
+    const inTokens = count * perMessage + batches * 300;
+    const outTokens = count * perAnswer;
+    const price = hMailAI.price();
+    return {
+      batches,
+      inTokens,
+      outTokens,
+      usd: (inTokens / 1e6) * price.in + (outTokens / 1e6) * price.out,
+    };
+  },
+
+  /** Money spent on this run so far, from the assistant's own counters. */
+  spent(since) {
+    const now = hMailAI.usageFor();
+    return hMailAI.cost({
+      in: Math.max(0, now.in - since.in),
+      out: Math.max(0, now.out - since.out),
+    });
+  },
+
+  /**
+   * Ask about a batch of messages in one call and get one verdict each.
+   *
+   * Ten messages per call rather than one is most of the saving: the rule,
+   * the instructions and the output format are sent once instead of ten
+   * times, and short mail is mostly overhead.
+   */
+  async askBatch(items, question) {
+    const parts = items.map((it, i) =>
+      `### Thư ${i + 1}\nTừ: ${it.from}\nTiêu đề: ${it.subject}\nNội dung: ${it.body}`);
+
+    const answer = await hMailAI.ask([{
+      role: "user",
+      text:
+        `Với mỗi thư dưới đây, trả lời câu hỏi: ${question}\n\n` +
+        "Trả về DUY NHẤT một mảng JSON, mỗi phần tử là " +
+        '{"i": số thứ tự thư, "yes": true hoặc false, "c": độ chắc chắn từ ' +
+        '0 đến 1, "why": lý do ngắn}. Không thêm chữ nào ngoài mảng JSON.' +
+        "\nNếu thư không đủ thông tin để kết luận, đặt c thấp thay vì " +
+        "đoán.\n\n" +
+        parts.join("\n\n"),
+    }]);
+
+    try {
+      const json = String(answer).replace(/^[^[]*/, "").replace(/[^\]]*$/, "");
+      const list = JSON.parse(json);
+      return Array.isArray(list) ? list : [];
+    } catch (e) {
+      // An unparseable answer is not a "no": it is an unknown, and unknowns
+      // belong in the review list rather than being silently dropped.
+      return items.map((it, i) => ({ i: i + 1, yes: false, c: 0,
+                                     why: "không đọc được trả lời của AI" }));
+    }
+  },
+
+  /**
+   * Run one rule across a folder.
+   *
+   * @param {object} opts
+   * @param {function} opts.onProgress  (done, total, spentUSD)
+   * @param {function} opts.shouldStop  called between batches
+   */
+  async runFolder(win, folder, rule, opts = {}) {
+    const { onProgress = () => {}, shouldStop = () => false } = opts;
+    const since = { ...hMailAI.usageFor() };
+    const cap = this.budget();
+    const review = [];
+    const acted = [];
+    let done = 0;
+    let stoppedFor = "";
+
+    // The cheap half first, on every message, before a single call is made.
+    const candidates = [];
+    for (const hdr of folder.msgDatabase.enumerateMessages()) {
+      const from = String(hdr.mime2DecodedAuthor || "").toLowerCase();
+      const subject = String(hdr.mime2DecodedSubject || "").toLowerCase();
+      if (rule.from && !from.includes(rule.from.toLowerCase())) {
+        continue;
+      }
+      if (rule.subject && !subject.includes(rule.subject.toLowerCase())) {
+        continue;
+      }
+      if (rule.hasAttachment &&
+          !(hdr.flags & Ci.nsMsgMessageFlags.Attachment)) {
+        continue;
+      }
+      candidates.push(hdr);
+    }
+
+    if (!rule.ask) {
+      // No question to ask: every candidate matched on the cheap half alone,
+      // and the model is not involved at all.
+      for (const hdr of candidates) {
+        if (shouldStop()) {
+          break;
+        }
+        await this.apply(hdr, rule);
+        acted.push(hdr);
+        onProgress(++done, candidates.length, 0);
+      }
+      return { acted, review, total: candidates.length, spent: 0, stoppedFor };
+    }
+
+    for (let i = 0; i < candidates.length; i += this.BATCH_SIZE) {
+      if (shouldStop()) {
+        stoppedFor = "người dùng dừng";
+        break;
+      }
+      const spentSoFar = this.spent(since);
+      if (spentSoFar >= cap) {
+        stoppedFor = `chạm mức trần ${cap} USD`;
+        break;
+      }
+
+      const slice = candidates.slice(i, i + this.BATCH_SIZE);
+      const items = [];
+      for (const hdr of slice) {
+        items.push({
+          hdr,
+          from: String(hdr.mime2DecodedAuthor || ""),
+          subject: String(hdr.mime2DecodedSubject || ""),
+          body: (await this.shortBody(hdr)).slice(0, 1500),
+        });
+      }
+
+      let verdicts = [];
+      try {
+        verdicts = await this.askBatch(items, rule.ask);
+      } catch (e) {
+        stoppedFor = "lỗi khi gọi AI: " + (e.message || e);
+        break;
+      }
+
+      for (const [index, item] of items.entries()) {
+        const v = verdicts.find(x => Number(x.i) === index + 1) || {};
+        const confidence = Number(v.c);
+        if (!v.yes) {
+          continue;
+        }
+        if (!(confidence >= this.CONFIDENT)) {
+          // Sure enough to raise, not sure enough to act on.
+          review.push({
+            hdr: item.hdr,
+            from: item.from,
+            subject: item.subject,
+            confidence: Number.isFinite(confidence) ? confidence : 0,
+            why: String(v.why || ""),
+          });
+          continue;
+        }
+        await this.apply(item.hdr, rule);
+        acted.push(item.hdr);
+      }
+
+      done = Math.min(candidates.length, i + this.BATCH_SIZE);
+      onProgress(done, candidates.length, this.spent(since));
+      await new Promise(r => win.setTimeout(r, 0));
+    }
+
+    return {
+      acted,
+      review,
+      total: candidates.length,
+      spent: this.spent(since),
+      stoppedFor,
+    };
+  },
+
+  /** Enough of a message for a yes/no question, and no more. */
+  async shortBody(hdr) {
+    try {
+      const raw = await hMailInsight.raw(hdr);
+      return hMailInsight.plainBody(raw);
+    } catch (e) {
+      return "";
+    }
+  },
+
   // -------------------------------------------------------------------- log
 
   logPath() {

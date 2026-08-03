@@ -128,6 +128,78 @@ var hMailFlowUI = {
     });
     page.appendChild(add);
 
+    // --- run over an existing folder --------------------------------------
+    page.appendChild(el("div", "hmail-ai-section",
+                        "Chạy trên thư mục sẵn có"));
+    page.appendChild(el("div", "hmail-ai-hint",
+      "Áp một quy tắc cho thư đã nhận. Việc này đụng tới hàng nghìn thư một " +
+      "lúc và tốn tiền thật, nên hMail ước tính chi phí trước, hỏi lại hai " +
+      "lần, và mọi thư mà AI không chắc sẽ được đưa vào danh sách chờ bạn " +
+      "duyệt thay vì tự xử lý."));
+
+    const runRow = el("div", "hmail-ai-row");
+    const rulePick = el("select", "hmail-ai-field");
+    rulePick.id = "hmail-flow-run-rule";
+    const folderPick = el("select", "hmail-ai-field");
+    folderPick.id = "hmail-flow-run-folder";
+    for (const folder of this.folders()) {
+      const opt = el("option", null, folder.label);
+      opt.value = folder.uri;
+      folderPick.appendChild(opt);
+    }
+    runRow.append(rulePick, folderPick);
+    page.appendChild(runRow);
+
+    const capRow = el("div", "hmail-ai-row");
+    capRow.append(el("span", "hmail-flow-label", "Mức trần chi phí (USD)"));
+    const cap = el("input", "hmail-ai-field");
+    cap.id = "hmail-flow-cap";
+    cap.type = "number";
+    cap.min = "0.1";
+    cap.step = "0.5";
+    cap.value = String(hMailFlow.budget());
+    cap.addEventListener("change", () => {
+      Services.prefs.setCharPref(hMailFlow.BUDGET_PREF, cap.value);
+    });
+    capRow.appendChild(cap);
+    page.appendChild(capRow);
+    page.appendChild(el("div", "hmail-ai-hint",
+      "hMail dừng ngay khi tiêu tới mức này, kể cả khi chưa xử lý hết thư. " +
+      "Số tiền tính theo đơn giá bạn khai trong cài đặt trợ lý."));
+
+    const runActions = el("div", "hmail-ai-actions");
+    const run = el("button", "hmail-ai-btn primary", "Ước tính và chạy…");
+    run.id = "hmail-flow-run";
+    run.addEventListener("click", () => this.startRun(win));
+    const stop = el("button", "hmail-ai-btn", "Dừng");
+    stop.id = "hmail-flow-run-stop";
+    stop.hidden = true;
+    stop.addEventListener("click", () => {
+      this.stopping = true;
+    });
+    runActions.append(run, stop);
+    page.appendChild(runActions);
+
+    const runStatus = el("div", "hmail-ai-status", "");
+    runStatus.id = "hmail-flow-run-status";
+    page.appendChild(runStatus);
+
+    const runBar = el("div", "hmail-merge-bar");
+    runBar.id = "hmail-flow-run-bar";
+    runBar.hidden = true;
+    runBar.appendChild(el("div", "hmail-merge-bar-fill"));
+    page.appendChild(runBar);
+
+    // --- review -----------------------------------------------------------
+    page.appendChild(el("div", "hmail-ai-section", "Chờ bạn duyệt"));
+    page.appendChild(el("div", "hmail-ai-hint",
+      "Những thư AI cho là khớp nhưng không đủ chắc chắn. hMail không tự " +
+      "làm gì với chúng — một cái máy đoán mò trên hàng nghìn lá thư là " +
+      "hàng nghìn lần đoán sai."));
+    const review = el("div", "hmail-flow-review");
+    review.id = "hmail-flow-review";
+    page.appendChild(review);
+
     page.appendChild(el("div", "hmail-ai-section", "Nhật ký"));
     page.appendChild(el("div", "hmail-ai-hint",
       "Mỗi hành động tự động đều được ghi lại. Một thứ chạy thay bạn mà " +
@@ -155,6 +227,19 @@ var hMailFlowUI = {
       list.appendChild(this.el(doc, "div", "hmail-ai-hint",
         "Chưa có quy tắc nào."));
     }
+
+    const picker = doc.getElementById("hmail-flow-run-rule");
+    if (picker) {
+      const chosen = picker.value;
+      picker.textContent = "";
+      for (const rule of rules) {
+        const opt = this.el(doc, "option", null, rule.name || "(chưa đặt tên)");
+        opt.value = rule.id;
+        picker.appendChild(opt);
+      }
+      picker.value = chosen || rules[0]?.id || "";
+    }
+    this.paintReview(win);
     this.paintLog(win);
   },
 
@@ -363,6 +448,183 @@ var hMailFlowUI = {
       } catch (e) {}
     }
     return list;
+  },
+
+  // ------------------------------------------------------- chạy hàng loạt
+
+  say(win, text) {
+    const node = win.document.getElementById("hmail-flow-run-status");
+    if (node) {
+      node.textContent = text;
+    }
+  },
+
+  /**
+   * Two confirmations, and they are not the same question twice.
+   *
+   * The first says what will be touched and what it will cost. The second
+   * says what will be done to the mail, in the plainest words available,
+   * because "chuyển 3.400 thư vào Archive" is the sentence someone needs to
+   * read before it happens rather than after.
+   */
+  async startRun(win) {
+    const doc = win.document;
+    const ruleId = doc.getElementById("hmail-flow-run-rule")?.value;
+    const folderUri = doc.getElementById("hmail-flow-run-folder")?.value;
+    const rule = hMailFlow.rules().find(r => r.id === ruleId);
+    const folder = folderUri
+      ? MailServices.folderLookup.getFolderForURL(folderUri) : null;
+    if (!rule || !folder) {
+      this.say(win, "Hãy chọn quy tắc và thư mục.");
+      return;
+    }
+
+    const count = folder.getTotalMessages(false);
+    const estimate = hMailFlow.estimate(count);
+    const cap = hMailFlow.budget();
+
+    const first = Services.prompt.confirmEx(
+      win, "Chạy quy tắc trên thư mục",
+      `Thư mục "${folder.prettyName}" có ${count.toLocaleString("vi-VN")} ` +
+      `thư.
+
+` +
+      (rule.ask
+        ? `hMail sẽ hỏi AI về những thư qua được phần so khớp, gộp ` +
+          `${hMailFlow.BATCH_SIZE} thư mỗi lượt gọi.
+` +
+          `Ước tính tối đa: khoảng ${estimate.usd.toFixed(2)} USD ` +
+          `(${estimate.batches.toLocaleString("vi-VN")} lượt gọi).
+` +
+          `Mức trần đang đặt: ${cap} USD — chạm tới là dừng.
+
+`
+        : "Quy tắc này không hỏi AI nên không tốn phí.\n") +
+      "Đây là ước tính, không phải giá chốt. Số thực tế phụ thuộc độ dài " +
+      "từng thư.",
+      Services.prompt.BUTTON_POS_0 * Services.prompt.BUTTON_TITLE_IS_STRING +
+      Services.prompt.BUTTON_POS_1 * Services.prompt.BUTTON_TITLE_IS_STRING,
+      "Tiếp tục", "Huỷ", null, null, {});
+    if (first !== 0) {
+      return;
+    }
+
+    const willDo = [];
+    if (rule.moveTo) {
+      const target = MailServices.folderLookup.getFolderForURL(rule.moveTo);
+      willDo.push(`chuyển vào "${target?.prettyName || rule.moveTo}"`);
+    }
+    if (rule.tag) {
+      willDo.push("gắn nhãn");
+    }
+    if (rule.markRead) {
+      willDo.push("đánh dấu đã đọc");
+    }
+    if (rule.flag) {
+      willDo.push("gắn cờ");
+    }
+    if (rule.summarize) {
+      willDo.push("tóm tắt bằng AI");
+    }
+    if (rule.reply) {
+      willDo.push(rule.send ? "GỬI thư trả lời tự động"
+                            : "soạn sẵn thư trả lời vào Thư nháp");
+    }
+
+    const second = Services.prompt.confirmEx(
+      win, "Xác nhận lần cuối",
+      `Với mỗi thư khớp quy tắc "${rule.name}", hMail sẽ:
+
+` +
+      (willDo.length ? "  • " + willDo.join("• ")
+                     : "  • (chưa chọn hành động nào)") +
+      "\nViệc này không hoàn tác được hàng loạt. Thư mà AI không đủ chắc " +
+      "chắn sẽ KHÔNG bị đụng tới — chúng vào danh sách chờ bạn duyệt.",
+      Services.prompt.BUTTON_POS_0 * Services.prompt.BUTTON_TITLE_IS_STRING +
+      Services.prompt.BUTTON_POS_1 * Services.prompt.BUTTON_TITLE_IS_STRING,
+      "Tôi hiểu, chạy đi", "Quay lại", null, null, {});
+    if (second !== 0) {
+      return;
+    }
+
+    this.stopping = false;
+    doc.getElementById("hmail-flow-run").hidden = true;
+    doc.getElementById("hmail-flow-run-stop").hidden = false;
+    const bar = doc.getElementById("hmail-flow-run-bar");
+    const fill = bar.firstChild;
+    bar.hidden = false;
+
+    try {
+      const result = await hMailFlow.runFolder(win, folder, rule, {
+        onProgress: (done, total, spent) => {
+          fill.style.width = `${total ? (done / total) * 100 : 0}%`;
+          this.say(win,
+            `${done.toLocaleString("vi-VN")}/${total.toLocaleString("vi-VN")}` +
+            ` — đã tiêu ≈ $${spent.toFixed(4)} / ${cap} USD`);
+        },
+        shouldStop: () => this.stopping,
+      });
+
+      this.pending = (this.pending || []).concat(
+        result.review.map(r => ({ ...r, rule })));
+      this.say(win,
+        `Xong. Đã xử lý ${result.acted.length.toLocaleString("vi-VN")} thư, ` +
+        `${result.review.length.toLocaleString("vi-VN")} thư chờ bạn duyệt, ` +
+        `tiêu ≈ $${result.spent.toFixed(4)}` +
+        (result.stoppedFor ? ` — dừng vì ${result.stoppedFor}.` : "."));
+    } catch (e) {
+      this.say(win, "Lỗi: " + (e.message || e));
+    } finally {
+      bar.hidden = true;
+      doc.getElementById("hmail-flow-run").hidden = false;
+      doc.getElementById("hmail-flow-run-stop").hidden = true;
+      this.refresh(win);
+    }
+  },
+
+  /**
+   * The messages the model flagged but was not sure about. Nothing has been
+   * done to them; each row offers the action and a way to dismiss it.
+   */
+  paintReview(win) {
+    const doc = win.document;
+    const box = doc.getElementById("hmail-flow-review");
+    if (!box) {
+      return;
+    }
+    box.textContent = "";
+    const items = this.pending || [];
+    if (!items.length) {
+      box.appendChild(this.el(doc, "div", "hmail-ai-hint",
+        "Không có thư nào đang chờ."));
+      return;
+    }
+
+    for (const [index, item] of items.entries()) {
+      const row = this.el(doc, "div", "hmail-flow-review-row");
+      row.append(
+        this.el(doc, "span", "hmail-flow-review-conf",
+                `${Math.round((item.confidence || 0) * 100)}%`),
+        this.el(doc, "span", "hmail-flow-review-from", item.from),
+        this.el(doc, "span", "hmail-flow-review-subject", item.subject),
+        this.el(doc, "span", "hmail-flow-review-why", item.why));
+
+      const actions = this.el(doc, "div", "hmail-warning-group");
+      const yes = this.el(doc, "button", "hmail-warning-action", "Áp dụng");
+      yes.addEventListener("click", async () => {
+        await hMailFlow.apply(item.hdr, item.rule);
+        this.pending.splice(index, 1);
+        this.refresh(win);
+      });
+      const no = this.el(doc, "button", "hmail-warning-action", "Bỏ qua");
+      no.addEventListener("click", () => {
+        this.pending.splice(index, 1);
+        this.refresh(win);
+      });
+      actions.append(yes, no);
+      row.appendChild(actions);
+      box.appendChild(row);
+    }
   },
 
   paintLog(win) {

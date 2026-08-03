@@ -4129,3 +4129,40 @@ unified-toolbar-customization {
     max-width: 46ch;
     line-height: 1.5;
 }
+
+/* Waiting for a human: what the model flagged but was not sure about. */
+.hmail-flow-review {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 40vh;
+    overflow-y: auto;
+}
+
+.hmail-flow-review-row {
+    display: grid;
+    grid-template-columns: 52px 170px 1fr 1fr auto;
+    gap: 10px;
+    align-items: center;
+    padding: 5px 6px;
+    font-size: 0.85em;
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 8%, transparent);
+}
+
+.hmail-flow-review-conf {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: #B45309;
+}
+
+.hmail-flow-review-from,
+.hmail-flow-review-subject,
+.hmail-flow-review-why {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.hmail-flow-review-why {
+    opacity: 0.7;
+}
