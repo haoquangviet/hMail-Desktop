@@ -1,0 +1,60 @@
+/* hMail Desktop — nội dung thư
+ * MIT License, Copyright (c) 2026 HQV Software
+ *
+ * Mail is written by other people, and plenty of it carries a hard-coded
+ * width: a 900px table from a shipping line, a <pre> block with 200-character
+ * lines, an image straight off a camera. In a reading pane that is narrower
+ * than the sender assumed, all of it turns into a horizontal scrollbar and
+ * the reader has to drag the message left and right to read one paragraph.
+ *
+ * These rules keep the message inside the pane. They only touch the layout
+ * that would otherwise overflow — nothing here changes colours, fonts, or
+ * anything else the sender chose.
+ */
+
+@-moz-document url-prefix("mailbox:"),
+               url-prefix("imap:"),
+               url-prefix("news:"),
+               url-prefix("nntp:"),
+               url-prefix("snews:"),
+               url-prefix("file:///"),
+               url-prefix("about:blank") {
+
+  /* A long word — a URL, a reference number, an ID — must break rather than
+     push the whole document wide. */
+  html, body {
+    max-width: 100% !important;
+    overflow-wrap: break-word !important;
+    word-wrap: break-word !important;
+  }
+
+  /* Tables are the usual culprit: a fixed pixel width plus table-layout:fixed
+     makes the browser honour it whatever the window does. */
+  table {
+    max-width: 100% !important;
+    table-layout: auto !important;
+  }
+
+  td, th {
+    overflow-wrap: break-word !important;
+    word-break: break-word !important;
+  }
+
+  /* Images scale down but never up, so a small logo stays small. */
+  img, video, iframe, embed, object {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Preformatted text is the other common overflow: plain-text mail and code
+     blocks arrive with lines far longer than the pane. */
+  pre {
+    white-space: pre-wrap !important;
+    overflow-wrap: break-word !important;
+  }
+
+  /* Anything the sender pinned wider than the pane gets reined in. */
+  div, p, blockquote, section, article, span {
+    max-width: 100% !important;
+  }
+}
