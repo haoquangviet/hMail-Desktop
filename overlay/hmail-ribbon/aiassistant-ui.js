@@ -649,11 +649,11 @@ Object.assign(hMailAI, {
     if (!text) {
       return;
     }
+    // A question does not have to be about a message. Refusing "xin chào"
+    // because nothing is selected made the box look broken, and with an
+    // on-device model there is no cost to answering anyway. Without a
+    // message the conversation is kept against the panel instead.
     const hdr = this.selectedMessage(win);
-    if (!hdr) {
-      this.notify(win, "Hãy chọn một thư trước.");
-      return;
-    }
     const input = win.document.getElementById("hmail-ai-input");
     if (input) {
       input.value = "";
@@ -662,29 +662,48 @@ Object.assign(hMailAI, {
     this.notify(win, "Đang suy nghĩ…", true);
 
     try {
-      const convo = await this.conversationFor(hdr);
       const turns = [];
-      // Give the model the message once, then the conversation so far.
-      turns.push({
-        role: "user",
-        text: "Đây là email đang được xem. Hãy dùng nó để trả lời các câu " +
-              "hỏi tiếp theo. Bạn có thể thực hiện hành động trên thư này " +
-              "(đánh dấu, gắn nhãn, gắn cờ, chuyển thư mục, lưu trữ, mở cửa " +
-              "sổ trả lời) khi người dùng yêu cầu.\n\n---\n" +
-              await this.messageText(hdr),
-      });
-      for (const t of convo.turns) {
-        turns.push({ role: t.role, text: t.text });
+      if (hdr) {
+        // Give the model the message once, then the conversation so far.
+        turns.push({
+          role: "user",
+          text: "Đây là email đang được xem. Hãy dùng nó để trả lời các câu " +
+                "hỏi tiếp theo. Bạn có thể thực hiện hành động trên thư này " +
+                "(đánh dấu, gắn nhãn, gắn cờ, chuyển thư mục, lưu trữ, mở " +
+                "cửa sổ trả lời) khi người dùng yêu cầu.\n\n---\n" +
+                await this.messageText(hdr),
+        });
+        const convo = await this.conversationFor(hdr);
+        for (const t of convo.turns) {
+          turns.push({ role: t.role, text: t.text });
+        }
+      } else {
+        turns.push({
+          role: "user",
+          text: "Bạn là trợ lý trong ứng dụng thư hMail Desktop. Trả lời " +
+                "ngắn gọn bằng tiếng Việt.",
+        });
+        for (const t of this.looseTurns || []) {
+          turns.push(t);
+        }
       }
       turns.push({ role: "user", text });
 
       const reply = await this.ask(turns, {
         win,
-        allowActions: true,
+        // Actions operate on the open message; with none open there is
+        // nothing for them to act on.
+        allowActions: !!hdr,
         onAction: line => this.addTurn(win, "action", line),
       });
-      await this.remember(hdr, "user", text);
-      await this.remember(hdr, "assistant", reply);
+      if (hdr) {
+        await this.remember(hdr, "user", text);
+        await this.remember(hdr, "assistant", reply);
+      } else {
+        this.looseTurns = (this.looseTurns || []).concat(
+          { role: "user", text },
+          { role: "assistant", text: reply }).slice(-12);
+      }
       this.addTurn(win, "assistant", reply);
       this.notify(win, this.usageLine());
     } catch (e) {
