@@ -654,7 +654,35 @@ var hMailImport = {
     return m ? m[1].replace(/[<>]/g, "").trim() : "";
   },
 
+  /**
+   * Put one message in a folder.
+   *
+   * A local folder is written to directly. nsIMsgLocalMailFolder.addMessage
+   * appends to the store and returns the header, with no temporary file, no
+   * round trip through the copy service and no per-message notification —
+   * the same call the feed reader uses. Through copyFileMessage the import
+   * managed about one message a second, which for a .pst of a hundred
+   * thousand messages is thirty hours; this is faster by a wide margin.
+   *
+   * IMAP and anything else still goes the long way, because for those the
+   * copy service is doing real work: talking to a server.
+   */
   async addMessage(folder, rfc822, isRead) {
+    try {
+      const local = folder.QueryInterface(Ci.nsIMsgLocalMailFolder);
+      // addMessage wants bytes, one per character, not a UTF-16 string.
+      const hdr = local.addMessage(unescape(encodeURIComponent(rfc822)));
+      if (isRead && hdr) {
+        hdr.orFlags(Ci.nsMsgMessageFlags.Read);
+      }
+      return;
+    } catch (e) {
+      // Not a local folder, or the store refused it: fall through.
+    }
+    return this.addMessageSlowly(folder, rfc822, isRead);
+  },
+
+  async addMessageSlowly(folder, rfc822, isRead) {
     const tmp = Services.dirsvc.get("TmpD", Ci.nsIFile);
     tmp.append(`hmail-import-${Math.floor(Date.now() % 1e9)}-` +
                `${this._seq = (this._seq || 0) + 1}.eml`);
@@ -767,6 +795,13 @@ var hMailImport = {
         const already = this.existingIds(target);
         let skipped = 0;
 
+        // Tells the folder a batch is arriving, so it stops announcing every
+        // single message to the rest of the application while it runs.
+        try {
+          target.gettingNewMessages = true;
+        } catch (e) {}
+
+        try {
         for await (const message of hMailPst.messages(this.handle,
                                                       node.path)) {
           if (this.cancelled) {
@@ -797,11 +832,17 @@ var hMailImport = {
             this.notify(win,
               `Đang nhập ${node.name}: ${done.toLocaleString("vi-VN")}/` +
               `${total.toLocaleString("vi-VN")} thư (${pct}%)` +
+              (skipped ? ` — bỏ qua ${skipped} thư đã có` : "") +
               (failed ? ` — ${failed} thư lỗi` : ""),
               total ? done / total : "busy");
             // Let the interface breathe between batches.
             await new Promise(r => win.setTimeout(r, 0));
           }
+        }
+        } finally {
+          try {
+            target.gettingNewMessages = false;
+          } catch (e) {}
         }
       }
 
