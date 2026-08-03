@@ -196,6 +196,18 @@ if (Test-Path $IconDir) {
 Log "Applying overlay (distribution, autoconfig, hmail-chrome)"
 Copy-Item -Recurse -Force (Join-Path $RepoRoot "overlay\*") $App
 
+# The start page ships inside the application so the message pane still has
+# something to show with no network. docs/ is the single source: the same
+# files serve the public site on GitHub Pages.
+Log "Bundling the start page"
+$StartDir = Join-Path $App "hmail-start"
+New-Item -ItemType Directory -Force -Path (Join-Path $StartDir "assets") | Out-Null
+Copy-Item (Join-Path $RepoRoot "docs\start.html") $StartDir -Force
+foreach ($asset in @("brand.css", "i18n.js", "hMail.svg")) {
+    Copy-Item (Join-Path $RepoRoot "docs\assets\$asset") `
+              (Join-Path $StartDir "assets") -Force
+}
+
 # The AI assistant is no longer an add-on. It was a repack of a third-party
 # extension whose chat lived in popup windows and whose "which message is this
 # about?" state was held by a background script keyed to its own toolbar

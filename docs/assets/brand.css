@@ -239,21 +239,68 @@ h2 {
     font-size: 0.95rem;
 }
 
-.card .dot {
-    display: block;
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
+/* --- icons ---
+   Drawn inline as SVG so they carry no extra request and take the colour of
+   the tile they sit in. */
+
+.icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
     margin-bottom: 14px;
     background: rgba(23, 71, 133, .10);
+    color: var(--blue);
 }
 
-.card.accent .dot {
+.icon svg {
+    width: 22px;
+    height: 22px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.card.accent .icon {
     background: rgba(255, 121, 29, .16);
+    color: #d95c05;
 }
 
-.card.green .dot {
+.card.green .icon {
     background: rgba(52, 141, 0, .14);
+    color: var(--green);
+}
+
+/* --- language switch --- */
+
+.lang {
+    display: inline-flex;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--bg);
+}
+
+.lang a {
+    padding: 5px 13px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--ink-soft);
+    letter-spacing: .02em;
+}
+
+.lang a:hover {
+    text-decoration: none;
+    background: var(--bg-soft);
+}
+
+.lang a.on {
+    background: var(--blue);
+    color: #fff;
 }
 
 /* --- footer --- */

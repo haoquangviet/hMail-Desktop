@@ -18,37 +18,41 @@ body {
 }
 
 .start {
-    max-width: 900px;
+    max-width: 920px;
     margin-inline: auto;
-    padding: 40px 28px 56px;
+    padding: 36px 26px 52px;
 }
 
 .start-head {
     display: flex;
     align-items: center;
     gap: 14px;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
 
 .start-head img {
-    width: 40px;
-    height: 40px;
+    width: 38px;
+    height: 38px;
 }
 
 .start-head h1 {
-    font-size: 1.55rem;
+    font-size: 1.5rem;
     margin: 0;
     letter-spacing: -0.02em;
 }
 
+.start-head .lang {
+    margin-inline-start: auto;
+}
+
 .start-sub {
     color: var(--ink-soft);
-    margin: 0 0 28px;
+    margin: 0 0 26px;
 }
 
 .tips {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 14px;
 }
 
@@ -57,6 +61,18 @@ body {
     border: 1px solid var(--line);
     border-radius: 14px;
     padding: 16px 18px;
+}
+
+.tip .icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+
+.tip .icon svg {
+    width: 19px;
+    height: 19px;
 }
 
 .tip h3 {
@@ -73,8 +89,8 @@ body {
 
 .tip .where {
     display: inline-block;
-    margin-top: 8px;
-    font-size: 0.8rem;
+    margin-top: 9px;
+    font-size: 0.79rem;
     font-weight: 600;
     color: var(--blue);
     background: rgba(23, 71, 133, .08);
@@ -83,7 +99,7 @@ body {
 }
 
 .links {
-    margin-top: 26px;
+    margin-top: 24px;
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
@@ -105,7 +121,7 @@ body {
 }
 
 .foot {
-    margin-top: 30px;
+    margin-top: 28px;
     font-size: 0.78rem;
     color: var(--ink-soft);
     line-height: 1.6;
@@ -118,57 +134,76 @@ body {
   <div class="start-head">
     <img src="assets/hMail.svg" alt="">
     <h1>hMail Desktop</h1>
+    <span class="lang">
+      <a href="#" data-lang="vi">VI</a><a href="#" data-lang="en">EN</a>
+    </span>
   </div>
-  <p class="start-sub">Chọn một thư ở danh sách bên trái để bắt đầu.</p>
+  <p class="start-sub" data-vi="Chọn một thư ở danh sách bên trái để bắt đầu."
+     data-en="Pick a message on the left to begin.">Chọn một thư ở danh sách bên trái để bắt đầu.</p>
 
   <div class="tips">
     <div class="tip">
-      <h3>Hỏi trợ lý về thư đang mở</h3>
-      <p>Tóm tắt, phân loại, rút việc cần làm, dịch, soạn thư trả lời — và
-         thực hiện luôn nếu bạn yêu cầu.</p>
-      <span class="where">Nút hMail AI, cạnh Trả lời</span>
+      <span class="icon"><svg viewBox="0 0 24 24"><path d="M12 3l1.9 4.6 4.6 1.9-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z"/><path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9L18 15z"/></svg></span>
+      <h3 data-vi="Hỏi trợ lý về thư đang mở" data-en="Ask about the message you are reading">Hỏi trợ lý về thư đang mở</h3>
+      <p data-vi="Tóm tắt, phân loại, rút việc cần làm, dịch, soạn thư trả lời — và thực hiện luôn nếu bạn yêu cầu."
+         data-en="Summarise, classify, pull out the to-dos, translate, draft a reply — and carry it out if you ask.">Tóm tắt, phân loại, rút việc cần làm, dịch, soạn thư trả lời — và thực hiện luôn nếu bạn yêu cầu.</p>
+      <span class="where" data-vi="Nút hMail AI, cạnh Trả lời"
+            data-en="The hMail AI button, next to Reply">Nút hMail AI, cạnh Trả lời</span>
     </div>
 
     <div class="tip">
-      <h3>Trả lời nhanh</h3>
-      <p>Ô trả lời nằm ngay dưới thư: gõ, Enter, xong. Cần viết dài thì mở
-         soạn thảo đầy đủ, chữ đã gõ vẫn giữ nguyên.</p>
-      <span class="where">Dưới nội dung thư</span>
+      <span class="icon"><svg viewBox="0 0 24 24"><path d="M20 6H8a4 4 0 0 0 0 8h8a4 4 0 0 1 0 8H4"/><path d="M7 3L4 6l3 3"/></svg></span>
+      <h3 data-vi="Trả lời nhanh" data-en="Quick reply">Trả lời nhanh</h3>
+      <p data-vi="Ô trả lời nằm ngay dưới thư: gõ, Enter, xong. Cần viết dài thì mở soạn thảo đầy đủ, chữ đã gõ vẫn giữ nguyên."
+         data-en="The reply box sits right under the message: type, Enter, done. Need more room? Open the full composer and what you typed comes with you.">Ô trả lời nằm ngay dưới thư: gõ, Enter, xong. Cần viết dài thì mở soạn thảo đầy đủ, chữ đã gõ vẫn giữ nguyên.</p>
+      <span class="where" data-vi="Dưới nội dung thư"
+            data-en="Below the message body">Dưới nội dung thư</span>
     </div>
 
     <div class="tip">
-      <h3>Gửi cho nhiều người</h3>
-      <p>Mỗi người một bản riêng, có ô thay thế tên và thông tin từng người,
-         giãn cách để không bị máy chủ chặn.</p>
-      <span class="where">Gửi / Nhận ▸ Gửi hàng loạt</span>
+      <span class="icon"><svg viewBox="0 0 24 24"><path d="M3 5h13v9H3z"/><path d="M6 8.5h7"/><path d="M16 9l5 3-5 3"/><path d="M8 19h8"/></svg></span>
+      <h3 data-vi="Gửi cho nhiều người" data-en="Send to many people">Gửi cho nhiều người</h3>
+      <p data-vi="Mỗi người một bản riêng, có ô thay thế tên và thông tin từng người, giãn cách để không bị máy chủ chặn."
+         data-en="Each person gets their own copy, with their name and details merged in, paced so servers do not block you.">Mỗi người một bản riêng, có ô thay thế tên và thông tin từng người, giãn cách để không bị máy chủ chặn.</p>
+      <span class="where" data-vi="Gửi / Nhận ▸ Gửi hàng loạt"
+            data-en="Send / Receive ▸ Bulk send">Gửi / Nhận ▸ Gửi hàng loạt</span>
     </div>
 
     <div class="tip">
-      <h3>Mang dữ liệu Outlook sang</h3>
-      <p>Đọc thẳng tệp .pst và .ost, giữ nguyên cây thư mục và trạng thái đã
-         đọc.</p>
-      <span class="where">Trợ giúp ▸ Nhập từ Outlook</span>
+      <span class="icon"><svg viewBox="0 0 24 24"><path d="M12 3v11"/><path d="M8 10l4 4 4-4"/><path d="M4 17v3h16v-3"/></svg></span>
+      <h3 data-vi="Mang dữ liệu Outlook sang" data-en="Bring your Outlook data over">Mang dữ liệu Outlook sang</h3>
+      <p data-vi="Đọc thẳng tệp .pst và .ost, giữ nguyên cây thư mục và trạng thái đã đọc."
+         data-en="Reads .pst and .ost files directly, keeping the folder tree and the read state.">Đọc thẳng tệp .pst và .ost, giữ nguyên cây thư mục và trạng thái đã đọc.</p>
+      <span class="where" data-vi="Trợ giúp ▸ Nhập từ Outlook"
+            data-en="Help ▸ Import from Outlook">Trợ giúp ▸ Nhập từ Outlook</span>
     </div>
 
     <div class="tip">
-      <h3>Lịch và danh bạ trên máy chủ</h3>
-      <p>hMail hỏi máy chủ thư của bạn rồi tự thiết lập CalDAV và CardDAV,
-         không phải nhập lại mật khẩu.</p>
-      <span class="where">Trợ giúp ▸ Đồng bộ Lịch &amp; Danh bạ</span>
+      <span class="icon"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4"/><path d="M16 3v4"/><path d="M9 15l2 2 4-4"/></svg></span>
+      <h3 data-vi="Lịch và danh bạ trên máy chủ" data-en="Calendar and contacts on your server">Lịch và danh bạ trên máy chủ</h3>
+      <p data-vi="hMail hỏi máy chủ thư của bạn rồi tự thiết lập CalDAV và CardDAV, không phải nhập lại mật khẩu."
+         data-en="hMail asks your mail server and sets up CalDAV and CardDAV itself — no retyping your password.">hMail hỏi máy chủ thư của bạn rồi tự thiết lập CalDAV và CardDAV, không phải nhập lại mật khẩu.</p>
+      <span class="where" data-vi="Trợ giúp ▸ Đồng bộ Lịch &amp; Danh bạ"
+            data-en="Help ▸ Sync calendar &amp; contacts">Trợ giúp ▸ Đồng bộ Lịch &amp; Danh bạ</span>
     </div>
 
     <div class="tip">
-      <h3>Cảnh báo thư đáng ngờ</h3>
-      <p>Người lạ mới vào chuỗi thư, tên miền nhìn giống, xác thực không đạt —
-         hMail nói trước khi bạn kịp trả lời.</p>
-      <span class="where">Tự hiện trên đầu thư</span>
+      <span class="icon"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 4.4-3.2 7.9-8 9-4.8-1.1-8-4.6-8-9V7l8-4z"/><path d="M12 9v4"/><path d="M12 16h.01"/></svg></span>
+      <h3 data-vi="Cảnh báo thư đáng ngờ" data-en="Warnings about suspicious mail">Cảnh báo thư đáng ngờ</h3>
+      <p data-vi="Người lạ mới vào chuỗi thư, tên miền nhìn giống, xác thực không đạt — hMail nói trước khi bạn kịp trả lời."
+         data-en="A stranger new to the thread, a lookalike domain, authentication that did not pass — hMail says so before you reply.">Người lạ mới vào chuỗi thư, tên miền nhìn giống, xác thực không đạt — hMail nói trước khi bạn kịp trả lời.</p>
+      <span class="where" data-vi="Tự hiện trên đầu thư"
+            data-en="Appears above the message">Tự hiện trên đầu thư</span>
     </div>
   </div>
 
   <div class="links">
-    <a href="https://github.com/haoquangviet/hMail-Desktop/releases">Bản phát hành</a>
-    <a href="https://github.com/haoquangviet/hMail-Desktop/issues">Báo lỗi &amp; góp ý</a>
-    <a href="https://github.com/haoquangviet/hMail-Desktop">Mã nguồn</a>
+    <a href="https://github.com/haoquangviet/hMail-Desktop/releases"
+       data-vi="Bản phát hành" data-en="Releases">Bản phát hành</a>
+    <a href="https://github.com/haoquangviet/hMail-Desktop/issues"
+       data-vi="Báo lỗi &amp; góp ý" data-en="Report a problem">Báo lỗi &amp; góp ý</a>
+    <a href="https://github.com/haoquangviet/hMail-Desktop"
+       data-vi="Mã nguồn" data-en="Source code">Mã nguồn</a>
     <a href="https://hqv.software/">HQV Software</a>
   </div>
 
@@ -179,5 +214,6 @@ body {
   </p>
 </div>
 
+<script src="assets/i18n.js"></script>
 </body>
 </html>
