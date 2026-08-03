@@ -95,8 +95,12 @@ var hMailRibbon = {
         {
           label: "Trợ lý",
           buttons: [
+            // Pinned: the assistant is the one command that must never end up
+            // behind the "···" menu, however narrow the window gets.
             { id: "ai-panel", label: "hMail\nAI", icon: "ai", size: "large",
-              fn: win => win.hMailAI.toggle(win) },
+              pin: true, fn: win => win.hMailAI.toggle(win) },
+            { id: "local-ai", label: "AI trên máy", icon: "search",
+              fn: win => win.hMailLocalAIUI.openTab(win) },
           ],
         },
         {
@@ -342,6 +346,8 @@ var hMailRibbon = {
           buttons: [
             { id: "h-settings", label: "Tùy chọn", icon: "settings",
               fn: win => win.openPreferencesTab() },
+            { id: "h-local-ai", label: "AI trên máy", icon: "ai",
+              fn: win => win.hMailLocalAIUI.openTab(win) },
             { id: "h-addons", label: "Tiện ích", icon: "extention",
               fn: win => win.openAddonsMgr("addons://list/extension") },
           ],
@@ -420,6 +426,41 @@ var hMailRibbon = {
     const tabStrip = el("div", "hmail-ribbon-tabs");
     const panes = el("div", "hmail-ribbon-panes");
 
+    // Buttons flagged "pin" leave their group and are repeated at the
+    // right-hand end of every tab, so the assistant is one click away
+    // wherever the user is and however narrow the window gets.
+    const pinnedDefs = this.TABS.flatMap(t =>
+      t.groups.flatMap(g => g.buttons.filter(b => b.pin)));
+
+    const makeButton = btn => {
+      const b = el("button", "hmail-ribbon-button" +
+                   (btn.size === "large" ? " large" : " small"));
+      b.dataset.icon = btn.icon || "";
+      b.dataset.id = btn.id;
+      if (btn.cmd) {
+        b.dataset.cmd = btn.cmd;
+      }
+
+      const icon = el("span", "hmail-ribbon-icon");
+      const label = el("span", "hmail-ribbon-label");
+      // "\n" in a label is Outlook's two-line big button.
+      label.textContent = btn.label.replace(/\n/g, " ");
+      label.setAttribute("data-multiline", btn.label.includes("\n"));
+      if (btn.label.includes("\n")) {
+        label.textContent = "";
+        for (const line of btn.label.split("\n")) {
+          const s = el("span", "hmail-ribbon-line");
+          s.textContent = line;
+          label.appendChild(s);
+        }
+      }
+      b.append(icon, label);
+
+      b.addEventListener("command", e => e.stopPropagation());
+      b.addEventListener("click", () => this.run(win, btn));
+      return b;
+    };
+
     let activeTab = "home";
     try {
       activeTab = Services.prefs.getCharPref(this.ACTIVE_TAB_PREF);
@@ -441,38 +482,30 @@ var hMailRibbon = {
         // splitting — every button goes straight into the group.
 
         for (const btn of group.buttons) {
-          const b = el("button", "hmail-ribbon-button" +
-                       (btn.size === "large" ? " large" : " small"));
-          b.dataset.icon = btn.icon || "";
-          b.dataset.id = btn.id;
-          if (btn.cmd) {
-            b.dataset.cmd = btn.cmd;
+          if (btn.pin) {
+            continue;
           }
+          items.appendChild(makeButton(btn));
+        }
 
-          const icon = el("span", "hmail-ribbon-icon");
-          const label = el("span", "hmail-ribbon-label");
-          // "\n" in a label is Outlook's two-line big button.
-          label.textContent = btn.label.replace(/\n/g, " ");
-          label.setAttribute("data-multiline", btn.label.includes("\n"));
-          if (btn.label.includes("\n")) {
-            label.textContent = "";
-            for (const line of btn.label.split("\n")) {
-              const s = el("span", "hmail-ribbon-line");
-              s.textContent = line;
-              label.appendChild(s);
-            }
-          }
-          b.append(icon, label);
-
-          b.addEventListener("command", e => e.stopPropagation());
-          b.addEventListener("click", () => this.run(win, btn));
-          items.appendChild(b);
+        // A group whose every button was pinned would render as an empty box
+        // with a caption under it.
+        if (!items.hasChildNodes()) {
+          continue;
         }
 
         const groupLabel = el("div", "hmail-ribbon-group-label");
         groupLabel.textContent = group.label;
         groupEl.append(items, groupLabel);
         pane.appendChild(groupEl);
+      }
+
+      if (pinnedDefs.length) {
+        const pinned = el("div", "hmail-ribbon-pinned");
+        for (const btn of pinnedDefs) {
+          pinned.appendChild(makeButton(btn));
+        }
+        pane.appendChild(pinned);
       }
 
       tabButton.addEventListener("click", () => this.selectTab(doc, tab.id));
@@ -584,7 +617,8 @@ var hMailRibbon = {
       overflow.title = "Lệnh khác";
       overflow.textContent = "···";
       overflow.addEventListener("click", () => this.showOverflow(win, doc, pane, overflow));
-      pane.appendChild(overflow);
+      // Before the pinned box, so the pinned commands stay flush right.
+      pane.insertBefore(overflow, pane.querySelector(".hmail-ribbon-pinned"));
     }
 
     const groups = [...pane.querySelectorAll(".hmail-ribbon-group")];

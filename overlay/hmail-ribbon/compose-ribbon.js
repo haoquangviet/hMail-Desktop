@@ -109,14 +109,11 @@ var hMailComposeRibbon = {
     const root = el("div", "hmail-ribbon hmail-compose-ribbon");
     root.id = this.ID;
 
-    const tabStrip = el("div", "hmail-ribbon-tabs");
+    // No tab strip: the composer has one set of commands, and a lone tab
+    // labelled "Thư" is a row of chrome that tells the user nothing.
     const panes = el("div", "hmail-ribbon-panes");
 
     for (const tab of this.TABS) {
-      const tabButton = el("button", "hmail-ribbon-tab selected");
-      tabButton.textContent = tab.label;
-      tabStrip.appendChild(tabButton);
-
       const pane = el("div", "hmail-ribbon-pane selected");
       for (const group of tab.groups) {
         const box = el("div", "hmail-ribbon-group");
@@ -168,7 +165,7 @@ var hMailComposeRibbon = {
       panes.appendChild(pane);
     }
 
-    root.append(tabStrip, panes);
+    root.appendChild(panes);
     return root;
   },
 

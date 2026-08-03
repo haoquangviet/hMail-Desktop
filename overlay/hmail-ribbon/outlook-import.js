@@ -55,7 +55,12 @@ var hMailImport = {
         tab.panel.appendChild(self.buildPanel(win));
       },
       closeTab() {
-        self.cancelled = true;
+        // Closing the tab does not stop the import. A .pst with tens of
+        // thousands of messages takes long enough that nobody should have to
+        // sit and watch it, so the job runs on and reports from a small chip
+        // in the corner instead.
+        self.panelGone = true;
+        self.showChip(win);
       },
       saveTabState() {},
       showTab(tab) {
@@ -88,6 +93,19 @@ var hMailImport = {
     const opened = tabmail.tabInfo.find(t => t.mode?.name === this.TAB_MODE);
     if (opened) {
       tabmail.switchToTab(opened);
+    }
+    this.panelGone = false;
+    this.hideChip(win);
+    // A job that kept running while the tab was shut picks its status line
+    // back up where the chip left it.
+    if (this.state) {
+      win.setTimeout(() => {
+        this.notify(win, this.state.text, this.state.ratio);
+        if (this.running) {
+          win.document.getElementById("hmail-import-stop").hidden = false;
+          win.document.getElementById("hmail-import-start").hidden = true;
+        }
+      }, 0);
     }
   },
 
@@ -125,6 +143,18 @@ var hMailImport = {
     status.id = "hmail-import-status";
     root.appendChild(status);
 
+    // A line of text alone left the import looking frozen on a large .pst,
+    // where a single folder can run for minutes. The bar gives the progress a
+    // shape: striped while we are reading the file and cannot know the total,
+    // filling once we do.
+    const progress = el("div", "hmail-import-progress");
+    progress.id = "hmail-import-progress";
+    progress.hidden = true;
+    const bar = el("div", "hmail-import-bar");
+    bar.id = "hmail-import-bar";
+    progress.appendChild(bar);
+    root.appendChild(progress);
+
     const tree = el("div", "hmail-import-tree");
     tree.id = "hmail-import-tree";
     root.appendChild(tree);
@@ -154,7 +184,7 @@ var hMailImport = {
     stop.hidden = true;
     stop.addEventListener("click", () => {
       this.cancelled = true;
-      this.notify(win, "Đang dừng…");
+      this.notify(win, "Đang dừng…", "busy");
     });
     actions.append(start, stop);
     root.appendChild(actions);
@@ -163,11 +193,87 @@ var hMailImport = {
     return root;
   },
 
-  notify(win, text) {
-    const status = win.document.getElementById("hmail-import-status");
+  /**
+   * @param {number|null} ratio 0..1 to fill the bar, "busy" while the total
+   *   is unknown, null to put the bar away.
+   */
+  notify(win, text, ratio = null) {
+    const doc = win.document;
+    this.state = { text, ratio };
+    if (this.panelGone) {
+      this.showChip(win);
+      return;
+    }
+    const status = doc.getElementById("hmail-import-status");
     if (status) {
       status.textContent = text;
     }
+    const progress = doc.getElementById("hmail-import-progress");
+    const bar = doc.getElementById("hmail-import-bar");
+    if (!progress || !bar) {
+      return;
+    }
+    if (ratio === null) {
+      progress.hidden = true;
+      return;
+    }
+    progress.hidden = false;
+    if (ratio === "busy") {
+      progress.classList.add("busy");
+      bar.style.width = "";
+    } else {
+      progress.classList.remove("busy");
+      bar.style.width = `${Math.round(Math.max(0, Math.min(1, ratio)) * 100)}%`;
+    }
+  },
+
+  // ------------------------------------------------------- background chip
+
+  /**
+   * While the tab is closed the import still needs somewhere to speak from.
+   * A chip in the bottom corner of the main window carries the same text as
+   * the tab's status line, plus a way back to the tab and a way to stop.
+   */
+  showChip(win) {
+    const doc = win.document;
+    const el = (t, c, x) => this.el(doc, t, c, x);
+    let chip = doc.getElementById("hmail-import-chip");
+    if (!chip) {
+      chip = el("div", "hmail-import-chip");
+      chip.id = "hmail-import-chip";
+
+      const text = el("span", "hmail-import-chip-text", "");
+      text.id = "hmail-import-chip-text";
+      text.title = "Mở lại trang nhập dữ liệu";
+      text.addEventListener("click", () => this.openTab(win));
+
+      const stop = el("button", "hmail-import-chip-btn", "✕");
+      stop.id = "hmail-import-chip-stop";
+      stop.title = "Dừng nhập";
+      stop.addEventListener("click", () => {
+        if (this.running) {
+          this.cancelled = true;
+        } else {
+          this.hideChip(win);
+        }
+      });
+
+      chip.append(text, stop);
+      (doc.body || doc.documentElement).appendChild(chip);
+    }
+    const label = doc.getElementById("hmail-import-chip-text");
+    if (label) {
+      label.textContent = this.state?.text || "Đang nhập…";
+    }
+    const stop = doc.getElementById("hmail-import-chip-stop");
+    if (stop) {
+      stop.title = this.running ? "Dừng nhập" : "Đóng";
+    }
+    chip.classList.toggle("done", !this.running);
+  },
+
+  hideChip(win) {
+    win.document.getElementById("hmail-import-chip")?.remove();
   },
 
   destinations() {
@@ -255,7 +361,7 @@ var hMailImport = {
   async load(win, path) {
     const doc = win.document;
     doc.getElementById("hmail-import-path").value = path;
-    this.notify(win, "Đang đọc tệp…");
+    this.notify(win, "Đang đọc tệp…", "busy");
     doc.getElementById("hmail-import-tree").textContent = "";
 
     try {
@@ -463,6 +569,10 @@ var hMailImport = {
     const total = folders.reduce((s, f) => s + (f.messageCount || 0), 0);
     let done = 0;
     let failed = 0;
+    let lastTick = 0;
+    this.running = true;
+
+    this.notify(win, "Đang chuẩn bị thư mục…", total ? 0 : "busy");
 
     try {
       const root = await this.ensureFolder(server.rootFolder,
@@ -491,11 +601,18 @@ var hMailImport = {
             failed++;
           }
           done++;
-          if (done % 10 === 0 || done === total) {
+          // Update on a clock rather than a message count: ten messages can
+          // be a blink or half a minute depending on what is in them, and a
+          // status line that only moves every tenth one reads as stuck.
+          const now = win.performance.now();
+          if (now - lastTick > 150 || done === total) {
+            lastTick = now;
+            const pct = total ? Math.round((done / total) * 100) : 0;
             this.notify(win,
               `Đang nhập ${node.name}: ${done.toLocaleString("vi-VN")}/` +
-              `${total.toLocaleString("vi-VN")} thư` +
-              (failed ? ` (${failed} thư lỗi)` : ""));
+              `${total.toLocaleString("vi-VN")} thư (${pct}%)` +
+              (failed ? ` — ${failed} thư lỗi` : ""),
+              total ? done / total : "busy");
             // Let the interface breathe between batches.
             await new Promise(r => win.setTimeout(r, 0));
           }
@@ -509,12 +626,18 @@ var hMailImport = {
           `"Outlook — ${label}"` +
           (failed || errors
             ? `, bỏ qua ${failed + errors} thư không đọc được.`
-            : "."));
+            : "."),
+        1);
     } catch (e) {
-      this.notify(win, "Lỗi khi nhập: " + (e.message || e));
+      this.notify(win, "Lỗi khi nhập: " + (e.message || e), null);
     } finally {
-      doc.getElementById("hmail-import-stop").hidden = true;
-      doc.getElementById("hmail-import-start").hidden = false;
+      this.running = false;
+      if (this.panelGone) {
+        this.showChip(win);
+      } else {
+        doc.getElementById("hmail-import-stop").hidden = true;
+        doc.getElementById("hmail-import-start").hidden = false;
+      }
     }
   },
 };

@@ -246,6 +246,14 @@ var hMailInsight = {
 
   paint(win, doc, result, key) {
     doc.getElementById("hmail-warning")?.remove();
+
+    // One message, one warning. The assistant panel shows this same analysis
+    // in full ("Đọc nhanh tại chỗ"); painting the bar as well gave the reader
+    // two notices about one message that each said a different part of it.
+    if (win.document.getElementById("hmail-ai-insight")) {
+      return;
+    }
+
     const host = doc.getElementById("mail-notification-top") ||
                  doc.body?.firstElementChild;
     if (!host) {
@@ -776,36 +784,135 @@ var hMailInsight = {
     };
   },
 
-  /** Text body, HTML stripped, good enough for reading and matching. */
+  /**
+   * Turn a raw message into readable text.
+   *
+   * raw() hands us bytes, one per JavaScript character, so the body has to be
+   * decoded with the charset the message declares. Guessing UTF-8 for
+   * everything and shrugging off the failure — which is what this used to do —
+   * left Vietnamese mail as "Cá»¢NH B" the moment a single byte anywhere in
+   * the message was not valid UTF-8.
+   */
   plainBody(raw) {
-    let body = raw.slice(raw.search(/\r?\n\r?\n/) + 2);
-    if (/Content-Transfer-Encoding:\s*base64/i.test(raw)) {
-      // Decode the first base64 part; enough for the analysis.
-      const part = /\r?\n\r?\n([A-Za-z0-9+/=\r\n]{200,})/.exec(body);
-      if (part) {
-        try {
-          body = atob(part[1].replace(/\s+/g, ""));
-        } catch (e) {}
-      }
-    }
-    if (/=[0-9A-F]{2}/.test(body)) {
+    const part = this.textPart(raw);
+    let body = part.body;
+
+    if (/base64/i.test(part.encoding)) {
+      try {
+        body = atob(body.replace(/[^A-Za-z0-9+/=]/g, ""));
+      } catch (e) {}
+    } else if (/quoted-printable/i.test(part.encoding) ||
+               /=[0-9A-F]{2}/.test(body)) {
       body = body.replace(/=\r?\n/g, "").replace(
         /=([0-9A-F]{2})/gi, (_m, hex) => String.fromCharCode(parseInt(hex, 16)));
     }
-    try {
-      body = decodeURIComponent(escape(body));
-    } catch (e) {}
-    return body
+
+    return this.stripHtml(this.decodeBytes(body, part.charset));
+  },
+
+  /**
+   * The part worth reading: text/plain if the message has one, otherwise the
+   * HTML. Falls back to everything after the headers for a message that is
+   * not MIME at all.
+   */
+  textPart(raw) {
+    const headerEnd = raw.search(/\r?\n\r?\n/);
+    const top = headerEnd === -1 ? raw : raw.slice(0, headerEnd);
+    const rest = raw.slice(headerEnd + 2);
+    const charsetOf = block =>
+      (/charset\s*=\s*"?([\w.:-]+)"?/i.exec(block)?.[1] || "").trim();
+    const encodingOf = block =>
+      (/Content-Transfer-Encoding\s*:\s*([\w-]+)/i.exec(block)?.[1] || "").trim();
+
+    const boundary = /boundary\s*=\s*"?([^"\r\n;]+)"?/i.exec(top)?.[1];
+    if (!boundary) {
+      return { body: rest, charset: charsetOf(top), encoding: encodingOf(top) };
+    }
+
+    // Split on the boundary and keep the best text part. Nested multiparts
+    // carry their own boundary, but their leaf parts show up in this split
+    // too, which is good enough for reading.
+    const parts = raw.split(new RegExp(
+      `--${boundary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:--)?\\r?\\n`));
+    let html = null;
+    for (const chunk of parts.slice(1)) {
+      const end = chunk.search(/\r?\n\r?\n/);
+      if (end === -1) {
+        continue;
+      }
+      const head = chunk.slice(0, end);
+      const value = {
+        body: chunk.slice(end + 2),
+        charset: charsetOf(head),
+        encoding: encodingOf(head),
+      };
+      if (/Content-Type\s*:\s*text\/plain/i.test(head)) {
+        return value;
+      }
+      if (!html && /Content-Type\s*:\s*text\/html/i.test(head)) {
+        html = value;
+      }
+    }
+    return html || { body: rest, charset: charsetOf(top),
+                     encoding: encodingOf(top) };
+  },
+
+  /** Byte string -> text, honouring the declared charset. */
+  decodeBytes(body, charset) {
+    const bytes = new Uint8Array(body.length);
+    for (let i = 0; i < body.length; i++) {
+      bytes[i] = body.charCodeAt(i) & 0xff;
+    }
+    for (const label of [charset, "utf-8", "windows-1258", "windows-1252"]) {
+      if (!label) {
+        continue;
+      }
+      try {
+        // Not fatal: one bad byte in a long message should cost that byte,
+        // not the whole text.
+        return new TextDecoder(label).decode(bytes);
+      } catch (e) {}
+    }
+    return body;
+  },
+
+  /** Markup out, entities in. */
+  stripHtml(text) {
+    return this.decodeEntities(text
       .replace(/<style[\s\S]*?<\/style>/gi, " ")
       .replace(/<script[\s\S]*?<\/script>/gi, " ")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/&nbsp;/g, " ")
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
+      .replace(/<(?:br|\/p|\/div|\/tr)\s*\/?>/gi, "\n")
+      .replace(/<[^>]+>/g, " "))
       .replace(/[ \t]+/g, " ")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
+  },
+
+  ENTITIES: {
+    nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'",
+    hellip: "…", mdash: "—", ndash: "–", rsquo: "’", lsquo: "‘",
+    rdquo: "”", ldquo: "“", acute: "´", grave: "`", tilde: "~",
+    circ: "ˆ", cedil: "¸", uml: "¨", middot: "·", bull: "•",
+    copy: "©", reg: "®", trade: "™", euro: "€", pound: "£", yen: "¥",
+  },
+
+  /**
+   * Named and numeric entities alike. Vietnamese mail written in a web editor
+   * arrives full of them, and a list of four was not enough — "&agrave;" left
+   * in the text is as unreadable as a broken charset.
+   */
+  decodeEntities(text) {
+    return text.replace(/&(#x?[0-9a-f]+|[a-z][a-z0-9]{1,31});/gi,
+      (match, name) => {
+        if (name[0] === "#") {
+          const code = name[1] === "x" || name[1] === "X"
+            ? parseInt(name.slice(2), 16)
+            : parseInt(name.slice(1), 10);
+          return Number.isFinite(code) && code > 0 && code <= 0x10ffff
+            ? String.fromCodePoint(code) : match;
+        }
+        return this.ENTITIES[name.toLowerCase()] ?? match;
+      });
   },
 
   suspiciousLinks(raw) {
@@ -906,7 +1013,9 @@ var hMailInsight = {
     const patterns = [
       /\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g,
       /\b\d{1,2}\s*(?:tháng|thg)\s*\d{1,2}(?:\s*,?\s*\d{4})?/gi,
-      /\b(?:hạn|deadline|trước ngày|due)\s*:?\s*[^\n.,;]{3,30}/gi,
+      // A deadline phrase only counts when a number follows it. Without that,
+      // "due to wrong declaration" was being reported as a date.
+      /\b(?:hạn(?:\s*chót)?|deadline|trước ngày|due\s*(?:date|by|on))\s*:?\s*[^\n.,;]{0,12}\d[^\n.,;]{0,18}/gi,
     ];
     for (const pattern of patterns) {
       for (const m of body.match(pattern) || []) {

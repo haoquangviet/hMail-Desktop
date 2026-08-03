@@ -118,7 +118,11 @@ var hMailQuickReply = {
     all.addEventListener("click", () => this.send(win, input, true));
 
     const ai = el("button", "hmail-quickreply-link", "Nhờ AI viết");
-    ai.addEventListener("click", () => this.draft(win, input));
+    ai.id = "hmail-quickreply-ai";
+    // The spinner lives inside the button so the wait is attached to the
+    // thing that started it, not to a status line somewhere else.
+    ai.appendChild(el("span", "hmail-quickreply-spin"));
+    ai.addEventListener("click", () => this.draft(win, input, ai));
 
     const full = el("button", "hmail-quickreply-link", "Mở soạn thảo đầy đủ");
     full.addEventListener("click", () => this.expand(win, input));
@@ -151,11 +155,18 @@ var hMailQuickReply = {
   },
 
   /** Let the assistant write it; the user still reads it before sending. */
-  async draft(win, input) {
+  async draft(win, input, button) {
     const hdr = this.message(win);
     if (!hdr) {
       return;
     }
+    // A model can take ten seconds or more. Without this the button looked
+    // dead, and a second click started a second request.
+    if (button?.hasAttribute("disabled")) {
+      return;
+    }
+    button?.setAttribute("disabled", "true");
+    button?.classList.add("busy");
     this.say(win, "Đang soạn…");
     try {
       const text = await hMailAI.messageText(hdr);
@@ -170,6 +181,9 @@ var hMailQuickReply = {
       this.say(win, hMailAI.usageLine());
     } catch (e) {
       this.say(win, "Lỗi: " + hMailAI.explain(e));
+    } finally {
+      button?.removeAttribute("disabled");
+      button?.classList.remove("busy");
     }
   },
 

@@ -565,6 +565,40 @@ Object.assign(hMailAI, {
     const hint = el("div", "hmail-ai-hint", "");
     form.appendChild(hint);
 
+    // --- on-device model -------------------------------------------------
+    // The providers above all answer in prose; the on-device model does not
+    // — it turns text into vectors, which is what semantic search needs. It
+    // is a different kind of thing, so it gets its own section rather than a
+    // ninth entry in the provider list, where picking it would silently
+    // break every prompt.
+    form.appendChild(el("div", "hmail-ai-section", "AI trên máy"));
+    form.appendChild(el("div", "hmail-ai-hint",
+      "Mô hình all-MiniLM-L6-v2 chạy hoàn toàn trên máy này: không cần API " +
+      "key, không mất phí, thư không rời khỏi máy. Nó dùng cho tìm kiếm theo " +
+      "ngữ nghĩa chứ không trả lời bằng lời văn, nên vẫn cần một nhà cung " +
+      "cấp ở trên nếu bạn muốn tóm tắt hay soạn thư."));
+
+    const localState = el("div", "hmail-ai-hint", "");
+    form.appendChild(localState);
+
+    const localBtn = el("button", "hmail-ai-action", "Mở trang AI trên máy…");
+    localBtn.addEventListener("click", () => {
+      try {
+        win.hMailLocalAIUI.openTab(win);
+      } catch (e) {
+        Cu.reportError("hMail AI: không mở được trang AI trên máy: " + e);
+      }
+    });
+    form.appendChild(localBtn);
+
+    try {
+      const on = Services.prefs.getBoolPref("hmail.localai.enabled", false);
+      const modelId = this.pref("hmail.localai.model", "");
+      localState.textContent = on
+        ? `Đang bật${modelId ? ` — ${modelId}` : ""}.`
+        : "Chưa kích hoạt. Mở trang bên dưới để chọn và tải mô hình về.";
+    } catch (e) {}
+
     // --- prices and spend ------------------------------------------------
     form.appendChild(el("div", "hmail-ai-section", "Chi phí"));
     form.appendChild(el("label", "hmail-ai-label",
