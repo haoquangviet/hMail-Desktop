@@ -1143,3 +1143,30 @@ global-search-bar {
 [is="tree-view-table-body"] .card-layout.selected:not(.current) .date {
 	color: #ffffff !important;
 }
+
+/* Không cho thu nhỏ thanh điều hướng bên trái.
+ *
+ * Thanh này đã hẹp tới mức chỉ còn một cột icon, thu lại tiết kiệm được 45px
+ * mà đổi lấy việc mất đường đi giữa Thư, Lịch, Công việc và Danh bạ. Thứ hiện
+ * ra thay nó là một mũi tên 16px không chữ ở góc dưới cùng cửa sổ và một nút
+ * ghim trên thanh tab — mà thanh tab lại tự ẩn khi chỉ có một tab. Bấm nhầm
+ * một cái là coi như mất, nên bỏ hẳn cái nút bấm nhầm đó.
+ *
+ * Nằm ở userChrome.css chứ không phải custom.css vì custom.css được @import ở
+ * đầu file này, mọi thứ bên dưới đều đè lên nó. */
+#collapseButton,
+#spacesToolbarReveal,
+#spacesPinnedButton,
+#spacesPopupRevealSeparator,
+#spacesPopupButtonReveal,
+#viewToolbarsPopupSpacesToolbar,
+#appmenu_spacesToolbar {
+	display: none !important;
+}
+
+/* Thanh tab luôn hiện, kể cả khi chỉ có một tab (mail.tabs.autoHide=false).
+   Thunderbird vẫn đặt thuộc tính này trong một số đường đi, nên chặn luôn. */
+:root[tabbarhidden="true"] #tabs-toolbar,
+:root[tabbarhidden="true"] #tabmail-tabs {
+	visibility: visible !important;
+}

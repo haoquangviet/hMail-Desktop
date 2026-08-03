@@ -215,7 +215,7 @@ var hMailRibbon = {
           ],
         },
         {
-          label: "Thư mục",
+          label: "Ngăn",
           buttons: [
             { id: "v-folderpane", label: "Ngăn thư mục", icon: "folder",
               fn: win => {

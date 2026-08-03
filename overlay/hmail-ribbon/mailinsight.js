@@ -254,7 +254,7 @@ var hMailInsight = {
     const key = `${hdr.folder?.URI}#${hdr.messageKey}`;
     const result = await this.analyze(hdr);
     this.cache = { key, result };
-    if (result.level === "ok" || this.dismissed?.has(key)) {
+    if (result.level === "ok" || this.isDismissed(hdr, key)) {
       return;
     }
     this.paint(win, doc, result, key);
@@ -301,7 +301,7 @@ var hMailInsight = {
       const close = el("button", "hmail-warning-close", "✕");
       close.title = "Ẩn cảnh báo";
       close.addEventListener("click", () => {
-        this.dismissed?.add(key);
+        this.dismiss(this.selected(win), key);
         bar.remove();
       });
       head.appendChild(close);
@@ -331,7 +331,7 @@ var hMailInsight = {
     const close = el("button", "hmail-warning-close", "✕");
     close.title = "Ẩn cảnh báo";
     close.addEventListener("click", () => {
-      this.dismissed?.add(key);
+      this.dismiss(this.selected(win), key);
       bar.remove();
     });
     head.appendChild(close);
@@ -395,6 +395,7 @@ var hMailInsight = {
             "Đánh dấu thư rác và chuyển vào thư mục rác của tài khoản này",
             () => {
               this.junk(hdr, true);
+              this.dismiss(hdr, key);
               bar.remove();
             });
       }
@@ -405,6 +406,7 @@ var hMailInsight = {
           "Bỏ đánh dấu thư rác và dạy bộ lọc rằng thư này bình thường",
           () => {
             this.junk(hdr, false);
+            this.dismiss(hdr, key);
             bar.remove();
           });
     }
@@ -436,6 +438,33 @@ var hMailInsight = {
       decide.remove();
     }
     return row.children.length ? row : null;
+  },
+
+  /**
+   * The reader has answered this warning — by acting on it or by closing it —
+   * so it does not come back.
+   *
+   * Kept on the message rather than in a Set in memory: the old set was lost
+   * on restart, and a warning that returns after you have already dealt with
+   * it reads as the program not listening. Marking a message "not junk" and
+   * then being told again on the next click is exactly that.
+   */
+  dismiss(hdr, key) {
+    this.dismissed?.add(key);
+    try {
+      hdr?.setStringProperty("hmail-warning-off", "1");
+    } catch (e) {}
+  },
+
+  isDismissed(hdr, key) {
+    if (this.dismissed?.has(key)) {
+      return true;
+    }
+    try {
+      return hdr?.getStringProperty("hmail-warning-off") === "1";
+    } catch (e) {
+      return false;
+    }
   },
 
   junk(hdr, isJunk) {
