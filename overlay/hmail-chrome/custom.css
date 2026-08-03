@@ -3500,10 +3500,23 @@ unified-toolbar-customization {
     display: none !important;
 }
 
-/* The ribbon is a surface of its own, so it gets a surface's corners. */
+/* The ribbon is a surface of its own, so it gets a surface's corners — but
+   only the bottom two. The base theme leaves an 8px margin under the tab
+   strip, and rounding the top corners let the window background show through
+   at both ends, which read as a stray line above the ribbon. The ribbon now
+   meets the tab strip flush. */
 #hmail-ribbon {
-    border-radius: 10px;
+    border-start-start-radius: 0 !important;
+    border-start-end-radius: 0 !important;
+    border-end-start-radius: 10px;
+    border-end-end-radius: 10px;
     overflow: hidden;
+}
+
+/* That margin is what the line actually was. */
+#tabs-toolbar {
+    margin-bottom: 0 !important;
+    border-bottom: none !important;
 }
 
 /* Only the row that is actually selected carries the marker. An account row
