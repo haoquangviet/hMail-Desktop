@@ -3724,3 +3724,83 @@ unified-toolbar-customization {
 .hmail-ribbon-meaning[hidden] {
     display: none !important;
 }
+
+/* Chrome documents do not select text by default, so an answer from the
+   assistant could be read but not copied — which is half of what people do
+   with an answer. */
+.hmail-ai-log,
+.hmail-ai-log *,
+.hmail-ai-insight,
+.hmail-ai-insight *,
+.hmail-ai-contact,
+.hmail-ai-contact *,
+.hmail-warning-list,
+.hmail-warning-list *,
+.hmail-localai-results,
+.hmail-localai-results * {
+    user-select: text !important;
+    -moz-user-select: text !important;
+    cursor: auto;
+}
+
+/* Except the controls inside them, which are for pressing. */
+.hmail-ai-log button,
+.hmail-ai-insight button,
+.hmail-ai-contact button,
+.hmail-warning-list button,
+.hmail-localai-results button {
+    user-select: none !important;
+    cursor: pointer !important;
+}
+
+/* The translation bar, above the message it is describing. */
+.hmail-translate-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 0 8px 8px;
+    padding: 4px 8px;
+    border-radius: 3px;
+    border: 1px solid color-mix(in srgb, var(--hmail-accent) 26%, transparent);
+    background-color: color-mix(in srgb, var(--hmail-accent) 7%, Canvas);
+    box-shadow: 0 1px 3px color-mix(in srgb, CanvasText 12%, transparent);
+    font-size: 0.92em;
+}
+
+.hmail-translate-label {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.hmail-translate-actions {
+    display: inline-flex;
+    border-radius: 3px;
+    background-color: Canvas;
+    box-shadow: 0 1px 3px color-mix(in srgb, CanvasText 20%, transparent);
+    overflow: hidden;
+}
+
+.hmail-translate-action {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    padding: 3px 10px !important;
+    min-height: 24px;
+    line-height: 1.5 !important;
+    border: none !important;
+    background-color: transparent !important;
+    color: inherit !important;
+    font: inherit !important;
+    font-size: 0.9em !important;
+    white-space: nowrap;
+    cursor: pointer !important;
+}
+
+.hmail-translate-action + .hmail-translate-action {
+    border-inline-start: 1px solid
+        color-mix(in srgb, CanvasText 12%, transparent) !important;
+}
+
+.hmail-translate-action:hover {
+    background-color: color-mix(in srgb, CanvasText 9%, Canvas) !important;
+}

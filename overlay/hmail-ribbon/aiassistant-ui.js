@@ -568,6 +568,15 @@ Object.assign(hMailAI, {
   // -------------------------------------------------------------- running
 
   async runPrompt(win, promptId, { silent = false } = {}) {
+    // A translation belongs where the message is, not in a column beside it:
+    // read in the panel, you read every sentence twice — once to find your
+    // place in the original, once to read it. translate.js replaces the body
+    // and keeps the result until the reader asks for it again.
+    if (promptId === "translate-vi" || promptId === "translate-en") {
+      const lang = promptId === "translate-en" ? "en" : "vi";
+      win.hMailTranslate?.run(win, lang);
+      return;
+    }
     const prompt = this.promptById(promptId);
     if (!prompt) {
       return;

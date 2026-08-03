@@ -99,6 +99,14 @@ var hMailQuickReply = {
    */
   reserveSpace(win, doc, box) {
     const pane = doc.getElementById("messagepane");
+    const attachments = doc.getElementById("attachmentView");
+    // The space has to go under whatever is last in the column. Reserving it
+    // under the browser alone pushed the attachment bar down behind the fixed
+    // reply box, so a message with attachments looked like it had none.
+    const lastVisible = () =>
+      attachments && !attachments.hidden &&
+      attachments.getBoundingClientRect().height > 0 ? attachments : pane;
+
     const apply = () => {
       try {
         const height = Math.round(box.getBoundingClientRect().height);
@@ -107,9 +115,21 @@ var hMailQuickReply = {
         }
         doc.documentElement.style.setProperty(
           "--hmail-quickreply-height", `${height}px`);
-        // userContent.css reads this from the message document.
+
+        // Whatever is last in the column is what the bar covers. With an
+        // attachment bar on screen that is the attachment bar — reserving
+        // inside the message document instead pushed it down behind the
+        // reply box, so a message with attachments looked like it had none.
         const inner = pane?.contentDocument?.documentElement;
-        inner?.style.setProperty("--hmail-quickreply-reserve", `${height}px`);
+        if (lastVisible() === attachments) {
+          attachments.style.marginBlockEnd = `${height}px`;
+          inner?.style.setProperty("--hmail-quickreply-reserve", "0px");
+        } else {
+          if (attachments) {
+            attachments.style.marginBlockEnd = "";
+          }
+          inner?.style.setProperty("--hmail-quickreply-reserve", `${height}px`);
+        }
         if (pane) {
           pane.style.marginBlockEnd = "";
         }
@@ -141,8 +161,11 @@ var hMailQuickReply = {
       const pane = doc.getElementById("messagepane");
       pane?.contentDocument?.documentElement?.style
         .removeProperty("--hmail-quickreply-reserve");
-      if (pane) {
-        pane.style.marginBlockEnd = "";
+      for (const id of ["messagepane", "attachmentView"]) {
+        const node = doc.getElementById(id);
+        if (node) {
+          node.style.marginBlockEnd = "";
+        }
       }
       doc.documentElement.style.removeProperty("--hmail-quickreply-height");
     } catch (e) {}

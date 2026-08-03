@@ -64,17 +64,30 @@ var hMailLocalAI = {
    */
   CHAT_MODELS: [
     {
-      id: "Xenova/Qwen1.5-0.5B-Chat",
-      // "q8" is the transformers.js name for model_quantized.onnx, which is
-      // what the hub actually serves. Asking for "q4" produced a 404 with a
-      // message about a file that was never published.
-      dtype: "q8",
-      label: "Qwen 1.5 — 0.5B",
+      id: "HuggingFaceTB/SmolLM2-360M-Instruct",
+      dtype: "q4f16",
+      label: "SmolLM2 360M — nhẹ nhất",
+      size: "khoảng 270 MB",
+      note: "Tải nhanh, chạy được trên máy yếu. Câu trả lời ngắn và đơn giản.",
+    },
+    {
+      id: "onnx-community/Qwen2.5-0.5B-Instruct",
+      dtype: "q4f16",
+      label: "Qwen 2.5 — 0.5B",
       size: "khoảng 480 MB",
-      note: "Mô hình sinh văn bản duy nhất có sẵn trên kho của Mozilla. " +
-            "Trả lời ngắn, đủ để tóm tắt và soạn nháp.",
+      note: "Cân bằng giữa dung lượng và chất lượng. Viết tiếng Việt khá hơn " +
+            "hẳn SmolLM2. Cần khoảng 3 GB RAM trống.",
+    },
+    {
+      id: "onnx-community/Qwen2.5-1.5B-Instruct",
+      dtype: "q4f16",
+      label: "Qwen 2.5 — 1.5B",
+      size: "khoảng 1,2 GB",
+      note: "Viết tiếng Việt tự nhiên nhất trong ba lựa chọn. Cần khoảng " +
+            "6 GB RAM trống và máy đủ khoẻ.",
     },
   ],
+
 
 
   CHAT_ENABLED_PREF: "hmail.localai.chat.enabled",
@@ -94,6 +107,10 @@ var hMailLocalAI = {
   TEMPLATE_PREF: "browser.ml.modelHubUrlTemplate",
 
   HUBS: [
+    // Hugging Face is where these three are published, and their file layout
+    // is the one transformers.js asks for: onnx/model_<dtype>.onnx. The older
+    // Xenova/Qwen1.5 export used decoder_model_merged_* names instead, which
+    // is why it only ever worked through Mozilla's mirror.
     { root: "https://huggingface.co/", template: "{model}/resolve/{revision}",
       label: "Hugging Face" },
     { root: "https://model-hub.mozilla.org/", template: "{model}/{revision}",
@@ -260,8 +277,8 @@ var hMailLocalAI = {
   // ------------------------------------------------------- trả lời tại chỗ
 
   chatModel() {
-    const id = this.pref(this.CHAT_MODEL_PREF, this.CHAT_MODELS[0].id);
-    return this.CHAT_MODELS.find(m => m.id === id) || this.CHAT_MODELS[0];
+    const id = this.pref(this.CHAT_MODEL_PREF, this.CHAT_MODELS[1].id);
+    return this.CHAT_MODELS.find(m => m.id === id) || this.CHAT_MODELS[1];
   },
 
   chatReady() {
