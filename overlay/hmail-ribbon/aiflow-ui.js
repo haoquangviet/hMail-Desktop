@@ -81,45 +81,33 @@ var hMailFlowUI = {
 
   // ------------------------------------------------------------------ page
 
+  /**
+   * The pages that are not rules. Each one is its own thing — a run, a
+   * review queue, a log — and stacking them under the rule form meant that
+   * scrolling a rule ran straight into somebody else's business.
+   */
+  PAGES: [
+    { id: "general", label: "Cài đặt chung",
+      note: "Bật/tắt tự động hoá cho thư đến" },
+    { id: "run", label: "Chạy trên thư mục",
+      note: "Áp quy tắc cho thư đã nhận" },
+    { id: "review", label: "Chờ bạn duyệt",
+      note: "Thư AI không đủ chắc chắn" },
+    { id: "log", label: "Nhật ký",
+      note: "Việc đã làm thay bạn" },
+  ],
+
   build(win) {
     const doc = win.document;
     const el = (t, c, x) => this.el(doc, t, c, x);
 
-    const page = el("div", "hmail-import hmail-ai");
+    // Laid out like the account settings page: a column of pages against the
+    // edge of the tab, and one pane beside it showing whichever is chosen.
+    const page = el("div", "hmail-flow-page hmail-ai");
     page.id = "hmail-flow-page";
 
-    page.appendChild(el("div", "hmail-import-title",
-                        "Tự động hoá khi có thư mới"));
-    page.appendChild(el("div", "hmail-ai-hint",
-      "Bộ lọc thường chỉ so khớp chữ: một địa chỉ, một từ trong tiêu đề. " +
-      "Ở đây mỗi quy tắc có hai nửa. Nửa rẻ tiền so khớp như bộ lọc thường " +
-      "và chạy trước, không tốn gì. Chỉ khi nửa đó khớp, hMail mới đưa thư " +
-      "cho AI và hỏi đúng một câu bạn tự viết — nhờ thứ tự đó mà hỏi AI " +
-      "không biến thành một hoá đơn."));
-
-    // Master switch -------------------------------------------------------
-    const master = el("div", "hmail-flow-master");
-    const toggle = el("input");
-    toggle.type = "checkbox";
-    toggle.id = "hmail-flow-enabled";
-    toggle.checked = hMailFlow.enabled();
-    toggle.addEventListener("change", () => {
-      Services.prefs.setBoolPref(hMailFlow.ENABLED_PREF, toggle.checked);
-    });
-    const masterLabel = el("label", "hmail-flow-master-label");
-    masterLabel.append(toggle,
-      el("span", null, "Bật tự động hoá cho thư đến"));
-    master.appendChild(masterLabel);
-    master.appendChild(el("div", "hmail-ai-hint",
-      "Tắt thì không quy tắc nào chạy, kể cả quy tắc đang bật riêng. Chỉ " +
-      "áp dụng cho thư mới về Hộp thư; thư đã có sẵn không bị đụng tới."));
-    page.appendChild(master);
-
-    // Master and detail. A page of full-width cards means scrolling past
-    // every rule to reach the one you want, and each card is a screenful.
-    const split = el("div", "hmail-flow-split");
-
     const side = el("div", "hmail-flow-side");
+
     const sideHead = el("div", "hmail-flow-side-head");
     const add = el("button", "hmail-flow-add", "+ Thêm quy tắc");
     add.addEventListener("click", () => {
@@ -133,28 +121,117 @@ var hMailFlowUI = {
     sideHead.appendChild(add);
     side.appendChild(sideHead);
 
+    side.appendChild(el("div", "hmail-flow-side-title", "Quy tắc"));
     const list = el("div", "hmail-flow-rules");
     list.id = "hmail-flow-rules";
     side.appendChild(list);
 
-    const detail = el("div", "hmail-flow-detail");
-    detail.id = "hmail-flow-detail";
+    side.appendChild(el("div", "hmail-flow-side-title", "Khác"));
+    const pages = el("div", "hmail-flow-pages");
+    pages.id = "hmail-flow-pages";
+    side.appendChild(pages);
 
-    split.append(side, detail);
-    page.appendChild(split);
+    const splitter = el("div", "hmail-flow-splitter");
+    splitter.id = "hmail-flow-splitter";
+    splitter.title = "Kéo để đổi độ rộng";
 
-    // --- run over an existing folder --------------------------------------
-    page.appendChild(el("div", "hmail-ai-section",
-                        "Chạy trên thư mục sẵn có"));
-    page.appendChild(el("div", "hmail-ai-hint",
+    const main = el("div", "hmail-flow-main");
+    main.id = "hmail-flow-main";
+
+    page.append(side, splitter, main);
+    this.makeResizable(win, side, splitter, page);
+    win.setTimeout(() => this.refresh(win), 0);
+    return page;
+  },
+
+  // ------------------------------------------------------------- các trang
+
+  pageGeneral(win) {
+    const doc = win.document;
+    const el = (t, c, x) => this.el(doc, t, c, x);
+    const box = el("div", "hmail-flow-pane");
+
+    box.appendChild(el("div", "hmail-import-title",
+                       "Tự động hoá khi có thư mới"));
+    box.appendChild(el("div", "hmail-ai-hint",
+      "Bộ lọc thường chỉ so khớp chữ: một địa chỉ, một từ trong tiêu đề. " +
+      "Ở đây mỗi quy tắc có hai nửa. Nửa rẻ tiền so khớp như bộ lọc thường " +
+      "và chạy trước, không tốn gì. Chỉ khi nửa đó khớp, hMail mới đưa thư " +
+      "cho AI và hỏi đúng một câu bạn tự viết — nhờ thứ tự đó mà hỏi AI " +
+      "không biến thành một hoá đơn."));
+
+    const master = el("div", "hmail-flow-master");
+    const toggle = el("input");
+    toggle.type = "checkbox";
+    toggle.checked = hMailFlow.enabled();
+    toggle.addEventListener("change", () => {
+      Services.prefs.setBoolPref(hMailFlow.ENABLED_PREF, toggle.checked);
+    });
+    const label = el("label", "hmail-flow-master-label");
+    label.append(toggle, el("span", null, "Bật tự động hoá cho thư đến"));
+    master.appendChild(label);
+    master.appendChild(el("div", "hmail-ai-hint",
+      "Tắt thì không quy tắc nào chạy, kể cả quy tắc đang bật riêng. Chỉ " +
+      "áp dụng cho thư mới về Hộp thư; thư đã có sẵn không bị đụng tới."));
+    box.appendChild(master);
+
+    box.appendChild(el("div", "hmail-ai-section", "Trang liên quan"));
+    const links = el("div", "hmail-flow-links");
+    const link = (text, note, fn) => {
+      const b = el("button", "hmail-flow-link");
+      b.append(el("span", "hmail-flow-link-name", text),
+               el("span", "hmail-flow-link-note", note));
+      b.addEventListener("click", () => {
+        try {
+          fn();
+        } catch (e) {}
+      });
+      links.appendChild(b);
+    };
+    link("Cài đặt trợ lý AI", "Nhà cung cấp, mô hình, đơn giá",
+         () => win.hMailAI?.open(win));
+    link("AI trên máy", "Mô hình chạy tại chỗ, tìm theo ngữ nghĩa",
+         () => win.hMailLocalAIUI?.openTab(win));
+    link("Lọc theo máy chủ", "Xử lý theo kết luận bộ lọc của máy chủ",
+         () => win.hMailServerFilter?.openTab(win));
+    link("Bộ lọc thư của hMail", "Bộ lọc so khớp chữ, không dùng AI",
+         () => win.MsgFilters());
+    box.appendChild(links);
+
+    box.appendChild(el("div", "hmail-ai-section", "Chưa có"));
+    box.appendChild(el("div", "hmail-ai-hint",
+      "Lịch chạy định kỳ · Điều kiện theo người nhận và ngày tháng · " +
+      "Xuất báo cáo phân loại · Áp quy tắc cho nhiều thư mục một lượt"));
+    return box;
+  },
+
+  pageRun(win) {
+    const doc = win.document;
+    const el = (t, c, x) => this.el(doc, t, c, x);
+    const box = el("div", "hmail-flow-pane");
+
+    box.appendChild(el("div", "hmail-import-title",
+                       "Chạy trên thư mục sẵn có"));
+    box.appendChild(el("div", "hmail-ai-hint",
       "Áp một quy tắc cho thư đã nhận. Việc này đụng tới hàng nghìn thư một " +
       "lúc và tốn tiền thật, nên hMail ước tính chi phí trước, hỏi lại hai " +
       "lần, và mọi thư mà AI không chắc sẽ được đưa vào danh sách chờ bạn " +
       "duyệt thay vì tự xử lý."));
 
     const runRow = el("div", "hmail-ai-row");
+    runRow.append(el("span", "hmail-flow-label", "Quy tắc"));
     const rulePick = el("select", "hmail-ai-field");
     rulePick.id = "hmail-flow-run-rule";
+    for (const rule of hMailFlow.rules()) {
+      const opt = el("option", null, rule.name || "(chưa đặt tên)");
+      opt.value = rule.id;
+      rulePick.appendChild(opt);
+    }
+    runRow.appendChild(rulePick);
+    box.appendChild(runRow);
+
+    const folderRow = el("div", "hmail-ai-row");
+    folderRow.append(el("span", "hmail-flow-label", "Thư mục"));
     const folderPick = el("select", "hmail-ai-field");
     folderPick.id = "hmail-flow-run-folder";
     for (const folder of this.folders()) {
@@ -162,8 +239,8 @@ var hMailFlowUI = {
       opt.value = folder.uri;
       folderPick.appendChild(opt);
     }
-    runRow.append(rulePick, folderPick);
-    page.appendChild(runRow);
+    folderRow.appendChild(folderPick);
+    box.appendChild(folderRow);
 
     const capRow = el("div", "hmail-ai-row");
     capRow.append(el("span", "hmail-flow-label", "Mức trần chi phí (USD)"));
@@ -177,12 +254,12 @@ var hMailFlowUI = {
       Services.prefs.setCharPref(hMailFlow.BUDGET_PREF, cap.value);
     });
     capRow.appendChild(cap);
-    page.appendChild(capRow);
-    page.appendChild(el("div", "hmail-ai-hint",
+    box.appendChild(capRow);
+    box.appendChild(el("div", "hmail-ai-hint",
       "hMail dừng ngay khi tiêu tới mức này, kể cả khi chưa xử lý hết thư. " +
       "Số tiền tính theo đơn giá bạn khai trong cài đặt trợ lý."));
 
-    const runActions = el("div", "hmail-ai-actions");
+    const actions = el("div", "hmail-ai-actions");
     const run = el("button", "hmail-ai-btn primary", "Ước tính và chạy…");
     run.id = "hmail-flow-run";
     run.addEventListener("click", () => this.startRun(win));
@@ -192,51 +269,109 @@ var hMailFlowUI = {
     stop.addEventListener("click", () => {
       this.stopping = true;
     });
-    runActions.append(run, stop);
-    page.appendChild(runActions);
+    actions.append(run, stop);
+    box.appendChild(actions);
 
-    const runStatus = el("div", "hmail-ai-status", "");
-    runStatus.id = "hmail-flow-run-status";
-    page.appendChild(runStatus);
+    const status = el("div", "hmail-ai-status", "");
+    status.id = "hmail-flow-run-status";
+    box.appendChild(status);
 
-    const runBar = el("div", "hmail-merge-bar");
-    runBar.id = "hmail-flow-run-bar";
-    runBar.hidden = true;
-    runBar.appendChild(el("div", "hmail-merge-bar-fill"));
-    page.appendChild(runBar);
+    const bar = el("div", "hmail-merge-bar");
+    bar.id = "hmail-flow-run-bar";
+    bar.hidden = true;
+    bar.appendChild(el("div", "hmail-merge-bar-fill"));
+    box.appendChild(bar);
+    return box;
+  },
 
-    // --- review -----------------------------------------------------------
-    page.appendChild(el("div", "hmail-ai-section", "Chờ bạn duyệt"));
-    page.appendChild(el("div", "hmail-ai-hint",
+  pageReview(win) {
+    const doc = win.document;
+    const el = (t, c, x) => this.el(doc, t, c, x);
+    const box = el("div", "hmail-flow-pane");
+    box.appendChild(el("div", "hmail-import-title", "Chờ bạn duyệt"));
+    box.appendChild(el("div", "hmail-ai-hint",
       "Những thư AI cho là khớp nhưng không đủ chắc chắn. hMail không tự " +
       "làm gì với chúng — một cái máy đoán mò trên hàng nghìn lá thư là " +
       "hàng nghìn lần đoán sai."));
     const review = el("div", "hmail-flow-review");
     review.id = "hmail-flow-review";
-    page.appendChild(review);
+    box.appendChild(review);
+    return box;
+  },
 
-    page.appendChild(el("div", "hmail-ai-section", "Nhật ký"));
-    page.appendChild(el("div", "hmail-ai-hint",
+  pageLog(win) {
+    const doc = win.document;
+    const el = (t, c, x) => this.el(doc, t, c, x);
+    const box = el("div", "hmail-flow-pane");
+    box.appendChild(el("div", "hmail-import-title", "Nhật ký"));
+    box.appendChild(el("div", "hmail-ai-hint",
       "Mỗi hành động tự động đều được ghi lại. Một thứ chạy thay bạn mà " +
       "bạn không soát lại được thì không nên bật."));
     const log = el("div", "hmail-flow-log");
     log.id = "hmail-flow-log";
-    page.appendChild(log);
+    box.appendChild(log);
+    return box;
+  },
 
-    win.setTimeout(() => this.refresh(win), 0);
-    return page;
+  WIDTH_PREF: "hmail.flow.sideWidth",
+
+  /** Drag the handle to resize the list; the width is remembered. */
+  makeResizable(win, side, splitter, split) {
+    const apply = percent => {
+      const clamped = Math.max(15, Math.min(60, percent));
+      side.style.flexBasis = `${clamped}%`;
+      return clamped;
+    };
+
+    let saved = 30;
+    try {
+      saved = parseFloat(
+        Services.prefs.getCharPref(this.WIDTH_PREF, "30")) || 30;
+    } catch (e) {}
+    apply(saved);
+
+    let dragging = false;
+    splitter.addEventListener("mousedown", event => {
+      dragging = true;
+      event.preventDefault();
+      split.classList.add("resizing");
+    });
+    win.addEventListener("mousemove", event => {
+      if (!dragging) {
+        return;
+      }
+      const box = split.getBoundingClientRect();
+      if (!box.width) {
+        return;
+      }
+      apply(((event.clientX - box.left) / box.width) * 100);
+    });
+    win.addEventListener("mouseup", () => {
+      if (!dragging) {
+        return;
+      }
+      dragging = false;
+      split.classList.remove("resizing");
+      try {
+        Services.prefs.setCharPref(this.WIDTH_PREF,
+          String(parseFloat(side.style.flexBasis) || 30));
+      } catch (e) {}
+    });
   },
 
   refresh(win) {
     const doc = win.document;
     const list = doc.getElementById("hmail-flow-rules");
-    const detail = doc.getElementById("hmail-flow-detail");
-    if (!list || !detail) {
+    const pages = doc.getElementById("hmail-flow-pages");
+    const main = doc.getElementById("hmail-flow-main");
+    if (!list || !pages || !main) {
       return;
     }
     const rules = hMailFlow.rules();
-    if (!rules.some(r => r.id === this.selected)) {
-      this.selected = rules[0]?.id || null;
+    const known = new Set([...rules.map(r => r.id),
+                           ...this.PAGES.map(p => p.id)]);
+    if (!known.has(this.selected)) {
+      this.selected = rules[0]?.id || "general";
     }
 
     list.textContent = "";
@@ -244,32 +379,50 @@ var hMailFlowUI = {
       list.appendChild(this.sideRow(win, rule, index, rules));
     }
     if (!rules.length) {
-      list.appendChild(this.el(doc, "div", "hmail-ai-hint",
+      list.appendChild(this.el(doc, "div", "hmail-flow-side-empty",
         "Chưa có quy tắc nào."));
     }
 
-    detail.textContent = "";
-    const index = rules.findIndex(r => r.id === this.selected);
-    if (index >= 0) {
-      detail.appendChild(this.card(win, rules[index], index, rules));
-    } else {
-      detail.appendChild(this.el(doc, "div", "hmail-ai-hint",
-        "Chọn một quy tắc ở bên trái, hoặc bấm “Thêm quy tắc”."));
+    pages.textContent = "";
+    for (const page of this.PAGES) {
+      pages.appendChild(this.pageRow(win, page));
     }
 
-    const picker = doc.getElementById("hmail-flow-run-rule");
-    if (picker) {
-      const chosen = picker.value;
-      picker.textContent = "";
-      for (const rule of rules) {
-        const opt = this.el(doc, "option", null, rule.name || "(chưa đặt tên)");
-        opt.value = rule.id;
-        picker.appendChild(opt);
-      }
-      picker.value = chosen || rules[0]?.id || "";
+    main.textContent = "";
+    const rule = rules.find(r => r.id === this.selected);
+    if (rule) {
+      const pane = this.el(doc, "div", "hmail-flow-pane");
+      pane.appendChild(this.card(win, rule, rules.indexOf(rule), rules));
+      main.appendChild(pane);
+    } else if (this.selected === "run") {
+      main.appendChild(this.pageRun(win));
+    } else if (this.selected === "review") {
+      main.appendChild(this.pageReview(win));
+      this.paintReview(win);
+    } else if (this.selected === "log") {
+      main.appendChild(this.pageLog(win));
+      this.paintLog(win);
+    } else {
+      main.appendChild(this.pageGeneral(win));
     }
-    this.paintReview(win);
-    this.paintLog(win);
+    main.scrollTop = 0;
+  },
+
+  /** One of the non-rule pages in the sidebar. */
+  pageRow(win, page) {
+    const doc = win.document;
+    const el = (t, c, x) => this.el(doc, t, c, x);
+    const row = el("div", "hmail-flow-side-row page" +
+                   (page.id === this.selected ? " selected" : ""));
+    const text = el("div", "hmail-flow-side-text");
+    text.append(el("div", "hmail-flow-side-name", page.label),
+                el("div", "hmail-flow-side-note", page.note));
+    row.appendChild(text);
+    row.addEventListener("click", () => {
+      this.selected = page.id;
+      this.refresh(win);
+    });
+    return row;
   },
 
   /**
@@ -404,7 +557,7 @@ var hMailFlowUI = {
       box.appendChild(row);
       return field;
     };
-    text("Người gửi chứa", "from", "ví dụ: @vosagroup.com");
+    text("Người gửi chứa", "from", "ví dụ: @domain.com");
     text("Tiêu đề chứa", "subject", "ví dụ: hóa đơn");
 
     const check = (label, key, note) => {
