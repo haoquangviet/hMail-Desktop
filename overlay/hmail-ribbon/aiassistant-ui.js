@@ -447,10 +447,15 @@ Object.assign(hMailAI, {
       card.appendChild(list);
     }
 
-    const contact = this.contactBlock(win, doc, result.contact);
-    if (contact) {
-      card.appendChild(contact);
-    }
+    const contacts = (result.contacts && result.contacts.length)
+      ? result.contacts
+      : (result.contact ? [result.contact] : []);
+    contacts.forEach((c, i) => {
+      const block = this.contactBlock(win, doc, c, i === 0);
+      if (block) {
+        card.appendChild(block);
+      }
+    });
 
     log.insertBefore(card, log.firstChild);
   },
@@ -461,14 +466,16 @@ Object.assign(hMailAI, {
    * details are read out first so the user can see exactly what would be
    * saved.
    */
-  contactBlock(win, doc, contact) {
+  contactBlock(win, doc, contact, showHead = true) {
     if (!contact) {
       return null;
     }
     const el = (t, c, x) => this.el(doc, t, c, x);
     const box = el("div", "hmail-ai-contact");
 
-    box.appendChild(el("div", "hmail-ai-contact-head", "Liên hệ trong thư"));
+    if (showHead) {
+      box.appendChild(el("div", "hmail-ai-contact-head", "Liên hệ trong thư"));
+    }
 
     const line = (label, value) => {
       if (!value || (Array.isArray(value) && !value.length)) {

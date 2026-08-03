@@ -935,7 +935,8 @@ var hMailInsight = {
       out.summary = this.summarize(hdr, body);
       out.facts.dates = this.dates(body);
       out.facts.amounts = this.amounts(body);
-      out.contact = this.contact(headers, body, hdr);
+      out.contacts = this.contacts(headers, body, hdr);
+      out.contact = out.contacts[0] || null; // tương thích ngược
     } catch (e) {
       Cu.reportError("hMail insight: đọc nội dung thất bại: " + e);
     }
@@ -1085,6 +1086,66 @@ var hMailInsight = {
       return null;
     }
     return { name, email, org, title, phones, site, address };
+  },
+
+  /**
+   * NHIỀU liên hệ trong một thư: người gửi (chữ ký) + các người khác nêu ngay
+   * trong thân thư và các khối chữ ký / danh sách liên hệ (kiểu EMERGENCY
+   * CONTACTS: "Tên +84 …| Tên +84 …"). Heuristic nên có thể lẫn chút nhiễu —
+   * người dùng tự chọn cái nào lưu vào danh bạ.
+   */
+  contacts(headers, body, hdr) {
+    const list = [];
+    const seen = new Set();
+    const add = (c) => {
+      if (!c) {
+        return;
+      }
+      const key = `${(c.email || "").toLowerCase()}|${c.phones?.[0] || ""}|` +
+                  `${(c.name || "").toLowerCase()}`;
+      if (key === "||" || seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      list.push(c);
+    };
+
+    // 1) Người gửi + chữ ký (đầy đủ org/site/address/phone như cũ).
+    add(this.contact(headers, body, hdr));
+
+    // Bỏ phần trích dẫn thư trước để không nhặt liên hệ của thư cũ.
+    const unquoted = body.split(
+      /^\s*(?:On .{0,80}wrote:|-----\s*Original Message|Vào .{0,60}đã viết:)/mi)[0];
+
+    // 2) Cặp "Tên <email>" nêu trong thân thư.
+    const nameEmail =
+      /([A-ZÀ-Ỹ][\p{L}.'’-]+(?:\s+[A-ZÀ-Ỹ][\p{L}.'’-]+){0,3})\s*[<(]\s*([\w.+-]+@[\w.-]+\.\w{2,})\s*[>)]/gu;
+    let m;
+    while ((m = nameEmail.exec(unquoted)) !== null && list.length < 15) {
+      add({ name: m[1].replace(/\s+/g, " ").trim(),
+            email: m[2].toLowerCase(),
+            org: "", title: "", phones: [], site: "", address: "" });
+    }
+
+    // 3) Cặp "Tên + số điện thoại VN" (danh sách liên hệ, emergency contacts).
+    const namePhone =
+      /([A-ZÀ-Ỹ][\p{L}.'’-]+(?:\s+[A-ZÀ-Ỹ][\p{L}.'’-]+){0,3})\s*[:\-–|(]*\s*((?:\+84|0)\d[\d\s().-]{6,12}\d)/gu;
+    while ((m = namePhone.exec(unquoted)) !== null && list.length < 15) {
+      const name = m[1].replace(/\s+/g, " ").trim();
+      const phone = m[2].replace(/[\s.-]+/g, " ").trim();
+      // Loại tên không giống người (từ khoá công ty/nhãn), quá ngắn/dài.
+      if (name.length < 3 || name.length > 40) {
+        continue;
+      }
+      if (/\b(co|ltd|company|group|inc|corp|jsc|fax|hotline|tel|mob|mobile|phone|email|website|office)\b/i
+          .test(name)) {
+        continue;
+      }
+      add({ name, email: "", org: "", title: "", phones: [phone],
+            site: "", address: "" });
+    }
+
+    return list;
   },
 
   /**
