@@ -65,22 +65,44 @@ var hMailLocalAI = {
   CHAT_MODELS: [
     {
       id: "Xenova/Qwen1.5-0.5B-Chat",
-      dtype: "q4",
-      label: "Qwen 0.5B — nhẹ nhất",
-      size: "khoảng 350 MB",
-      note: "Chạy được trên hầu hết máy. Trả lời ngắn, đủ dùng cho tóm tắt.",
-    },
-    {
-      id: "Xenova/Qwen1.5-1.8B-Chat",
-      dtype: "q4",
-      label: "Qwen 1.8B — cân bằng",
-      size: "khoảng 1,1 GB",
-      note: "Viết tiếng Việt tự nhiên hơn. Cần khoảng 4 GB RAM trống.",
+      // "q8" is the transformers.js name for model_quantized.onnx, which is
+      // what the hub actually serves. Asking for "q4" produced a 404 with a
+      // message about a file that was never published.
+      dtype: "q8",
+      label: "Qwen 1.5 — 0.5B",
+      size: "khoảng 480 MB",
+      note: "Mô hình sinh văn bản duy nhất có sẵn trên kho của Mozilla. " +
+            "Trả lời ngắn, đủ để tóm tắt và soạn nháp.",
     },
   ],
 
+
   CHAT_ENABLED_PREF: "hmail.localai.chat.enabled",
   CHAT_MODEL_PREF: "hmail.localai.chat.model",
+
+  /**
+   * Where models are fetched from.
+   *
+   * Mozilla's hub is a narrow, curated mirror: of the writing models worth
+   * having, only Qwen 0.5B is on it, and the 1.8B one is not. Gecko reads the
+   * root from browser.ml.modelHubRootUrl, so hMail can point it at a mirror
+   * of its own — a GitHub release holds files up to 2 GB — and offer models
+   * the hub does not carry.
+   *
+   * Left at the default for now: the hub costs hMail nothing to use and is
+   * already trusted by the runtime. Setting hmail.localai.mirror switches it.
+   */
+  HUB_PREF: "browser.ml.modelHubRootUrl",
+  MIRROR_PREF: "hmail.localai.mirror",
+
+  applyMirror() {
+    try {
+      const mirror = this.pref(this.MIRROR_PREF, "");
+      if (mirror) {
+        Services.prefs.setCharPref(this.HUB_PREF, mirror);
+      }
+    } catch (e) {}
+  },
 
   // ------------------------------------------------------------ cấu hình
 
@@ -177,6 +199,7 @@ var hMailLocalAI = {
     if (this._engine) {
       return this._engine;
     }
+    this.applyMirror();
     const { createEngine } = ChromeUtils.importESModule(
       "chrome://global/content/ml/EngineProcess.sys.mjs");
     const model = this.model();
@@ -240,6 +263,7 @@ var hMailLocalAI = {
     if (this._chatEngine) {
       return this._chatEngine;
     }
+    this.applyMirror();
     const { createEngine } = ChromeUtils.importESModule(
       "chrome://global/content/ml/EngineProcess.sys.mjs");
     const model = this.chatModel();

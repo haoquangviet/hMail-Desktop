@@ -511,15 +511,23 @@ tr[data-properties~="unread"] .subject {
     opacity: 0.6;
 }
 
+/* A drawn chevron, not a character: "⌃" renders at a different weight and
+   baseline in every font that has it, and is missing from several. */
 .hmail-ribbon-toggle::after {
-    content: "⌃";
+    content: "";
     display: block;
-    font-size: 0.9rem;
-    line-height: 1;
+    width: 100%;
+    height: 26px;
+    background-image: url("chrome://global/skin/icons/arrow-up.svg");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 14px 14px;
+    -moz-context-properties: fill;
+    fill: currentColor;
 }
 
 #hmail-ribbon.collapsed .hmail-ribbon-toggle::after {
-    content: "⌄";
+    background-image: url("chrome://global/skin/icons/arrow-down.svg");
 }
 
 /* --- panes --- */
@@ -3695,9 +3703,16 @@ unified-toolbar-customization {
     border: 1px solid color-mix(in srgb, CanvasText 18%, transparent) !important;
     border-radius: 3px !important;
     background-color: Canvas !important;
-    color: var(--hmail-accent) !important;
-    font-size: 1rem !important;
-    line-height: 1 !important;
+    /* The lightbulb is the platform's "understanding" icon; a "≈" typed into
+       the button reads as a stray character next to a real toolbar. */
+    background-image: url("chrome://global/skin/icons/highlights.svg") !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: 14px 14px !important;
+    -moz-context-properties: fill;
+    fill: var(--hmail-accent);
+    color: transparent !important;
+    font-size: 0 !important;
     cursor: pointer !important;
 }
 
