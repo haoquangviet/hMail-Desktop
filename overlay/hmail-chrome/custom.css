@@ -3869,3 +3869,37 @@ unified-toolbar-customization {
 .hmail-import {
     max-width: none !important;
 }
+
+/* "Đang suy nghĩ…" at the end of the conversation, where the answer will
+   appear. */
+.hmail-ai-turn.thinking {
+    opacity: 0.85;
+}
+
+.hmail-ai-thinking-body {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.92em;
+    opacity: 0.8;
+}
+
+.hmail-ai-thinking-dots {
+    flex: 0 0 auto;
+    width: 13px;
+    height: 13px;
+    border: 2px solid color-mix(in srgb, currentColor 22%, transparent);
+    border-block-start-color: currentColor;
+    border-radius: 50%;
+    animation: hmail-spin 0.8s linear infinite;
+}
+
+.hmail-ai-thinking-text {
+    overflow-wrap: anywhere;
+}
+
+/* The status line no longer spins: the indicator moved into the conversation
+   where the answer appears, and two spinners for one wait is one too many. */
+.hmail-ai.busy .hmail-ai-status::after {
+    display: none !important;
+}

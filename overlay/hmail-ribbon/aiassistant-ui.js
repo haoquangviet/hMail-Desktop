@@ -227,6 +227,49 @@ Object.assign(hMailAI, {
     if (panel) {
       panel.classList.toggle("busy", busy);
     }
+    this.thinking(win, busy ? text : null);
+  },
+
+  /**
+   * "Đang suy nghĩ…" belongs at the end of the conversation, where the answer
+   * is going to appear, not on a status line above it. Above the log it sits
+   * off the top of a long conversation and the reader cannot tell whether
+   * anything is happening at all — which with a model that takes half a
+   * minute is the one thing they need to know.
+   *
+   * @param {?string} text  the message, or null to take the bubble away.
+   */
+  thinking(win, text) {
+    const doc = win.document;
+    const log = doc.getElementById("hmail-ai-log");
+    if (!log) {
+      return;
+    }
+    const existing = doc.getElementById("hmail-ai-thinking");
+    if (!text) {
+      existing?.remove();
+      return;
+    }
+    const bubble = existing || (() => {
+      const node = this.el(doc, "div", "hmail-ai-turn assistant thinking");
+      node.id = "hmail-ai-thinking";
+      node.append(
+        this.el(doc, "div", "hmail-ai-role", "Trợ lý"),
+        this.el(doc, "div", "hmail-ai-thinking-body"));
+      log.appendChild(node);
+      return node;
+    })();
+    // Always last: an answer arriving in between would otherwise leave the
+    // indicator stranded in the middle of the conversation.
+    if (bubble.nextSibling) {
+      log.appendChild(bubble);
+    }
+    const body = bubble.querySelector(".hmail-ai-thinking-body");
+    body.textContent = "";
+    body.append(
+      this.el(doc, "span", "hmail-ai-thinking-dots"),
+      this.el(doc, "span", "hmail-ai-thinking-text", text));
+    log.scrollTop = log.scrollHeight;
   },
 
   /**
