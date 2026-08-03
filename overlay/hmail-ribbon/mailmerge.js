@@ -32,18 +32,43 @@ var hMailMerge = {
   /** In the 3-pane: the ribbon opens a composer with the panel already up. */
   init() {},
 
+  /**
+   * From the ribbon: a bulk send starts by writing the letter, so this opens
+   * the composer with the panel already up — or brings a composer that is
+   * already open to the front instead of opening another.
+   */
   openTab(win) {
-    // Kept for the ribbon: a bulk send starts by writing the letter, so open
-    // the composer and put the panel up in it.
+    for (const other of Services.wm.getEnumerator("msgcompose")) {
+      other.focus();
+      if (other.hMailMerge) {
+        other.hMailMerge.open(other);
+      }
+      return;
+    }
+
     try {
+      const identity =
+        MailServices.accounts.defaultAccount?.defaultIdentity ||
+        MailServices.accounts.allIdentities[0];
+      if (!identity) {
+        Services.prompt.alert(win, "Gửi hàng loạt",
+          "Chưa có tài khoản thư nào để gửi.");
+        return;
+      }
+      // composeFields is not optional: without it the compose window fails to
+      // build and Thunderbird only says "đã xảy ra lỗi".
+      const fields = Cc["@mozilla.org/messengercompose/composefields;1"]
+        .createInstance(Ci.nsIMsgCompFields);
       const params = Cc["@mozilla.org/messengercompose/composeparams;1"]
         .createInstance(Ci.nsIMsgComposeParams);
+      params.composeFields = fields;
       params.type = Ci.nsIMsgCompType.New;
       params.format = Ci.nsIMsgCompFormat.HTML;
-      params.identity = MailServices.accounts.defaultAccount?.defaultIdentity;
-      MailServices.compose.OpenComposeWindowWithParams(null, params);
+      params.identity = identity;
       this.pendingOpen = true;
+      MailServices.compose.OpenComposeWindowWithParams(null, params);
     } catch (e) {
+      this.pendingOpen = false;
       Services.prompt.alert(win, "Gửi hàng loạt",
         "Không mở được cửa sổ soạn thư: " + (e.message || e));
     }
