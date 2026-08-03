@@ -292,6 +292,8 @@ var hMailLocalAIUI = {
     doc.getElementById("hmail-localai-chat-activate").disabled = true;
     this.say(win, "hmail-localai-chat-status",
       `Đang tải ${model.label} (${model.size})… lần đầu có thể mất vài phút.`);
+    hMailBusy.start("localai-chat-model", `Tải mô hình ${model.label}`,
+                    "Phần đã tải bị bỏ, lần sau phải tải lại từ đầu.");
 
     try {
       Services.prefs.setBoolPref(hMailLocalAI.CHAT_ENABLED_PREF, true);
@@ -339,6 +341,7 @@ var hMailLocalAIUI = {
       this.say(win, "hmail-localai-chat-status",
         "Không bật được: " + hMailLocalAI.describe(e));
     } finally {
+      hMailBusy.end("localai-chat-model");
       const button = doc.getElementById("hmail-localai-chat-activate");
       if (button) {
         button.disabled = false;
@@ -431,6 +434,8 @@ var hMailLocalAIUI = {
     fill.style.width = "0%";
     this.say(win, "hmail-localai-status",
       `Đang tải ${model.label} (${model.size})…`);
+    hMailBusy.start("localai-model", `Tải mô hình ${model.label}`,
+                    "Phần đã tải bị bỏ, lần sau phải tải lại từ đầu.");
 
     try {
       await hMailLocalAI.engine(({ percent, text }) => {
@@ -532,6 +537,11 @@ var hMailLocalAIUI = {
     this.stopping = false;
     this.running = true;
     this.win = win;
+    hMailBusy.start("localai-index", "Lập chỉ mục thư cho AI trên máy",
+                    "Phần đã lập chỉ mục được giữ; chạy lại sẽ đi tiếp.");
+    hMailBusy.onStop("localai-index", () => {
+      this.stopping = true;
+    });
 
     try {
       const result = await hMailLocalAI.indexFolder(win, folder,
@@ -547,6 +557,7 @@ var hMailLocalAIUI = {
       this.progress(win, "Lỗi khi lập chỉ mục: " + (e.message || e));
     } finally {
       this.running = false;
+      hMailBusy.end("localai-index");
       const index = doc.getElementById("hmail-localai-index");
       if (index) {
         index.hidden = false;

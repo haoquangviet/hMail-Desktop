@@ -709,6 +709,15 @@ var hMailMerge = {
       stopped: false,
       finished: false,
     };
+    // Half a mailing list wondering why they got nothing is the worst way to
+    // find out the window was closed.
+    hMailBusy.start("merge", "Gửi hàng loạt",
+                    "Người chưa được gửi sẽ không nhận được gì.");
+    hMailBusy.onStop("merge", () => {
+      if (this.job) {
+        this.job.stopped = true;
+      }
+    });
     this.paint(win);
     this.step(win);
   },
@@ -731,6 +740,7 @@ var hMailMerge = {
     }
     if (job.stopped || job.index >= job.rows.length) {
       job.finished = true;
+      hMailBusy.end("merge");
       this.paint(win);
       this.announce();
       return;
@@ -763,6 +773,7 @@ var hMailMerge = {
 
     if (job.stopped || job.index >= job.rows.length) {
       job.finished = true;
+      hMailBusy.end("merge");
       this.paint(win);
       this.announce();
       return;

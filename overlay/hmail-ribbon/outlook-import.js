@@ -19,43 +19,9 @@ var hMailImport = {
   init(win) {
     try {
       this.registerTabType(win);
-      this.guardClose(win);
     } catch (e) {
       Cu.reportError("hMail import init failed: " + e);
     }
-  },
-
-  /**
-   * Closing hMail during an import throws away the rest of the run. The
-   * messages already copied are safe — they were written as they went — but
-   * there is no way to know that from the outside, and no reason to lose the
-   * remaining hours by accident.
-   */
-  guardClose(win) {
-    try {
-      win.addEventListener("close", event => {
-        if (!this.running) {
-          return;
-        }
-        const total = this.state?.text || "";
-        const stay = Services.prompt.confirmEx(
-          win, "Đang nhập thư",
-          "hMail đang nhập thư từ Outlook và chưa xong.\n\n" +
-          (total ? total + "\n\n" : "") +
-          "Số thư đã nhập vẫn được giữ nguyên, nhưng phần còn lại sẽ dừng " +
-          "và bạn phải chạy lại. Lần chạy lại sẽ tự bỏ qua những thư đã có.",
-          Services.prompt.BUTTON_POS_0 *
-            Services.prompt.BUTTON_TITLE_IS_STRING +
-          Services.prompt.BUTTON_POS_1 *
-            Services.prompt.BUTTON_TITLE_IS_STRING,
-          "Tiếp tục nhập", "Đóng và dừng", null, null, {});
-        if (stay === 0) {
-          event.preventDefault();
-        } else {
-          this.cancelled = true;
-        }
-      }, true);
-    } catch (e) {}
   },
 
   el(doc, tag, cls, text) {
@@ -260,6 +226,9 @@ var hMailImport = {
   notify(win, text, ratio = null) {
     const doc = win.document;
     this.state = { text, ratio };
+    if (this.running) {
+      hMailBusy.update("import-pst", text);
+    }
     if (this.panelGone) {
       this.showChip(win);
       return;
@@ -769,6 +738,11 @@ var hMailImport = {
     let failed = 0;
     let lastTick = 0;
     this.running = true;
+    hMailBusy.start("import-pst", "Nhập thư từ Outlook",
+                    "Số thư đã nhập vẫn giữ nguyên; lần chạy sau sẽ bỏ qua chúng.");
+    hMailBusy.onStop("import-pst", () => {
+      this.cancelled = true;
+    });
 
     this.notify(win, "Đang chuẩn bị thư mục…", total ? 0 : "busy");
 
@@ -860,6 +834,7 @@ var hMailImport = {
       this.notify(win, "Lỗi khi nhập: " + (e.message || e), null);
     } finally {
       this.running = false;
+      hMailBusy.end("import-pst");
       if (this.panelGone) {
         this.showChip(win);
       } else {
