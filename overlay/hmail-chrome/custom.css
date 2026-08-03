@@ -3884,14 +3884,29 @@ unified-toolbar-customization {
     opacity: 0.8;
 }
 
+/* Chỉ báo "đang suy nghĩ" là 3 chấm nhấp nhô (typing indicator), KHÔNG phải vòng
+   xoay tròn — đúng ngôn ngữ chat. Ba chấm nảy lên lệch pha nhau. */
 .hmail-ai-thinking-dots {
     flex: 0 0 auto;
-    width: 13px;
-    height: 13px;
-    border: 2px solid color-mix(in srgb, currentColor 22%, transparent);
-    border-block-start-color: currentColor;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.hmail-ai-thinking-dot {
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
-    animation: hmail-spin 0.8s linear infinite;
+    background-color: currentColor;
+    animation: hmail-ai-bounce 1.2s ease-in-out infinite;
+}
+
+.hmail-ai-thinking-dot:nth-child(2) { animation-delay: 0.15s; }
+.hmail-ai-thinking-dot:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes hmail-ai-bounce {
+    0%, 60%, 100% { transform: translateY(0);    opacity: 0.35; }
+    30%           { transform: translateY(-4px); opacity: 1; }
 }
 
 .hmail-ai-thinking-text {
@@ -3902,4 +3917,29 @@ unified-toolbar-customization {
    where the answer appears, and two spinners for one wait is one too many. */
 .hmail-ai.busy .hmail-ai-status::after {
     display: none !important;
+}
+
+/* What changes when the provider changes. Not a wall of terms — three facts
+   that fit on screen. */
+.hmail-ai-caution {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-block: 4px 2px;
+    padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, #B45309 30%, transparent);
+    border-radius: 3px;
+    background-color: color-mix(in srgb, #B45309 7%, Canvas);
+    box-shadow: 0 1px 3px color-mix(in srgb, CanvasText 12%, transparent);
+    font-size: 0.84em;
+    line-height: 1.5;
+}
+
+.hmail-ai-caution[hidden] {
+    display: none !important;
+}
+
+.hmail-ai-caution-line::before {
+    content: "• ";
+    opacity: 0.6;
 }

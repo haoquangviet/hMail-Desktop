@@ -29,13 +29,35 @@ var hMailAI = {
   HISTORY_FILE: "hmail-ai-history.json",
   MAX_HISTORY_MESSAGES: 40,
 
+  /**
+   * System prompt — dat vai tro + khuon chat luong cho model. Gemini-flash tu suy
+   * ra duoc tu prompt nguoi dung, nhung cac model yeu hon (deepseek-chat, model
+   * openai-compatible, on-device) tra loi tot HON HAN khi co system prompt ro rang.
+   * Gui qua systemInstruction (Gemini) / role:"system" (OpenAI-compatible).
+   */
+  SYSTEM_PROMPT:
+    "Bạn là trợ lý email chuyên nghiệp tích hợp trong hMail. Nguyên tắc:\n" +
+    "- Luôn trả lời bằng TIẾNG VIỆT, chính xác, ngắn gọn, đúng trọng tâm.\n" +
+    "- CHỈ dựa vào dữ liệu email được cung cấp (Từ, Đến, Tiêu đề, Ngày, Tệp đính " +
+    "kèm, nội dung). TUYỆT ĐỐI không bịa thông tin không có trong thư; nếu thiếu " +
+    "dữ liệu thì nói rõ là không có.\n" +
+    "- Khi tóm tắt: nêu rõ NGƯỜI GỬI là ai, họ MUỐN GÌ, và VIỆC CẦN LÀM (nếu có). " +
+    "Trình bày mạch lạc, ưu tiên gạch đầu dòng, in đậm nhãn mục bằng **...**.\n" +
+    "- Cảnh giác dấu hiệu lừa đảo/giả mạo (tên miền lạ, địa chỉ trả lời khác người " +
+    "gửi, yêu cầu khẩn cấp/chuyển tiền/cung cấp mật khẩu, tệp đính kèm đáng ngờ) và " +
+    "nêu ngắn gọn cảnh báo nếu phát hiện.\n" +
+    "- Không thêm lời dẫn thừa, không nhắc lại đề bài.",
+
   /** Built-in prompts. Users can add their own; these are the defaults. */
   BUILTIN_PROMPTS: [
     {
       id: "summarize",
       label: "Tóm tắt thư",
-      text: "Tóm tắt ngắn gọn nội dung email sau bằng tiếng Việt, nêu rõ " +
-            "người gửi muốn gì và có việc gì cần làm không.",
+      text: "Tóm tắt email dưới đây bằng tiếng Việt theo đúng bố cục sau:\n" +
+            "**Người gửi:** ai, thuộc tổ chức nào (dựa trên Từ:/chữ ký).\n" +
+            "**Nội dung chính:** 2–4 gạch đầu dòng, mỗi ý một dòng.\n" +
+            "**Việc cần làm:** gạch đầu dòng; nếu không có thì ghi \"Không có\".\n" +
+            "Chỉ dựa vào nội dung thư, không suy diễn thêm. Ngắn gọn, súc tích.",
     },
     {
       id: "reply",
@@ -102,21 +124,29 @@ var hMailAI = {
   SERVICES: [
     { id: "gemini", label: "Google Gemini", provider: "gemini",
       endpoint: "https://generativelanguage.googleapis.com/v1beta",
-      model: "gemini-flash-latest", key: true, priceIn: 0.30, priceOut: 2.50 },
+      model: "gemini-flash-latest", key: true, priceIn: 0.30, priceOut: 2.50,
+      actions: true, tested: true, where: "máy chủ Google (Hoa Kỳ)" },
     { id: "openai", label: "OpenAI (ChatGPT)", provider: "openai",
       endpoint: "https://api.openai.com/v1",
-      model: "gpt-4o-mini", key: true, priceIn: 0.15, priceOut: 0.60 },
+      model: "gpt-4o-mini", key: true, priceIn: 0.15, priceOut: 0.60,
+      actions: true, where: "máy chủ OpenAI (Hoa Kỳ)" },
     { id: "deepseek", label: "DeepSeek", provider: "openai",
       endpoint: "https://api.deepseek.com/v1",
-      model: "deepseek-chat", key: true, priceIn: 0.27, priceOut: 1.10 },
+      model: "deepseek-chat", key: true, priceIn: 0.27, priceOut: 1.10,
+      // deepseek-chat accepts the tools field but calls them erratically, so
+      // hMail does not offer it actions. It answers; it does not act.
+      actions: false, where: "máy chủ DeepSeek (Trung Quốc)" },
     { id: "groq", label: "Groq", provider: "openai",
       endpoint: "https://api.groq.com/openai/v1",
       model: "llama-3.3-70b-versatile", key: true,
-      priceIn: 0.59, priceOut: 0.79 },
+      priceIn: 0.59, priceOut: 0.79,
+      actions: false, where: "máy chủ Groq (Hoa Kỳ)" },
     { id: "openrouter", label: "OpenRouter", provider: "openai",
       endpoint: "https://openrouter.ai/api/v1",
       model: "google/gemini-flash-1.5", key: true,
-      priceIn: 0.30, priceOut: 2.50 },
+      priceIn: 0.30, priceOut: 2.50,
+      actions: false,
+      where: "OpenRouter, rồi chuyển tiếp tới nhà cung cấp của model bạn chọn" },
     { id: "ollama", label: "Ollama (chạy trên máy này)", provider: "openai",
       endpoint: "http://127.0.0.1:11434/v1",
       model: "llama3.2", key: false, priceIn: 0, priceOut: 0 },
@@ -552,6 +582,25 @@ var hMailAI = {
   },
 
   /**
+   * Ghi payload request ra Error Console (Công cụ → Nhà phát triển → Error
+   * Console / Ctrl+Shift+J) khi bật pref `hmail.ai.debug` = true. Dùng để kiểm
+   * tra CHÍNH XÁC những gì gửi cho model — đặc biệt: đủ header (Từ/Đến/Tiêu đề/
+   * Ngày) trong nội dung và system prompt — khi một dịch vụ (vd DeepSeek) trả
+   * lời kém. Bật: about:config → hmail.ai.debug = true.
+   */
+  debugLog(shape, model, payload) {
+    try {
+      if (!this.pref("hmail.ai.debug", false)) return;
+      const json = JSON.stringify(payload, null, 2);
+      const clip = json.length > 20000
+        ? json.slice(0, 20000) + "\n…(đã cắt bớt để xem log)"
+        : json;
+      Services.console.logStringMessage(
+        `[hMail AI] gửi -> ${shape} (${model})\n${clip}`);
+    } catch (e) {}
+  },
+
+  /**
    * The on-device model. It cannot call the assistant's tools — a half-billion
    * parameter model asked to emit a function call produces something that
    * looks like one and is not — so it answers in prose and nothing else.
@@ -586,9 +635,13 @@ var hMailAI = {
     const url = `${this.endpoint()}/models/${this.model()}:generateContent` +
                 `?key=${encodeURIComponent(key)}`;
     const payload = { contents };
+    if (this.SYSTEM_PROMPT) {
+      payload.systemInstruction = { parts: [{ text: this.SYSTEM_PROMPT }] };
+    }
     if (tools) {
       payload.tools = tools;
     }
+    this.debugLog("gemini", this.model(), payload);
     const body = await this.fetchJSON(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -601,7 +654,26 @@ var hMailAI = {
 
   async callOpenAICompatible(contents, tools, key) {
     // Gemini "contents" -> OpenAI "messages".
-    const messages = [];
+    //
+    // A system message goes first. Gemini infers the register from the
+    // prompt; the OpenAI-protocol models — DeepSeek and Llama especially —
+    // answer in English, or wander into pleasantries, unless told plainly
+    // what they are and what shape the answer takes.
+    const messages = [{
+      role: "system",
+      content:
+        "Bạn là trợ lý trong ứng dụng thư hMail Desktop, làm việc với thư " +
+        "công việc tiếng Việt và tiếng Anh.\n" +
+        "- Luôn trả lời bằng tiếng Việt, trừ khi người dùng yêu cầu ngôn " +
+        "ngữ khác.\n" +
+        "- Trả lời thẳng vào việc. Không mở đầu bằng lời chào hay lời cảm " +
+        "ơn, không nhắc lại câu hỏi, không kết bằng lời mời hỏi thêm.\n" +
+        "- Giữ nguyên số liệu, ngày tháng, tên riêng, địa chỉ email, số hóa " +
+        "đơn và mã đơn hàng đúng như trong thư. Không suy đoán khi thư " +
+        "không nói.\n" +
+        "- Nếu thư có dấu hiệu lừa đảo hoặc mạo danh thì nói rõ ngay ở câu " +
+        "đầu.",
+    }];
     for (const c of contents) {
       const role = c.role === "model" ? "assistant" : "user";
       const calls = (c.parts || []).filter(p => p.functionCall);
@@ -637,7 +709,14 @@ var hMailAI = {
       messages.push({ role, content: text });
     }
 
+    // System prompt o dau danh sach — day la yeu to giup DeepSeek / model yeu
+    // tra loi sat de va dung dinh dang hon han.
+    if (this.SYSTEM_PROMPT) {
+      messages.unshift({ role: "system", content: this.SYSTEM_PROMPT });
+    }
+
     const payload = { model: this.model(), messages };
+    this.debugLog("openai:" + this.service(), this.model(), payload);
     if (tools) {
       payload.tools = tools[0].functionDeclarations.map(f => ({
         type: "function",
@@ -688,7 +767,11 @@ var hMailAI = {
       role: t.role === "assistant" ? "model" : "user",
       parts: [{ text: t.text }],
     }));
-    const tools = allowActions && win ? this.toolDeclarations() : null;
+    // Only where hMail has seen the service call a tool correctly. A model
+    // that emits something tool-shaped but wrong is worse than one that
+    // cannot: it moves the wrong message to the wrong folder.
+    const canAct = this.serviceDef().actions !== false;
+    const tools = allowActions && win && canAct ? this.toolDeclarations() : null;
 
     this.lastUsage = { in: 0, out: 0 };
     let acted = false;

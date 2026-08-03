@@ -266,10 +266,25 @@ Object.assign(hMailAI, {
     }
     const body = bubble.querySelector(".hmail-ai-thinking-body");
     body.textContent = "";
-    body.append(
-      this.el(doc, "span", "hmail-ai-thinking-dots"),
-      this.el(doc, "span", "hmail-ai-thinking-text", text));
-    log.scrollTop = log.scrollHeight;
+    const dots = this.el(doc, "span", "hmail-ai-thinking-dots");
+    dots.append(
+      this.el(doc, "span", "hmail-ai-thinking-dot"),
+      this.el(doc, "span", "hmail-ai-thinking-dot"),
+      this.el(doc, "span", "hmail-ai-thinking-dot"));
+    body.append(dots, this.el(doc, "span", "hmail-ai-thinking-text", text));
+    this.scrollToEnd(win, log);
+  },
+
+  /**
+   * Cuộn log xuống đáy. Gọi cả ngay lập tức lẫn sau khi trình duyệt layout xong
+   * (requestAnimationFrame) vì scrollHeight đọc ngay sau appendChild thường vẫn là
+   * giá trị CŨ (chưa reflow) nên không cuộn hết -> cảm giác "không tự cuộn xuống".
+   */
+  scrollToEnd(win, log) {
+    if (!log) return;
+    const go = () => { log.scrollTop = log.scrollHeight; };
+    go();
+    try { win.requestAnimationFrame(go); } catch (e) { try { win.setTimeout(go, 0); } catch (e2) {} }
   },
 
   /**
@@ -526,7 +541,7 @@ Object.assign(hMailAI, {
         : this.el(doc, "div", "hmail-ai-text", text)
     );
     log.appendChild(turn);
-    log.scrollTop = log.scrollHeight;
+    this.scrollToEnd(win, log);
     return turn;
   },
 
@@ -688,7 +703,7 @@ Object.assign(hMailAI, {
       fix.run();
     });
     log.appendChild(button);
-    log.scrollTop = log.scrollHeight;
+    this.scrollToEnd(win, log);
   },
 
   async send(win, question) {
@@ -805,6 +820,13 @@ Object.assign(hMailAI, {
     const hint = el("div", "hmail-ai-hint", "");
     form.appendChild(hint);
 
+    // What changes when the provider changes. Nobody reads a wall of terms,
+    // but three facts fit on screen: where the mail goes, whether hMail can
+    // still act on it, and whether this service has been tried.
+    const caution = el("div", "hmail-ai-caution", "");
+    caution.hidden = true;
+    form.appendChild(caution);
+
     // --- on-device model -------------------------------------------------
     // The providers above all answer in prose; the on-device model does not
     // — it turns text into vectors, which is what semantic search needs. It
@@ -918,6 +940,29 @@ Object.assign(hMailAI, {
         : "Chạy ngay trên máy này: không cần API key, không mất phí, và nội " +
           "dung thư không rời khỏi máy. Cần cài sẵn phần mềm tương ứng và " +
           "tải model về trước.";
+
+      const notes = [];
+      if (def.where) {
+        notes.push(`Nội dung thư được gửi tới ${def.where}. Với thư có hóa ` +
+                   "đơn, hợp đồng hay thông tin khách hàng, hãy cân nhắc " +
+                   "điều này trước.");
+      }
+      if (def.key && def.actions === false) {
+        notes.push("Dịch vụ này chỉ trả lời, không thực hiện được các hành " +
+                   "động trên thư (đánh dấu, gắn nhãn, chuyển thư mục) — mô " +
+                   "hình của họ gọi lệnh không đủ tin cậy để hMail giao " +
+                   "quyền đó.");
+      }
+      if (def.key && !def.tested) {
+        notes.push("hMail thử nghiệm kỹ với Google Gemini; các dịch vụ khác " +
+                   "chạy theo cùng một giao thức nhưng chưa được kiểm tra " +
+                   "sâu như vậy.");
+      }
+      caution.textContent = "";
+      caution.hidden = !notes.length;
+      for (const note of notes) {
+        caution.appendChild(el("div", "hmail-ai-caution-line", note));
+      }
     };
 
     // Switching services saves what is on screen first, so nothing typed for
