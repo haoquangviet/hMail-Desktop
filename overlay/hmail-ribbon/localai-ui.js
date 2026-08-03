@@ -301,8 +301,19 @@ var hMailLocalAIUI = {
       // what caused it.
       let phase = "tải mô hình";
       try {
-        await hMailLocalAI.chatEngine(percent => {
-          fill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+        await hMailLocalAI.chatEngine(({ percent, text }) => {
+          // Striped while the size is unknown, filling once it is: a bar that
+          // sits at zero for several minutes reads as a hung download.
+          if (percent === null) {
+            bar.classList.add("busy");
+            fill.style.width = "";
+          } else {
+            bar.classList.remove("busy");
+            fill.style.width = `${percent}%`;
+          }
+          this.say(win, "hmail-localai-chat-status",
+            `Đang tải ${model.label} — ${text}` +
+            (percent === null ? "" : ` (${percent}%)`));
         });
       } catch (e) {
         throw Object.assign(new Error(
@@ -422,8 +433,17 @@ var hMailLocalAIUI = {
       `Đang tải ${model.label} (${model.size})…`);
 
     try {
-      await hMailLocalAI.engine(percent => {
-        fill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+      await hMailLocalAI.engine(({ percent, text }) => {
+        if (percent === null) {
+          bar.classList.add("busy");
+          fill.style.width = "";
+        } else {
+          bar.classList.remove("busy");
+          fill.style.width = `${percent}%`;
+        }
+        this.say(win, "hmail-localai-status",
+          `Đang tải ${model.label} — ${text}` +
+          (percent === null ? "" : ` (${percent}%)`));
       });
       // Prove it works before claiming it does.
       const vector = await hMailLocalAI.embed("kiểm tra mô hình");

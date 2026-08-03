@@ -20,6 +20,13 @@
 !define ARP_KEY       "Software\Microsoft\Windows\CurrentVersion\Uninstall\hMailDesktop"
 !define MAILCLIENT    "SOFTWARE\Clients\Mail\hMail Desktop"
 
+Var DataDir
+
+Function .onInit
+  ; The usual place, so anyone who does not care can press Next twice.
+  StrCpy $DataDir "$APPDATA\hMail Desktop"
+FunctionEnd
+
 Name "${PRODUCT_NAME}"
 OutFile "${OUTDIR}\hMailDesktopSetup-${VERSION}.exe"
 InstallDir "$PROGRAMFILES64\hMail Desktop"
@@ -50,6 +57,20 @@ VIAddVersionKey /LANG=0 "LegalCopyright" "(c) ${COMPANY}. Based on Mozilla Thund
 !insertmacro MUI_PAGE_LICENSE "..\installer\EULA.txt"
 
 !insertmacro MUI_PAGE_DIRECTORY
+
+; Where the mail itself lives. This is a different question from where the
+; program lives, and a much more consequential one: a mailbox grows without
+; limit, and plenty of machines have a small system disk and a large second
+; one. Thunderbird never asks, which is how people end up with forty gigabytes
+; of mail on a full C: drive and no way to move it that does not involve
+; editing preferences by hand.
+!define MUI_DIRECTORYPAGE_VARIABLE $DataDir
+!define MUI_PAGE_HEADER_TEXT "Nơi lưu dữ liệu"
+!define MUI_PAGE_HEADER_SUBTEXT "Chọn ổ đĩa và thư mục để hMail lưu thư, lịch, danh bạ và mô hình AI."
+!define MUI_DIRECTORYPAGE_TEXT_TOP "Thư và toàn bộ dữ liệu của bạn sẽ nằm ở đây. Hộp thư lớn dần theo thời gian, nên hãy chọn ổ đĩa còn nhiều chỗ. Có thể đổi lại sau trong Cài đặt."
+!define MUI_DIRECTORYPAGE_TEXT_DESTINATION "Thư mục dữ liệu"
+!insertmacro MUI_PAGE_DIRECTORY
+
 !insertmacro MUI_PAGE_INSTFILES
 !define MUI_FINISHPAGE_RUN "$INSTDIR\hmail.exe"
 !define MUI_FINISHPAGE_RUN_TEXT "Khởi động hMail Desktop"
@@ -71,6 +92,28 @@ Section "hMail Desktop" SecMain
   ; Force a one-shot startup-cache purge after every (re)install
   FileOpen $0 "$INSTDIR\.purgecaches" w
   FileClose $0
+
+  ; --- where the mail lives ---
+  ; The profile location is compiled into the application, so it is redirected
+  ; the only way that works from outside: profiles.ini with an absolute path.
+  ;
+  ; Written only when there is no profiles.ini yet. An upgrade must never point
+  ; an existing installation at an empty folder — that reads to the user as
+  ; "all my mail is gone", and the mail is still on disk where they cannot see
+  ; it.
+  CreateDirectory "$DataDir"
+  IfFileExists "$APPDATA\Thunderbird\profiles.ini" keep_profiles 0
+    CreateDirectory "$APPDATA\Thunderbird"
+    WriteINIStr "$APPDATA\Thunderbird\profiles.ini" "Profile0" "Name" "default"
+    WriteINIStr "$APPDATA\Thunderbird\profiles.ini" "Profile0" "IsRelative" "0"
+    WriteINIStr "$APPDATA\Thunderbird\profiles.ini" "Profile0" "Path" "$DataDir"
+    WriteINIStr "$APPDATA\Thunderbird\profiles.ini" "Profile0" "Default" "1"
+    WriteINIStr "$APPDATA\Thunderbird\profiles.ini" "General" "StartWithLastProfile" "1"
+    WriteINIStr "$APPDATA\Thunderbird\profiles.ini" "General" "Version" "2"
+  keep_profiles:
+
+  ; Remember the choice so the uninstaller and the application can report it.
+  WriteRegStr HKLM "${ARP_KEY}" "DataDirectory" "$DataDir"
 
   ; Taskbar AppUserModelID — key path is fixed by the compiled-in app name
   WriteRegStr HKLM "SOFTWARE\Mozilla\Thunderbird\TaskBarIDs" "$INSTDIR" "${AUMID}"

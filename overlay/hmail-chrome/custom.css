@@ -3211,8 +3211,11 @@ unified-toolbar-customization {
     /* Vietnamese stacks a tone mark above a vowel mark, so a line box sized
        for Latin text clips the bottom of "ở" and "ầ". */
     line-height: 1.6 !important;
-    min-height: 36px;
+    /* The platform's own button rule sets min-height: 24px, which is a line
+       box sized for Latin text and cuts the foot off "ở". */
+    min-height: 36px !important;
     height: auto !important;
+    padding-block: 8px !important;
     white-space: normal !important;
     overflow: visible !important;
     /* A XUL button box crops its label to the content box; hMail's buttons
@@ -3829,4 +3832,18 @@ unified-toolbar-customization {
 
 .hmail-translate-action:hover {
     background-color: color-mix(in srgb, CanvasText 9%, Canvas) !important;
+}
+
+/* Downloading with no size known yet: sweep instead of sitting at zero. */
+.hmail-merge-bar.busy .hmail-merge-bar-fill {
+    width: 35% !important;
+    transition: none;
+    animation: hmail-import-sweep 1.1s ease-in-out infinite;
+}
+
+/* The progress bars on the on-device AI page are worth seeing. */
+#hmail-localai-bar,
+#hmail-localai-chat-bar {
+    height: 8px;
+    margin-block: 2px 6px;
 }

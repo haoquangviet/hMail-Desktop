@@ -267,20 +267,7 @@ var hMailLocalAI = {
         timeoutMS: -1,
         numThreads: 2,
       },
-      data => {
-        if (!onProgress) {
-          return;
-        }
-        try {
-          // The runtime reports bytes for each file it fetches.
-          if (data?.total) {
-            onProgress(Math.round((data.currentBytes || 0) /
-                                  data.total * 100));
-          } else if (typeof data?.progress === "number") {
-            onProgress(Math.round(data.progress));
-          }
-        } catch (e) {}
-      });
+      onProgress ? this.progressHandler(onProgress) : null);
     return this._engine;
   },
 
@@ -293,6 +280,45 @@ var hMailLocalAI = {
       await this._chatEngine?.terminate?.();
     } catch (e) {}
     this._chatEngine = null;
+  },
+
+  /**
+   * Turn the runtime's progress events into a percentage and a line of text.
+   *
+   * The fields are progress/totalLoaded/total (see
+   * ProgressAndStatusCallbackParams in Utils.sys.mjs). hMail was reading
+   * "currentBytes", which does not exist, so every event computed 0% and the
+   * bar sat still through a 500 MB download.
+   *
+   * @param {function({percent: ?number, text: string}):void} report
+   */
+  progressHandler(report) {
+    const mb = value => `${(value / (1024 * 1024)).toFixed(1)} MB`;
+    return data => {
+      if (!data) {
+        return;
+      }
+      try {
+        let percent = null;
+        if (typeof data.progress === "number" && isFinite(data.progress)) {
+          // Reported 0–100 in some paths and 0–1 in others.
+          percent = data.progress <= 1 ? data.progress * 100 : data.progress;
+        } else if (data.total && typeof data.totalLoaded === "number") {
+          percent = (data.totalLoaded / data.total) * 100;
+        }
+
+        const size = data.total && typeof data.totalLoaded === "number"
+          ? ` — ${mb(data.totalLoaded)} / ${mb(data.total)}` : "";
+        const what = data.statusText ||
+          (data.id ? String(data.id).split("/").pop() : "");
+
+        report({
+          percent: percent === null ? null
+            : Math.max(0, Math.min(100, Math.round(percent))),
+          text: (what || "Đang tải") + size,
+        });
+      } catch (e) {}
+    };
   },
 
   // ------------------------------------------------------- trả lời tại chỗ
@@ -370,18 +396,7 @@ ${e?.stack || ""}`);
         timeoutMS: -1,
         numThreads: this.threads(),
       },
-      data => {
-        if (!onProgress) {
-          return;
-        }
-        try {
-          if (data?.total) {
-            onProgress(Math.round((data.currentBytes || 0) / data.total * 100));
-          } else if (typeof data?.progress === "number") {
-            onProgress(Math.round(data.progress));
-          }
-        } catch (e) {}
-      });
+      onProgress ? this.progressHandler(onProgress) : null);
     } catch (e) {
       this._chatEngine = null;
       throw e;
@@ -453,14 +468,21 @@ ${e?.stack || ""}`);
       role: t.role === "assistant" ? "assistant" : "user",
       content: String(t.text || ""),
     }));
-    const out = await engine.run({
-      args: [messages],
-      options: {
-        max_new_tokens: maxTokens,
-        do_sample: false,
-        return_full_text: false,
-      },
-    });
+    // No return_full_text here. transformers.js only accepts that option when
+    // the input is a plain string; with a chat array it throws, and the throw
+    // surfaces as "uncaught exception: Object" with nothing else to go on.
+    let out;
+    try {
+      out = await engine.run({
+        args: [messages],
+        options: {
+          max_new_tokens: maxTokens,
+          do_sample: false,
+        },
+      });
+    } catch (e) {
+      throw new Error("mô hình trên máy không chạy được: " + this.describe(e));
+    }
     return this.answerText(out);
   },
 
