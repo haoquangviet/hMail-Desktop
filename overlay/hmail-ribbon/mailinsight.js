@@ -120,6 +120,14 @@ var hMailInsight = {
       todo: "Kiểm tra cài đặt máy chủ gửi (SMTP) trong tài khoản: đúng máy chủ, đúng cổng, và có bật xác thực.",
     },
     {
+      test: (e, b, t) =>
+        /proper dns|dns entries|no dns|reverse dns|ptr record|rdns|host not found|unable to resolve|cannot resolve/.test(t),
+      kind: "permanent",
+      title: "Bên nhận từ chối vì cấu hình DNS không đạt",
+      why: "Máy chủ bên nhận đòi tên miền gửi phải có bản ghi DNS đầy đủ — thường là tên miền ngược (PTR) khớp với IP máy chủ gửi. Đây là quy định của bên nhận, không phải lỗi nội dung thư.",
+      todo: "Việc này thuộc về quản trị hệ thống thư phía gửi: nhờ họ khai báo bản ghi PTR cho IP máy chủ gửi và kiểm tra lại SPF. Nếu tên miền người nhận vừa mới đăng ký, cũng nên soát lại chính tả phần sau dấu @.",
+    },
+    {
       test: (e, b, t) => e === "5.7.1" || b === 554 ||
         /rejected|not allowed|policy|refused|blocked|từ chối/.test(t),
       kind: "permanent",
@@ -1127,8 +1135,19 @@ var hMailInsight = {
     let recipient = field("Final-Recipient") || field("Original-Recipient");
     recipient = recipient.replace(/^[^;]*;\s*/, "").trim();
     if (!recipient) {
-      const m = /^To:\s*([^\s<>]+@[^\s<>]+)/im.exec(body) ||
-        /addressed to[^\n]*?([\w.+-]+@[\w.-]+\.\w+)/i.exec(body);
+      // Exchange writes the failure in prose rather than as DSN fields:
+      //
+      //   The following recipient(s) cannot be reached:
+      //       'accounting@example.vn' on 8/3/2026 11:09 AM
+      //           Server error: '550 proper dns entries.'
+      //
+      // Reading "To:" first would report the address the bounce was sent
+      // *to* — the sender's own — as the one that could not be reached.
+      const m =
+        /cannot be reached[^\n]*\n\s*['"<]?([\w.+-]+@[\w.-]+\.\w+)/i.exec(body) ||
+        /(?:không tới được|không gửi được (?:đến|tới))[^\n]*?([\w.+-]+@[\w.-]+\.\w+)/i.exec(body) ||
+        /addressed to[^\n]*?([\w.+-]+@[\w.-]+\.\w+)/i.exec(body) ||
+        /^To:\s*([^\s<>]+@[^\s<>]+)/im.exec(body);
       recipient = m ? m[1] : "";
     }
     recipient = recipient.replace(/[<>]/g, "");
@@ -1147,6 +1166,8 @@ var hMailInsight = {
 
     // The server's own words, which is what the rules read.
     const serverSaid = diagnostic ||
+      // Exchange again: "Server error: '550 proper dns entries.'"
+      (/Server error:\s*['"]?([^'"\n]+)/i.exec(body)?.[1] || "").trim() ||
       (/The server returned:\s*\n*\s*(.+)/i.exec(body)?.[1] || "").trim() ||
       (/Reason:\s*(.+)/i.exec(body)?.[1] || "").trim();
     const haystack = `${serverSaid} ${statusField} ${body.slice(0, 4000)}`
