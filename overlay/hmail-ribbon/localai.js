@@ -375,6 +375,13 @@ var hMailLocalAI = {
     if (typeof e === "string") {
       return e;
     }
+    // The runtime nests the real failure: the outer object is often only the
+    // wrapper the engine threw on its way down.
+    if (e.cause && e.cause !== e) {
+      const inner = this.describe(e.cause);
+      const outer = e.message || "";
+      return outer && !outer.includes(inner) ? `${outer} ← ${inner}` : inner;
+    }
     const parts = [e.message, e.name, e.error, e.reason, e.statusText]
       .filter(v => typeof v === "string" && v);
     if (parts.length) {

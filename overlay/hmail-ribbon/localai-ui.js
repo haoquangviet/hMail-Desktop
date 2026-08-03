@@ -295,9 +295,20 @@ var hMailLocalAIUI = {
 
     try {
       Services.prefs.setBoolPref(hMailLocalAI.CHAT_ENABLED_PREF, true);
-      await hMailLocalAI.chatEngine(percent => {
-        fill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
-      });
+      // The two steps are reported apart on purpose. Running them together
+      // meant a failure while loading surfaced later as "postMessage on a
+      // null port" from the test call — a description of the wreckage, not of
+      // what caused it.
+      let phase = "tải mô hình";
+      try {
+        await hMailLocalAI.chatEngine(percent => {
+          fill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+        });
+      } catch (e) {
+        throw Object.assign(new Error(
+          `${phase} thất bại: ${hMailLocalAI.describe(e)}`), { cause: e });
+      }
+      phase = "chạy thử";
       this.say(win, "hmail-localai-chat-status",
         "Đã tải xong, đang thử viết một câu…");
       const answer = await hMailLocalAI.generate(

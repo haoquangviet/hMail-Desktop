@@ -2417,17 +2417,43 @@ select.hmail-ai-field,
    IMPORT FROM OUTLOOK
    ===================================================== */
 
+/* The tab panel is a XUL vbox: an HTML child inside it gets no height of its
+   own, so the page could not scroll however long it grew. The scroller has
+   to be the panel, and the page inside it must be allowed to be taller than
+   the window. */
 .hmail-import-tab {
     overflow: hidden;
 }
 
+/* Same shape as the local AI page, which does scroll: a XUL vbox gives an
+   HTML child no height of its own, so the child has to claim the space with
+   flex and then scroll inside it. Without "height: 0" the box grows to fit
+   its content and the scrollbar never appears. */
 .hmail-import {
+    flex: 1 1 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
     display: flex !important;
     flex-direction: column !important;
     gap: 10px;
-    padding: 20px 24px;
-    overflow: auto;
+    padding: 20px 24px 40px;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
     max-width: 900px;
+    /* The page itself is the backdrop; white is for the cards and controls
+       sitting on it. */
+    background-color: color-mix(in srgb, CanvasText 4%, Canvas) !important;
+}
+
+/* White belongs on the things you interact with, not on the whole page. */
+.hmail-import .hmail-ai-field,
+.hmail-import select,
+.hmail-import input,
+.hmail-import-found > *,
+.hmail-import-tree,
+.hmail-localai-model,
+.hmail-filter-rule {
+    background-color: Canvas !important;
 }
 
 .hmail-import-title {
