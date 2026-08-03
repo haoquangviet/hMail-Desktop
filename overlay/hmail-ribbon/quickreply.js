@@ -54,6 +54,13 @@ var hMailQuickReply = {
     return node;
   },
 
+  /** Diagnostics for a bar that lives in a document rebuilt per message. */
+  log(text) {
+    try {
+      Services.console.logStringMessage("hMail quick reply: " + text);
+    } catch (e) {}
+  },
+
   ensure(win) {
     try {
       const doc = this.doc(win);

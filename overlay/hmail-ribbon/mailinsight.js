@@ -208,8 +208,16 @@ var hMailInsight = {
       if (standalone && !win.document.getElementById("tabmail")) {
         return standalone.contentWindow?.gMessage || null;
       }
-      return win.document.getElementById("tabmail")?.currentAbout3Pane
-        ?.gDBView?.hdrForFirstSelectedMessage || null;
+      // hdrForFirstSelectedMessage asks the tree for range 0 and throws when
+      // there is no selection — "Try a real range index next time." Called
+      // from three polling loops, that filled the console with an exception
+      // several times a second and buried every real error under it.
+      const view = win.document.getElementById("tabmail")
+        ?.currentAbout3Pane?.gDBView;
+      if (!view || !view.numSelected) {
+        return null;
+      }
+      return view.hdrForFirstSelectedMessage || null;
     } catch (e) {
       return null;
     }

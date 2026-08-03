@@ -307,12 +307,13 @@ var hMailLocalAI = {
         this.useHub(hub);
         return await this.startChatEngine(onProgress);
       } catch (e) {
+        Cu.reportError(
+          `hMail: ${this.HUBS[hub].label} không dùng được — ` +
+          `${this.describe(e)}
+${e?.stack || ""}`);
         if (hub === this.HUBS.length - 1) {
           throw e;
         }
-        Cu.reportError(
-          `hMail: ${this.HUBS[hub].label} không dùng được (${e.message || e}), ` +
-          `thử ${this.HUBS[hub + 1].label}`);
       }
     }
     return null;
@@ -387,13 +388,31 @@ var hMailLocalAI = {
     if (parts.length) {
       return parts.join(" — ");
     }
+    // Own property names, not JSON: the runtime throws objects whose useful
+    // fields are non-enumerable, so JSON.stringify returns "{}" and the user
+    // is told "[object Object]" — which is how this hunt started.
+    try {
+      const own = Object.getOwnPropertyNames(e)
+        .filter(k => typeof e[k] !== "function")
+        .map(k => `${k}=${String(e[k]).slice(0, 120)}`)
+        .filter(pair => !pair.endsWith("=") && !pair.endsWith("=undefined"));
+      if (own.length) {
+        return own.join(", ").slice(0, 400);
+      }
+    } catch (err) {}
+    try {
+      const text = e.toString();
+      if (text && text !== "[object Object]") {
+        return text;
+      }
+    } catch (err) {}
     try {
       const json = JSON.stringify(e);
       if (json && json !== "{}") {
         return json.slice(0, 300);
       }
     } catch (err) {}
-    return String(e);
+    return "lỗi không mô tả được (xem Bảng điều khiển lỗi, lọc chữ ML)";
   },
 
   /**

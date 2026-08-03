@@ -325,8 +325,14 @@ var hMailAI = {
       if (standalone && !win.document.getElementById("tabmail")) {
         return standalone.contentWindow?.gMessage || null;
       }
-      const about3Pane = win.document.getElementById("tabmail")?.currentAbout3Pane;
-      return about3Pane?.gDBView?.hdrForFirstSelectedMessage || null;
+      // Asking for the first selected message with nothing selected throws;
+      // see the note in mailinsight.selected().
+      const view = win.document.getElementById("tabmail")
+        ?.currentAbout3Pane?.gDBView;
+      if (!view || !view.numSelected) {
+        return null;
+      }
+      return view.hdrForFirstSelectedMessage || null;
     } catch (e) {
       return null;
     }
