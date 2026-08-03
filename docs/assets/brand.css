@@ -1,0 +1,282 @@
+/* hMail Desktop — brand stylesheet
+ * MIT License, Copyright (c) 2026 HQV Software
+ *
+ * Tokens taken from hqv.software so the product pages sit inside the house
+ * identity rather than beside it: the same blue, the same orange accent, the
+ * same corner radius and shadow, the same type stack.
+ */
+
+:root {
+    --blue: #174785;
+    --green: #348d00;
+    --orange: #ff791d;
+    --red: #ed542c;
+    --ink: #0e1726;
+    --ink-soft: #48566b;
+    --line: #e7ebf1;
+    --bg: #ffffff;
+    --bg-soft: #f6f8fb;
+    --navy: #0c1a33;
+    --radius: 18px;
+    --maxw: 1180px;
+    --shadow: 0 18px 50px -22px rgba(14, 23, 38, .28);
+    --shadow-sm: 0 8px 24px -14px rgba(14, 23, 38, .30);
+    --font: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system,
+            'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: var(--font);
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+
+a {
+    color: var(--blue);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+.wrap {
+    max-width: var(--maxw);
+    margin-inline: auto;
+    padding-inline: 24px;
+}
+
+/* --- nav --- */
+
+.nav {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    padding-block: 18px;
+    border-bottom: 1px solid var(--line);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    font-size: 1.05rem;
+}
+
+.brand:hover {
+    text-decoration: none;
+}
+
+.brand img {
+    width: 28px;
+    height: 28px;
+}
+
+.nav-links {
+    display: flex;
+    gap: 22px;
+    margin-inline-start: auto;
+    font-size: 0.94rem;
+    font-weight: 500;
+}
+
+.nav-links a {
+    color: var(--ink-soft);
+}
+
+/* --- buttons --- */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 22px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.96rem;
+    border: 1px solid transparent;
+    transition: transform .12s ease, box-shadow .12s ease,
+                background-color .12s ease;
+}
+
+.btn:hover {
+    text-decoration: none;
+    transform: translateY(-1px);
+}
+
+.btn-primary {
+    background: var(--orange);
+    color: #fff;
+    box-shadow: 0 10px 26px -12px rgba(255, 121, 29, .8);
+}
+
+.btn-primary:hover {
+    background: #f26c10;
+}
+
+.btn-ghost {
+    border-color: var(--line);
+    color: var(--ink);
+    background: var(--bg);
+}
+
+.btn-ghost:hover {
+    border-color: var(--blue);
+    color: var(--blue);
+}
+
+/* --- hero --- */
+
+.hero {
+    padding-block: 72px 56px;
+    background:
+        radial-gradient(1100px 420px at 12% -10%,
+                        rgba(23, 71, 133, .10), transparent 60%),
+        radial-gradient(760px 380px at 92% 0%,
+                        rgba(255, 121, 29, .12), transparent 62%);
+}
+
+.eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--blue);
+    background: rgba(23, 71, 133, .08);
+    border-radius: 999px;
+    padding: 6px 14px;
+}
+
+h1 {
+    font-size: clamp(2.1rem, 4.6vw, 3.4rem);
+    line-height: 1.12;
+    letter-spacing: -0.03em;
+    margin: 18px 0 14px;
+    font-weight: 800;
+}
+
+.lede {
+    font-size: 1.12rem;
+    color: var(--ink-soft);
+    max-width: 60ch;
+    margin: 0 0 28px;
+}
+
+.hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+}
+
+.hero-note {
+    margin-top: 14px;
+    font-size: 0.86rem;
+    color: var(--ink-soft);
+}
+
+/* --- sections --- */
+
+section {
+    padding-block: 56px;
+}
+
+section.soft {
+    background: var(--bg-soft);
+    border-block: 1px solid var(--line);
+}
+
+h2 {
+    font-size: clamp(1.5rem, 2.4vw, 2rem);
+    letter-spacing: -0.02em;
+    margin: 0 0 8px;
+    font-weight: 800;
+}
+
+.section-lede {
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin: 0 0 32px;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.card {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    box-shadow: var(--shadow-sm);
+}
+
+.card h3 {
+    margin: 0 0 8px;
+    font-size: 1.06rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.card p {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 0.95rem;
+}
+
+.card .dot {
+    display: block;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    margin-bottom: 14px;
+    background: rgba(23, 71, 133, .10);
+}
+
+.card.accent .dot {
+    background: rgba(255, 121, 29, .16);
+}
+
+.card.green .dot {
+    background: rgba(52, 141, 0, .14);
+}
+
+/* --- footer --- */
+
+footer {
+    background: var(--navy);
+    color: #aab6c8;
+    padding-block: 40px;
+    font-size: 0.9rem;
+}
+
+footer a {
+    color: #7aa7e0;
+}
+
+footer .legal {
+    margin-top: 14px;
+    line-height: 1.7;
+    max-width: 74ch;
+}
+
+@media (max-width: 640px) {
+    .nav-links {
+        display: none;
+    }
+}

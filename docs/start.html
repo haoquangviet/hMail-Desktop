@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hMail Desktop</title>
+<link rel="icon" href="assets/hMail.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/brand.css">
+<style>
+/* The start page lives inside the message pane: no navigation, no marketing,
+   and a system type stack so it paints instantly with no web font to fetch. */
+:root {
+    --font: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+}
+
+body {
+    background: var(--bg-soft);
+}
+
+.start {
+    max-width: 900px;
+    margin-inline: auto;
+    padding: 40px 28px 56px;
+}
+
+.start-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 6px;
+}
+
+.start-head img {
+    width: 40px;
+    height: 40px;
+}
+
+.start-head h1 {
+    font-size: 1.55rem;
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+
+.start-sub {
+    color: var(--ink-soft);
+    margin: 0 0 28px;
+}
+
+.tips {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 14px;
+}
+
+.tip {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px 18px;
+}
+
+.tip h3 {
+    margin: 0 0 6px;
+    font-size: 0.98rem;
+    font-weight: 700;
+}
+
+.tip p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+}
+
+.tip .where {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--blue);
+    background: rgba(23, 71, 133, .08);
+    border-radius: 999px;
+    padding: 3px 10px;
+}
+
+.links {
+    margin-top: 26px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.links a {
+    font-size: 0.9rem;
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+}
+
+.links a:hover {
+    border-color: var(--blue);
+    color: var(--blue);
+    text-decoration: none;
+}
+
+.foot {
+    margin-top: 30px;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    line-height: 1.6;
+}
+</style>
+</head>
+<body>
+
+<div class="start">
+  <div class="start-head">
+    <img src="assets/hMail.svg" alt="">
+    <h1>hMail Desktop</h1>
+  </div>
+  <p class="start-sub">Chọn một thư ở danh sách bên trái để bắt đầu.</p>
+
+  <div class="tips">
+    <div class="tip">
+      <h3>Hỏi trợ lý về thư đang mở</h3>
+      <p>Tóm tắt, phân loại, rút việc cần làm, dịch, soạn thư trả lời — và
+         thực hiện luôn nếu bạn yêu cầu.</p>
+      <span class="where">Nút hMail AI, cạnh Trả lời</span>
+    </div>
+
+    <div class="tip">
+      <h3>Trả lời nhanh</h3>
+      <p>Ô trả lời nằm ngay dưới thư: gõ, Enter, xong. Cần viết dài thì mở
+         soạn thảo đầy đủ, chữ đã gõ vẫn giữ nguyên.</p>
+      <span class="where">Dưới nội dung thư</span>
+    </div>
+
+    <div class="tip">
+      <h3>Gửi cho nhiều người</h3>
+      <p>Mỗi người một bản riêng, có ô thay thế tên và thông tin từng người,
+         giãn cách để không bị máy chủ chặn.</p>
+      <span class="where">Gửi / Nhận ▸ Gửi hàng loạt</span>
+    </div>
+
+    <div class="tip">
+      <h3>Mang dữ liệu Outlook sang</h3>
+      <p>Đọc thẳng tệp .pst và .ost, giữ nguyên cây thư mục và trạng thái đã
+         đọc.</p>
+      <span class="where">Trợ giúp ▸ Nhập từ Outlook</span>
+    </div>
+
+    <div class="tip">
+      <h3>Lịch và danh bạ trên máy chủ</h3>
+      <p>hMail hỏi máy chủ thư của bạn rồi tự thiết lập CalDAV và CardDAV,
+         không phải nhập lại mật khẩu.</p>
+      <span class="where">Trợ giúp ▸ Đồng bộ Lịch &amp; Danh bạ</span>
+    </div>
+
+    <div class="tip">
+      <h3>Cảnh báo thư đáng ngờ</h3>
+      <p>Người lạ mới vào chuỗi thư, tên miền nhìn giống, xác thực không đạt —
+         hMail nói trước khi bạn kịp trả lời.</p>
+      <span class="where">Tự hiện trên đầu thư</span>
+    </div>
+  </div>
+
+  <div class="links">
+    <a href="https://github.com/haoquangviet/hMail-Desktop/releases">Bản phát hành</a>
+    <a href="https://github.com/haoquangviet/hMail-Desktop/issues">Báo lỗi &amp; góp ý</a>
+    <a href="https://github.com/haoquangviet/hMail-Desktop">Mã nguồn</a>
+    <a href="https://hqv.software/">HQV Software</a>
+  </div>
+
+  <p class="foot">
+    hMail Desktop is based on Mozilla Thunderbird open source code. hMail
+    Desktop and Thunderbird are not officially associated with Mozilla or its
+    products. © HQV Software.
+  </p>
+</div>
+
+</body>
+</html>
