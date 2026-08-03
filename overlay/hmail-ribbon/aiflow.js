@@ -101,6 +101,7 @@ var hMailFlow = {
       subject: "",
       hasAttachment: false,
       serverSpam: false,
+      olderThanDays: 0,        // 0 = không lọc theo tuổi; >0 = chỉ thư cũ hơn N ngày
       // expensive half
       ask: "",
       // actions
@@ -111,6 +112,7 @@ var hMailFlow = {
       summarize: false,
       reply: "",
       send: false,
+      cleanup: "",             // "" | "trash" | "archive" | "ai" (dọn dẹp thư cũ)
     };
   },
 
@@ -158,6 +160,13 @@ var hMailFlow = {
           verdict = await this.verdictOf(hdr);
         }
         if (!verdict.spam && !verdict.virus) {
+          continue;
+        }
+      }
+      // Tuổi thư — dọn dẹp thư cũ: chỉ khớp nếu thư cũ hơn N ngày.
+      if (rule.olderThanDays > 0) {
+        const ageDays = (Date.now() - (hdr.dateInSeconds || 0) * 1000) / 86400000;
+        if (ageDays < rule.olderThanDays) {
           continue;
         }
       }
@@ -264,11 +273,90 @@ var hMailFlow = {
           done.push(`chuyển vào "${target.prettyName}"`);
         }
       }
+      // Dọn dẹp thư cũ — thao tác có thể mất thư, nên đặt cuối cùng.
+      if (rule.cleanup) {
+        await this.cleanup(hdr, rule, done);
+      }
     } catch (e) {
       done.push("lỗi: " + (e.message || e));
     }
 
     this.note(hdr, rule, done.join(", ") || "không có hành động nào");
+  },
+
+  /**
+   * Dọn dẹp một thư cũ theo lựa chọn của quy tắc:
+   *   "trash"   -> chuyển vào Thùng rác (còn khôi phục được).
+   *   "archive" -> chuyển vào Lưu trữ (giữ lại, chỉ dọn khỏi hộp thư).
+   *   "ai"      -> hỏi model quyết định xóa / lưu / giữ nguyên.
+   * "Chuyển vào thư mục tự chọn" dùng action moveTo sẵn có (kết hợp điều kiện tuổi).
+   */
+  async cleanup(hdr, rule, done) {
+    const folder = hdr.folder;
+    let dest = rule.cleanup;
+    if (dest === "ai") {
+      dest = await this.decideCleanup(hdr);
+      if (dest !== "trash" && dest !== "archive") {
+        done.push("AI quyết định giữ lại");
+        return;
+      }
+      done.push("AI quyết định");
+    }
+    if (dest === "trash") {
+      // deleteMessages -> chuyển vào Thùng rác của tài khoản, có thể hoàn tác.
+      folder.deleteMessages([hdr], this.win?.msgWindow || null,
+        false /* deleteStorage */, false /* isMove */, null, true /* allowUndo */);
+      done.push("chuyển vào Thùng rác");
+    } else if (dest === "archive") {
+      const archive = this.specialFolder(folder, Ci.nsMsgFolderFlags.Archive);
+      if (archive && archive.URI !== folder.URI) {
+        MailServices.copy.copyMessages(
+          folder, [hdr], archive, true, null, null, false);
+        done.push("lưu trữ");
+      } else {
+        done.push("không tìm thấy thư mục Lưu trữ");
+      }
+    }
+  },
+
+  /** Thư mục đặc biệt (Archive/Trash) của tài khoản chứa thư này. */
+  specialFolder(folder, flag) {
+    try {
+      return folder.server.rootFolder.getFolderWithFlags(flag);
+    } catch (e) {
+      return null;
+    }
+  },
+
+  /**
+   * Hỏi model một từ về cách xử lý một thư cũ: "xóa" / "lưu" / "giữ".
+   * Trả về "trash" | "archive" | "keep". Lỗi/không chắc -> "keep" (an toàn).
+   */
+  async decideCleanup(hdr) {
+    if (!this.budgetLeft()) {
+      return "keep";
+    }
+    this.calls.push(Date.now());
+    try {
+      const text = await hMailAI.messageText(hdr);
+      const ans = await hMailAI.ask([{
+        role: "user",
+        text: "Thư dưới đây đã cũ. Trả lời đúng MỘT từ về cách xử lý:\n" +
+              "- \"xóa\" nếu là thư rác/quảng cáo/thông báo hết giá trị;\n" +
+              "- \"lưu\" nếu nên giữ lại để tra cứu (hóa đơn, hợp đồng, biên lai);\n" +
+              "- \"giữ\" nếu còn quan trọng, để nguyên trong hộp thư.\n\n---\n" + text,
+      }]);
+      const a = String(ans || "").toLowerCase();
+      if (/x[oó]a|delete|rác|spam/.test(a)) {
+        return "trash";
+      }
+      if (/l[uư]u|archive|tr[uữ]/.test(a)) {
+        return "archive";
+      }
+      return "keep";
+    } catch (e) {
+      return "keep";
+    }
   },
 
   async summarize(hdr) {
@@ -436,6 +524,13 @@ var hMailFlow = {
       if (rule.hasAttachment &&
           !(hdr.flags & Ci.nsMsgMessageFlags.Attachment)) {
         continue;
+      }
+      // Tuổi thư — dọn dẹp thư cũ: chỉ lấy thư cũ hơn N ngày.
+      if (rule.olderThanDays > 0) {
+        const ageDays = (Date.now() - (hdr.dateInSeconds || 0) * 1000) / 86400000;
+        if (ageDays < rule.olderThanDays) {
+          continue;
+        }
       }
       candidates.push(hdr);
     }

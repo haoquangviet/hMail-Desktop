@@ -579,6 +579,22 @@ var hMailFlowUI = {
     check("Có tệp đính kèm", "hasAttachment");
     check("Máy chủ đánh dấu là thư rác hoặc mã độc", "serverSpam");
 
+    // Điều kiện tuổi — để dọn dẹp thư cũ.
+    const ageRow = el("div", "hmail-ai-row");
+    ageRow.append(el("span", "hmail-flow-label", "Chỉ thư cũ hơn"));
+    const age = el("input", "hmail-ai-field");
+    age.type = "number";
+    age.min = "0";
+    age.style.maxWidth = "90px";
+    age.value = rule.olderThanDays || 0;
+    age.addEventListener("change", () => {
+      rule.olderThanDays = Math.max(0, parseInt(age.value, 10) || 0);
+      save();
+    });
+    ageRow.append(age, el("span", "hmail-flow-label",
+      "ngày (0 = không lọc theo tuổi)"));
+    box.appendChild(ageRow);
+
     box.appendChild(el("div", "hmail-flow-part", "…và AI trả lời “có” cho:"));
     const ask = el("textarea", "hmail-ai-field");
     ask.rows = 2;
@@ -642,6 +658,32 @@ var hMailFlowUI = {
     check("Nhờ AI tóm tắt và lưu vào thư", "summarize",
           "Bản tóm tắt nằm sẵn trong thư khi bạn mở ra, không hiện lên giữa " +
           "lúc bạn đang làm việc khác.");
+
+    // Dọn dẹp thư cũ.
+    const cleanRow = el("div", "hmail-ai-row");
+    cleanRow.append(el("span", "hmail-flow-label", "Dọn dẹp"));
+    const clean = el("select", "hmail-ai-field");
+    for (const [val, lbl] of [
+      ["", "— không dọn —"],
+      ["trash", "Chuyển vào Thùng rác"],
+      ["archive", "Lưu trữ (chuyển vào Archive)"],
+      ["ai", "Để AI quyết định (xóa / lưu / giữ)"],
+    ]) {
+      const opt = el("option", null, lbl);
+      opt.value = val;
+      clean.appendChild(opt);
+    }
+    clean.value = rule.cleanup || "";
+    clean.addEventListener("change", () => {
+      rule.cleanup = clean.value;
+      save();
+    });
+    cleanRow.appendChild(clean);
+    box.appendChild(cleanRow);
+    box.appendChild(el("div", "hmail-ai-hint",
+      "Đặt “Chỉ thư cũ hơn … ngày” rồi bấm “Chạy trên thư mục” để dọn hộp thư. " +
+      "Thùng rác vẫn khôi phục được. Muốn chuyển vào thư mục tự chọn thì dùng ô " +
+      "“Chuyển vào” ở trên (không cần Dọn dẹp)."));
 
     box.appendChild(el("div", "hmail-flow-part", "Trả lời tự động"));
     const reply = el("textarea", "hmail-ai-field");
@@ -787,6 +829,13 @@ var hMailFlowUI = {
     if (rule.reply) {
       willDo.push(rule.send ? "GỬI thư trả lời tự động"
                             : "soạn sẵn thư trả lời vào Thư nháp");
+    }
+    if (rule.cleanup === "trash") {
+      willDo.push("CHUYỂN VÀO THÙNG RÁC");
+    } else if (rule.cleanup === "archive") {
+      willDo.push("lưu trữ (chuyển vào Archive)");
+    } else if (rule.cleanup === "ai") {
+      willDo.push("để AI quyết định xóa / lưu trữ / giữ");
     }
 
     const second = Services.prompt.confirmEx(

@@ -27,6 +27,17 @@
     border-bottom: 1px solid color-mix(in srgb, CanvasText 10%, transparent) !important;
 }
 
+/* Xóa đường kẻ đậm dưới titlebar/tab strip (viền + bóng mặc định của Thunderbird
+   ở toolbox trên cùng) — giáp với nút điều khiển cửa sổ trông chối mắt. */
+#navigation-toolbox,
+#toolbar-menubar,
+#tabs-toolbar,
+#tabmail-tabs {
+    border-bottom: none !important;
+    box-shadow: none !important;
+    background-image: none !important;
+}
+
 #folderTree li > .container > .name {
     font-size: 0.95rem !important;
     font-weight: 400 !important;
