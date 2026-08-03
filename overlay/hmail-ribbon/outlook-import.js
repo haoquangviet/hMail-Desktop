@@ -19,9 +19,43 @@ var hMailImport = {
   init(win) {
     try {
       this.registerTabType(win);
+      this.guardClose(win);
     } catch (e) {
       Cu.reportError("hMail import init failed: " + e);
     }
+  },
+
+  /**
+   * Closing hMail during an import throws away the rest of the run. The
+   * messages already copied are safe — they were written as they went — but
+   * there is no way to know that from the outside, and no reason to lose the
+   * remaining hours by accident.
+   */
+  guardClose(win) {
+    try {
+      win.addEventListener("close", event => {
+        if (!this.running) {
+          return;
+        }
+        const total = this.state?.text || "";
+        const stay = Services.prompt.confirmEx(
+          win, "Đang nhập thư",
+          "hMail đang nhập thư từ Outlook và chưa xong.\n\n" +
+          (total ? total + "\n\n" : "") +
+          "Số thư đã nhập vẫn được giữ nguyên, nhưng phần còn lại sẽ dừng " +
+          "và bạn phải chạy lại. Lần chạy lại sẽ tự bỏ qua những thư đã có.",
+          Services.prompt.BUTTON_POS_0 *
+            Services.prompt.BUTTON_TITLE_IS_STRING +
+          Services.prompt.BUTTON_POS_1 *
+            Services.prompt.BUTTON_TITLE_IS_STRING,
+          "Tiếp tục nhập", "Đóng và dừng", null, null, {});
+        if (stay === 0) {
+          event.preventDefault();
+        } else {
+          this.cancelled = true;
+        }
+      }, true);
+    } catch (e) {}
   },
 
   el(doc, tag, cls, text) {
@@ -597,6 +631,29 @@ var hMailImport = {
     });
   },
 
+  /** Message-IDs already filed in a folder. */
+  existingIds(folder) {
+    const ids = new Set();
+    try {
+      for (const hdr of folder.msgDatabase.enumerateMessages()) {
+        if (hdr.messageId) {
+          ids.add(hdr.messageId);
+        }
+      }
+    } catch (e) {}
+    return ids;
+  },
+
+  /** The Message-ID of a raw message, without parsing the whole thing. */
+  messageId(rfc822) {
+    const head = rfc822.slice(0, 8192);
+    const m = new RegExp("^Message-ID:([^\\r\\n]+)", "im").exec(head);
+    // The database stores the id without its angle brackets, so this has to
+    // strip them too or nothing would ever match and every run would import
+    // the whole file again.
+    return m ? m[1].replace(/[<>]/g, "").trim() : "";
+  },
+
   async addMessage(folder, rfc822, isRead) {
     const tmp = Services.dirsvc.get("TmpD", Ci.nsIFile);
     tmp.append(`hmail-import-${Math.floor(Date.now() % 1e9)}-` +
@@ -703,13 +760,29 @@ var hMailImport = {
           target = await this.ensureFolder(target, part);
         }
 
+        // What is already in this folder, so a second run picks up where the
+        // first one stopped instead of importing everything twice. A .pst of
+        // a hundred thousand messages takes hours, and hours is long enough
+        // that the run will be interrupted at least once.
+        const already = this.existingIds(target);
+        let skipped = 0;
+
         for await (const message of hMailPst.messages(this.handle,
                                                       node.path)) {
           if (this.cancelled) {
             break;
           }
+          const id = this.messageId(message.rfc822);
+          if (id && already.has(id)) {
+            skipped++;
+            done++;
+            continue;
+          }
           try {
             await this.addMessage(target, message.rfc822, message.isRead);
+            if (id) {
+              already.add(id);
+            }
           } catch (e) {
             failed++;
           }
@@ -734,7 +807,8 @@ var hMailImport = {
 
       const errors = (this.handle?.errors || []).length;
       this.notify(win, this.cancelled
-        ? `Đã dừng. Nhập được ${done.toLocaleString("vi-VN")} thư.`
+        ? `Đã dừng ở ${done.toLocaleString("vi-VN")} thư. Chạy lại sẽ tự bỏ ` +
+          `qua những thư đã nhập.`
         : `Xong. Nhập ${(done - failed).toLocaleString("vi-VN")} thư vào ` +
           `"Outlook — ${label}"` +
           (failed || errors
