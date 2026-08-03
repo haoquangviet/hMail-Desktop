@@ -350,6 +350,8 @@ var hMailRibbon = {
               fn: win => win.hMailLocalAIUI.openTab(win) },
             { id: "h-server-filter", label: "Lọc theo máy chủ", icon: "filter",
               fn: win => win.hMailServerFilter.openTab(win) },
+            { id: "h-flow", label: "Tự động hoá AI", icon: "ai",
+              fn: win => win.hMailFlowUI.openTab(win) },
 
           ],
         },

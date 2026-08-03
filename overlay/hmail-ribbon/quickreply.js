@@ -447,4 +447,48 @@ var hMailQuickReply = {
       this.say(win, "Không gửi được: " + (e.message || e));
     }
   },
+  /**
+   * Send or save a reply that something other than the reply box composed —
+   * the automation rules, for one. Shares the addressing and threading work
+   * with send() so an automatic reply lands in the same conversation, with
+   * the same References, as one typed by hand.
+   *
+   * @returns {Promise<boolean>} true if it was sent, false if it was filed
+   *   as a draft.
+   */
+  async sendReply(win, hdr, body, { send = false, replyAll = false } = {}) {
+    const identity = this.identityFor(hdr);
+    if (!identity) {
+      throw new Error("chưa có tài khoản để gửi");
+    }
+    const params = Cc["@mozilla.org/messengercompose/composeparams;1"]
+      .createInstance(Ci.nsIMsgComposeParams);
+    const fields = Cc["@mozilla.org/messengercompose/composefields;1"]
+      .createInstance(Ci.nsIMsgCompFields);
+    fields.body = this.htmlBody(body);
+    await this.fillReply(hdr, fields, replyAll, identity);
+    if (!fields.to) {
+      throw new Error("không xác định được người nhận");
+    }
+    params.composeFields = fields;
+    params.type = replyAll ? Ci.nsIMsgCompType.ReplyAll
+                           : Ci.nsIMsgCompType.ReplyToSender;
+    params.format = Ci.nsIMsgCompFormat.HTML;
+    params.originalMsgURI = hdr.folder.getUriForMsg(hdr);
+    params.identity = identity;
+
+    const compose = MailServices.compose.initCompose(params);
+    const accountKey = MailServices.accounts
+      .findAccountForServer(hdr.folder.server)?.key || "";
+    const msgWindow = Cc["@mozilla.org/messenger/msgwindow;1"]
+      .createInstance(Ci.nsIMsgWindow);
+    // SaveAsDraft, not Now, unless the rule says otherwise: a machine
+    // answering mail in someone's name without anyone reading it first is a
+    // different proposition from one filing it.
+    await compose.sendMsg(
+      send ? Ci.nsIMsgCompDeliverMode.Now
+           : Ci.nsIMsgCompDeliverMode.SaveAsDraft,
+      identity, accountKey, msgWindow, null);
+    return send;
+  },
 };

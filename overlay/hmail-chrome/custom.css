@@ -3943,3 +3943,108 @@ unified-toolbar-customization {
     content: "• ";
     opacity: 0.6;
 }
+
+/* =====================================================
+   AI AUTOMATION — one card per rule, read as a sentence.
+   ===================================================== */
+.hmail-flow-master {
+    border: 1px solid color-mix(in srgb, var(--hmail-accent) 26%, transparent);
+    border-radius: 3px;
+    background-color: color-mix(in srgb, var(--hmail-accent) 6%, Canvas);
+    padding: 10px 12px;
+    margin-block: 6px 10px;
+    box-shadow: 0 1px 3px color-mix(in srgb, CanvasText 12%, transparent);
+}
+
+.hmail-flow-master-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.hmail-flow-rules {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.hmail-flow-rule {
+    border: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+    border-radius: 3px;
+    background-color: Canvas;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-shadow: 0 1px 3px color-mix(in srgb, CanvasText 12%, transparent);
+}
+
+.hmail-flow-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.hmail-flow-name {
+    flex: 1 1 auto;
+    font-weight: 600;
+}
+
+/* The three stages of the sentence: when, and, then. */
+.hmail-flow-part {
+    margin-block-start: 8px;
+    font-weight: 600;
+    color: var(--hmail-accent);
+    font-size: 0.92em;
+}
+
+.hmail-flow-label {
+    flex: 0 0 120px;
+    font-size: 0.88em;
+    opacity: 0.75;
+}
+
+.hmail-flow-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.92em;
+}
+
+.hmail-flow-check.danger {
+    color: #B42318;
+    font-weight: 600;
+}
+
+.hmail-flow-log {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.85em;
+    max-height: 40vh;
+    overflow-y: auto;
+}
+
+.hmail-flow-log-row {
+    display: grid;
+    grid-template-columns: 150px 130px 1fr 1fr;
+    gap: 10px;
+    padding: 4px 6px;
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 8%, transparent);
+}
+
+.hmail-flow-log-time,
+.hmail-flow-log-rule {
+    opacity: 0.65;
+}
+
+.hmail-flow-log-subject {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.hmail-flow-log-what {
+    color: var(--hmail-accent);
+}
