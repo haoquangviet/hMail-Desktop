@@ -2165,8 +2165,15 @@ select.hmail-ai-field,
    exactly where a reply box belongs. */
 #hmail-quickreply-holder {
     display: block !important;
+    flex: 0 0 auto !important;
+    -moz-box-flex: 0 !important;
 }
 
+/* Pinned to the bottom of the message pane. In-flow does not work here:
+   #singleMessage holds the header, and the notification bars and the message
+   browser live below it, so a bar appended there lands between the subject
+   and the message. The space it covers is given back by a margin on the
+   browser — see reserveSpace() in quickreply.js. */
 .hmail-quickreply {
     position: fixed !important;
     inset-inline: 0 !important;

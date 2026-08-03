@@ -89,29 +89,24 @@ var hMailQuickReply = {
   },
 
   /**
-   * The bar is fixed to the bottom of the message pane, so it sits on top of
+   * The bar is pinned to the bottom of the message pane, so it covers
    * whatever the message ends with — a signature, a logo, the last line of a
-   * quote. Push the message up by exactly the height of the bar, and keep
-   * doing it as the bar grows: the input box gets taller as it is typed into.
+   * quote. The browser that renders the message is pushed up by exactly the
+   * height of the bar. It has to be the browser and not the column above it:
+   * #singleMessage carries the header, and padding on it opens a gap between
+   * the subject and the message instead of below it.
    */
   reserveSpace(win, doc, box) {
-    // Padding on the container, not a margin on the browser: a margin leaves
-    // a band of the window's own background between the message and the
-    // reply box, which reads as a gap in the page. Padding keeps the space
-    // inside the message surface.
-    const host = doc.getElementById("singleMessage") ||
-                 doc.getElementById("messagepane")?.parentNode;
+    const pane = doc.getElementById("messagepane");
     const apply = () => {
       try {
         const height = Math.round(box.getBoundingClientRect().height);
-        if (!height) {
+        if (!height || !pane) {
           return;
         }
         doc.documentElement.style.setProperty(
           "--hmail-quickreply-height", `${height}px`);
-        if (host) {
-          host.style.paddingBlockEnd = `${height}px`;
-        }
+        pane.style.marginBlockEnd = `${height}px`;
       } catch (e) {}
     };
     apply();
@@ -130,10 +125,9 @@ var hMailQuickReply = {
     try {
       this._spaceObserver?.disconnect();
       this._spaceObserver = null;
-      const host = doc.getElementById("singleMessage") ||
-                   doc.getElementById("messagepane")?.parentNode;
-      if (host) {
-        host.style.paddingBlockEnd = "";
+      const pane = doc.getElementById("messagepane");
+      if (pane) {
+        pane.style.marginBlockEnd = "";
       }
       doc.documentElement.style.removeProperty("--hmail-quickreply-height");
     } catch (e) {}
