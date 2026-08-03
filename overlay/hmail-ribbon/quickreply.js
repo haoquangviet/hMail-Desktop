@@ -56,10 +56,14 @@ var hMailQuickReply = {
 
   ensure(win) {
     try {
+      const doc = this.doc(win);
       if (!this.enabled()) {
+        if (doc) {
+          doc.getElementById(this.ID + "-holder")?.remove();
+          this.releaseSpace(doc);
+        }
         return;
       }
-      const doc = this.doc(win);
       if (!doc || doc.getElementById(this.ID)) {
         return;
       }
@@ -76,11 +80,59 @@ var hMailQuickReply = {
       const box = this.build(win, doc);
       holder.appendChild(box);
       host.appendChild(holder);
+      this.reserveSpace(win, doc, box);
       this.log("added, rect=" +
                JSON.stringify(box.getBoundingClientRect().toJSON()));
     } catch (e) {
       this.log("failed: " + e + "\n" + (e.stack || ""));
     }
+  },
+
+  /**
+   * The bar is fixed to the bottom of the message pane, so it sits on top of
+   * whatever the message ends with — a signature, a logo, the last line of a
+   * quote. Push the message up by exactly the height of the bar, and keep
+   * doing it as the bar grows: the input box gets taller as it is typed into.
+   */
+  reserveSpace(win, doc, box) {
+    const pane = doc.getElementById("messagepane") ||
+                 doc.getElementById("messageBrowser");
+    const apply = () => {
+      try {
+        const height = Math.round(box.getBoundingClientRect().height);
+        if (!height) {
+          return;
+        }
+        doc.documentElement.style.setProperty(
+          "--hmail-quickreply-height", `${height}px`);
+        if (pane) {
+          pane.style.marginBlockEnd = `${height}px`;
+        }
+      } catch (e) {}
+    };
+    apply();
+    try {
+      const observer = new win.ResizeObserver(apply);
+      observer.observe(box);
+      this._spaceObserver?.disconnect();
+      this._spaceObserver = observer;
+    } catch (e) {
+      // No observer: the initial reservation still covers the common case.
+    }
+  },
+
+  /** Give the space back when the bar goes away. */
+  releaseSpace(doc) {
+    try {
+      this._spaceObserver?.disconnect();
+      this._spaceObserver = null;
+      const pane = doc.getElementById("messagepane") ||
+                   doc.getElementById("messageBrowser");
+      if (pane) {
+        pane.style.marginBlockEnd = "";
+      }
+      doc.documentElement.style.removeProperty("--hmail-quickreply-height");
+    } catch (e) {}
   },
 
   build(win, doc) {

@@ -866,9 +866,12 @@ var hMailInsight = {
     const contentType = this.first(headers, "content-type").toLowerCase();
     const subject = String(hdr?.mime2DecodedSubject || "");
 
+    // "no-reply@" is how half the newsletters in the world are sent, so it
+    // cannot stand on its own here — a Vietnam Airlines statement was being
+    // announced as "Thư không gửi được".
     const looksLikeBounce =
       /report-type=delivery-status|multipart\/report/.test(contentType) ||
-      /^(mailer-daemon|postmaster|no-?reply)@/i.test(from) ||
+      /^(mailer-daemon|postmaster)@/i.test(from) ||
       /delivery (status notification|failure|has failed)|undeliver|returned mail|failure notice|thư không gửi được|không thể gửi/i
         .test(subject);
     if (!looksLikeBounce) {
