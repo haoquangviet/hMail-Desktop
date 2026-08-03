@@ -374,12 +374,16 @@ var hMailInsight = {
               this.junk(hdr, true);
               bar.remove();
             });
-      } else {
-        add("Không phải thư rác", "Bỏ đánh dấu thư rác", () => {
-          this.junk(hdr, false);
-          bar.remove();
-        });
       }
+      // The server calling it spam is a claim, not a verdict. Disagreeing has
+      // to be one click away whether or not hMail has filed it yet, otherwise
+      // a false positive is easier to live with than to correct.
+      add("Không phải thư rác",
+          "Bỏ đánh dấu thư rác và dạy bộ lọc rằng thư này bình thường",
+          () => {
+            this.junk(hdr, false);
+            bar.remove();
+          });
     }
 
     // A lookalike domain or a failed check is about the sender, not the
@@ -399,8 +403,11 @@ var hMailInsight = {
     add("Xem đầu thư", "Mở toàn bộ phần đầu thư để tự kiểm tra",
         () => this.showSource(win, hdr));
 
+    // open(), not toggle(): the assistant is usually already on screen when
+    // the warning is read, and toggling shut it — so the button appeared to
+    // do nothing until it was pressed a second time.
     add("Hỏi trợ lý", "Mở bảng trợ lý cho thư này",
-        () => win.hMailAI?.toggle(win));
+        () => win.hMailAI?.open(win));
 
     return row.children.length ? row : null;
   },

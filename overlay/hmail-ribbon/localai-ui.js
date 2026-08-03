@@ -285,8 +285,7 @@ var hMailLocalAIUI = {
         throw new Error("mô hình không trả về vector hợp lệ");
       }
       Services.prefs.setBoolPref(hMailLocalAI.ENABLED_PREF, true);
-      Services.prefs.setBoolPref("hmail.localai.pending", false);
-      bar.hidden = true;
+        bar.hidden = true;
       this.say(win, "hmail-localai-status",
         `Đã kích hoạt — ${model.label}, vector ${vector.length} chiều. ` +
         `Bước tiếp theo là lập chỉ mục.`);
@@ -294,24 +293,18 @@ var hMailLocalAIUI = {
     } catch (e) {
       bar.hidden = true;
       const message = String(e?.message || e);
-      // The Remote Settings client reads its server address once, when the
-      // session starts. If the channel was shut when hMail opened, opening it
-      // now is not enough — but it will be there next time, so say that
-      // instead of leaving the user with a sentence about Remote Settings.
-      if (/Remote Settings/i.test(message)) {
-        Services.prefs.setBoolPref("hmail.localai.pending", true);
+      Services.prefs.setBoolPref(hMailLocalAI.ENABLED_PREF, false);
+      // A failure to reach the runtime is a network problem, not something a
+      // restart fixes. Telling the user to restart when it will not help sends
+      // them round the same loop for as long as they have patience.
+      if (/Remote Settings|ML engine|ONNX/i.test(message)) {
         this.say(win, "hmail-localai-status",
-          "Cần khởi động lại hMail một lần để tải bộ chạy, rồi bấm " +
-          "“Tải về và kích hoạt” lại. Kênh cấu hình đã được mở sẵn cho lần " +
-          "khởi động tới.");
-        Services.prompt.alert(win, "AI trên máy",
-          "hMail cần khởi động lại một lần để lấy bộ chạy ONNX.\n\n" +
-          "Đóng và mở lại hMail, vào lại thẻ “AI trên máy” rồi bấm “Tải về " +
-          "và kích hoạt”.");
+          "Không tải được bộ chạy ONNX. Bộ chạy này lấy từ máy chủ cấu hình " +
+          "của Mozilla, nên hãy kiểm tra mạng, tường lửa hoặc proxy của công " +
+          "ty có chặn firefox.settings.services.mozilla.com hay không, rồi " +
+          "thử lại. Chi tiết: " + message);
         return;
       }
-      Services.prefs.setBoolPref(hMailLocalAI.ENABLED_PREF, false);
-      hMailLocalAI.closeSettingsChannel();
       this.say(win, "hmail-localai-status",
         "Không kích hoạt được: " + message);
     }
@@ -323,7 +316,6 @@ var hMailLocalAIUI = {
       return;
     }
     Services.prefs.setBoolPref(hMailLocalAI.ENABLED_PREF, false);
-    Services.prefs.setBoolPref("hmail.localai.pending", false);
     await hMailLocalAI.shutdown();
     await hMailLocalAI.clear();
     hMailLocalAI.closeSettingsChannel();

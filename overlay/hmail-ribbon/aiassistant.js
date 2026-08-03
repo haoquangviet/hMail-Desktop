@@ -721,6 +721,8 @@ var hMailAI = {
     switch (e?.code) {
       case "no_key":
         return "chưa nhập API key — mở phần cài đặt trong bảng trợ lý";
+      case "local_off":
+        return "AI trên máy chưa được kích hoạt";
       case "network":
         return "không kết nối được máy chủ AI";
       case "RESOURCE_EXHAUSTED":

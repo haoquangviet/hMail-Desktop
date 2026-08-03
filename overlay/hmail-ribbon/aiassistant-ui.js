@@ -495,7 +495,8 @@ Object.assign(hMailAI, {
 
     const hdr = this.selectedMessage(win);
     if (!hdr) {
-      this.notify(win, "Chưa chọn thư nào — chọn một thư để bắt đầu.");
+      this.notify(win, "Chưa chọn thư nào.");
+      this.showWelcome(win, log);
       return;
     }
     // What the machine can work out on its own comes first: it is instant,
@@ -510,6 +511,58 @@ Object.assign(hMailAI, {
     this.notify(win, convo.turns.length
       ? `${convo.turns.length} lượt trao đổi về thư này`
       : "Chọn một câu lệnh rồi bấm Chạy.");
+  },
+
+  /**
+   * With no message open the panel used to show one line of text and nothing
+   * else — a blank column beside a blank reading pane. It now says what the
+   * assistant can do and offers the things that do not need a message
+   * selected in the first place.
+   */
+  showWelcome(win, log) {
+    const doc = win.document;
+    const el = (t, c, x) => this.el(doc, t, c, x);
+
+    const card = el("div", "hmail-ai-welcome");
+    card.appendChild(el("div", "hmail-ai-welcome-head", "Trợ lý hMail"));
+    card.appendChild(el("div", "hmail-ai-hint",
+      "Chọn một thư ở danh sách bên trái, rồi bấm Chạy để tóm tắt, phân " +
+      "loại, rút việc cần làm, dịch hoặc soạn thư trả lời. Phần \"Đọc nhanh " +
+      "tại chỗ\" chạy ngay trên máy, không tốn phí và không gửi thư đi đâu."));
+
+    const list = el("div", "hmail-ai-welcome-list");
+    const item = (label, note, run) => {
+      const b = el("button", "hmail-ai-welcome-item");
+      b.append(el("span", "hmail-ai-welcome-label", label),
+               el("span", "hmail-ai-welcome-note", note));
+      b.addEventListener("click", () => {
+        try {
+          run();
+        } catch (e) {
+          Cu.reportError("hMail AI welcome action failed: " + e);
+        }
+      });
+      list.appendChild(b);
+    };
+
+    item("Soạn thư mới", "Mở trình soạn thảo — trợ lý có sẵn trong đó",
+         () => win.goDoCommand("cmd_newMessage"));
+    item("Gửi hàng loạt", "Mỗi người một bản riêng, chạy nền",
+         () => win.hMailMerge?.openTab(win));
+    item("AI trên máy", "Tải mô hình về máy, không cần API key",
+         () => win.hMailLocalAIUI?.openTab(win));
+    item("Lọc theo máy chủ", "Xử lý thư theo kết luận bộ lọc của máy chủ",
+         () => win.hMailServerFilter?.openTab(win));
+    item("Cài đặt trợ lý", "Nhà cung cấp, mô hình, đơn giá, giao diện",
+         () => this.showSettings(win));
+
+    card.appendChild(list);
+
+    const service = this.serviceDef();
+    card.appendChild(el("div", "hmail-ai-hint",
+      `Đang dùng: ${service.label}.`));
+
+    log.appendChild(card);
   },
 
   // -------------------------------------------------------------- running
@@ -542,8 +595,44 @@ Object.assign(hMailAI, {
       this.addTurn(win, "assistant", reply);
       this.notify(win, this.usageLine());
     } catch (e) {
-      this.notify(win, "Lỗi: " + this.explain(e));
+      this.reportError(win, e);
     }
+  },
+
+  /**
+   * Say what went wrong, and where it can be put right. An error the reader
+   * cannot act on is only half a message: "AI trên máy chưa được kích hoạt"
+   * with no way through to the page that activates it wastes their time.
+   */
+  reportError(win, e, prefix = "Lỗi") {
+    const doc = win.document;
+    this.notify(win, `${prefix}: ${this.explain(e)}`);
+    const log = doc.getElementById("hmail-ai-log");
+    if (!log || doc.getElementById("hmail-ai-fix")) {
+      return;
+    }
+    const fixes = {
+      local_off: {
+        label: "Mở trang AI trên máy…",
+        run: () => win.hMailLocalAIUI?.openTab(win),
+      },
+      no_key: {
+        label: "Mở cài đặt trợ lý…",
+        run: () => this.showSettings(win),
+      },
+    };
+    const fix = fixes[e?.code];
+    if (!fix) {
+      return;
+    }
+    const button = this.el(doc, "button", "hmail-ai-action", fix.label);
+    button.id = "hmail-ai-fix";
+    button.addEventListener("click", () => {
+      button.remove();
+      fix.run();
+    });
+    log.appendChild(button);
+    log.scrollTop = log.scrollHeight;
   },
 
   async send(win, question) {
@@ -590,7 +679,7 @@ Object.assign(hMailAI, {
       this.addTurn(win, "assistant", reply);
       this.notify(win, this.usageLine());
     } catch (e) {
-      this.notify(win, "Lỗi: " + this.explain(e));
+      this.reportError(win, e);
     }
   },
 
@@ -911,7 +1000,7 @@ Object.assign(hMailAI, {
         ]);
         this.notify(win, "Kết nối tốt — AI trả lời: " + reply.slice(0, 40));
       } catch (e) {
-        this.notify(win, "Kết nối lỗi: " + this.explain(e));
+        this.reportError(win, e, "Kết nối lỗi");
       }
     });
 
