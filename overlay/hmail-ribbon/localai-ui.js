@@ -285,11 +285,23 @@ var hMailLocalAIUI = {
         throw new Error("mô hình không trả về vector hợp lệ");
       }
       Services.prefs.setBoolPref(hMailLocalAI.ENABLED_PREF, true);
-        bar.hidden = true;
+      bar.hidden = true;
       this.say(win, "hmail-localai-status",
-        `Đã kích hoạt — ${model.label}, vector ${vector.length} chiều. ` +
-        `Bước tiếp theo là lập chỉ mục.`);
+        `Đã kích hoạt — ${model.label}, vector ${vector.length} chiều.`);
       this.refresh(win);
+
+      // A model with an empty index can answer nothing, so the obvious next
+      // step is offered rather than left for the user to find. It is asked
+      // and not assumed: indexing reads every message in the folder, and
+      // that is their time and their disk.
+      const folder = this.currentFolder(win);
+      if (folder && Services.prompt.confirm(win, "AI trên máy",
+            `Lập chỉ mục thư mục "${folder.prettyName}" ngay bây giờ?\n\n` +
+            "Chỉ mục là thứ làm cho tìm theo ý nghĩa hoạt động. Việc này " +
+            "chạy nền — đóng thẻ này vẫn được, tiến trình hiện ở góc màn " +
+            "hình.")) {
+        this.index(win);
+      }
     } catch (e) {
       bar.hidden = true;
       const message = String(e?.message || e);
@@ -335,6 +347,12 @@ var hMailLocalAIUI = {
     }
   },
 
+  /**
+   * Indexing an inbox of a few thousand messages takes minutes. Nobody should
+   * have to keep the tab open and watch it, so the job runs on when the tab
+   * is closed and reports from a chip in the corner — the same arrangement
+   * the Outlook import uses.
+   */
   async index(win) {
     const folder = this.currentFolder(win);
     if (!folder) {
@@ -346,25 +364,83 @@ var hMailLocalAIUI = {
     doc.getElementById("hmail-localai-index").hidden = true;
     doc.getElementById("hmail-localai-stop").hidden = false;
     this.stopping = false;
+    this.running = true;
+    this.win = win;
 
     try {
       const result = await hMailLocalAI.indexFolder(win, folder,
         (done, total) => {
-          this.say(win, "hmail-localai-index-status",
+          this.progress(win,
             `${folder.prettyName}: ${done}/${total} thư…`);
           return !this.stopping;
         });
-      this.say(win, "hmail-localai-index-status",
+      this.progress(win,
         `${folder.prettyName}: đã lập chỉ mục ${result.indexed} thư` +
         (result.skipped ? `, bỏ qua ${result.skipped} thư đã có.` : "."));
     } catch (e) {
-      this.say(win, "hmail-localai-index-status",
-        "Lỗi khi lập chỉ mục: " + (e.message || e));
+      this.progress(win, "Lỗi khi lập chỉ mục: " + (e.message || e));
     } finally {
-      doc.getElementById("hmail-localai-index").hidden = false;
-      doc.getElementById("hmail-localai-stop").hidden = true;
-      this.refresh(win);
+      this.running = false;
+      const index = doc.getElementById("hmail-localai-index");
+      if (index) {
+        index.hidden = false;
+        doc.getElementById("hmail-localai-stop").hidden = true;
+        this.refresh(win);
+      }
+      this.chip(win);
     }
+  },
+
+  /** Say where the indexing is, in the tab if it is open and in the chip. */
+  progress(win, text) {
+    this.state = text;
+    const status = win.document.getElementById("hmail-localai-index-status");
+    if (status) {
+      status.textContent = text;
+    }
+    this.chip(win);
+  },
+
+  chip(win) {
+    const doc = win.document;
+    // The tab is open: it is saying everything the chip would.
+    if (doc.getElementById("hmail-localai-index-status")) {
+      doc.getElementById("hmail-localai-chip")?.remove();
+      return;
+    }
+    if (!this.state) {
+      return;
+    }
+    let chip = doc.getElementById("hmail-localai-chip");
+    if (!chip) {
+      const NS = "http://www.w3.org/1999/xhtml";
+      chip = doc.createElementNS(NS, "div");
+      chip.className = "hmail-import-chip";
+      chip.id = "hmail-localai-chip";
+
+      const text = doc.createElementNS(NS, "span");
+      text.className = "hmail-import-chip-text";
+      text.id = "hmail-localai-chip-text";
+      text.title = "Mở lại trang AI trên máy";
+      text.addEventListener("click", () => this.openTab(win));
+
+      const stop = doc.createElementNS(NS, "button");
+      stop.className = "hmail-import-chip-btn";
+      stop.textContent = "✕";
+      stop.addEventListener("click", () => {
+        if (this.running) {
+          this.stopping = true;
+        } else {
+          chip.remove();
+          this.state = "";
+        }
+      });
+
+      chip.append(text, stop);
+      (doc.body || doc.documentElement).appendChild(chip);
+    }
+    doc.getElementById("hmail-localai-chip-text").textContent = this.state;
+    chip.classList.toggle("done", !this.running);
   },
 
   async search(win) {

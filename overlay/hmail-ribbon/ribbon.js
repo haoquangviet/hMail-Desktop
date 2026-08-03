@@ -524,11 +524,39 @@ var hMailRibbon = {
         return;
       }
       const term = search.value.trim();
-      if (term) {
+      if (!term) {
+        return;
+      }
+      // Shift+Enter asks the on-device model instead, the way Shift changes
+      // what Enter means everywhere else in hMail.
+      if (event.shiftKey) {
+        this.searchMeaning(win, term);
+      } else {
         this.search(win, term);
       }
     });
     tabStrip.appendChild(search);
+
+    // Only offered when there is a model to ask.
+    const meaning = el("button", "hmail-ribbon-meaning");
+    meaning.textContent = "≈";
+    meaning.title = "Tìm theo ý nghĩa bằng AI trên máy (Shift+Enter)";
+    meaning.hidden = true;
+    meaning.addEventListener("click", () => {
+      const term = search.value.trim();
+      if (term) {
+        this.searchMeaning(win, term);
+      }
+    });
+    tabStrip.appendChild(meaning);
+    win.setTimeout(() => {
+      try {
+        meaning.hidden = !win.hMailLocalAI?.enabled();
+        search.placeholder = meaning.hidden
+          ? "Tìm kiếm thư…"
+          : "Tìm kiếm thư… (Shift+Enter: theo ý nghĩa)";
+      } catch (e) {}
+    }, 1500);
 
     // Collapse/expand, like Outlook's ribbon chevron.
     const toggle = el("button", "hmail-ribbon-toggle");
@@ -711,6 +739,34 @@ var hMailRibbon = {
       });
     } catch (e) {
       Cu.reportError("hMail ribbon search failed: " + e);
+    }
+  },
+
+  /**
+   * The same box, asked a different question. Keyword search finds the words
+   * you typed; the on-device model finds messages that mean what you typed,
+   * which is what you want when you remember the gist and not the wording.
+   *
+   * They are offered side by side rather than merged: a result list that
+   * silently mixes "contains these words" with "is about this" cannot be
+   * reasoned about, and the two are useful at different moments.
+   */
+  searchMeaning(win, term) {
+    try {
+      if (!win.hMailLocalAI?.enabled()) {
+        win.hMailLocalAIUI?.openTab(win);
+        return;
+      }
+      win.hMailLocalAIUI.openTab(win);
+      win.setTimeout(() => {
+        const box = win.document.getElementById("hmail-localai-query");
+        if (box) {
+          box.value = term;
+          win.hMailLocalAIUI.search(win);
+        }
+      }, 300);
+    } catch (e) {
+      Cu.reportError("hMail semantic search failed: " + e);
     }
   },
 
