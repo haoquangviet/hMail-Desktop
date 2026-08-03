@@ -646,6 +646,75 @@ var hMailInsight = {
   /**
    * Look at one message. Returns findings and a plain summary; never throws.
    */
+  /**
+   * Mẫu rủi ro cho phân loại ngữ nghĩa bằng all-MiniLM. Mỗi nhóm vài câu ví dụ
+   * cả TIẾNG VIỆT lẫn TIẾNG ANH (model thiên tiếng Anh, thêm ví dụ Việt cho đỡ
+   * lệch). Vector các ví dụ được nhúng một lần rồi cache trong bộ nhớ.
+   */
+  RISK_THRESHOLD: 0.55,
+  RISK_PROTOTYPES: [
+    { id: "credential", level: "danger",
+      message: "Nội dung có dấu hiệu lừa lấy mật khẩu / thông tin đăng nhập",
+      examples: [
+        "verify your account password now or it will be suspended",
+        "confirm your login credentials to keep your mailbox active",
+        "your account has been locked, sign in to restore access",
+        "xác minh mật khẩu tài khoản của bạn ngay nếu không sẽ bị khóa",
+        "cập nhật thông tin đăng nhập để tránh bị vô hiệu hóa tài khoản",
+      ] },
+    { id: "payment", level: "danger",
+      message: "Nội dung có dấu hiệu lừa đảo chuyển tiền / đổi tài khoản",
+      examples: [
+        "please pay the attached invoice to the updated bank account",
+        "urgent wire transfer to a new beneficiary account number",
+        "change of bank details for your pending payment",
+        "vui lòng chuyển khoản gấp vào số tài khoản mới cho hóa đơn",
+        "thay đổi thông tin ngân hàng nhận tiền, thanh toán ngay",
+      ] },
+    { id: "urgency", level: "warn",
+      message: "Nội dung tạo áp lực khẩn cấp bất thường",
+      examples: [
+        "act within 24 hours or your account will be terminated",
+        "immediate action required, this is your final warning",
+        "yêu cầu xử lý ngay trong 24 giờ nếu không tài khoản sẽ bị chấm dứt",
+        "cảnh báo cuối cùng, phản hồi khẩn trước khi quá hạn",
+      ] },
+  ],
+
+  /**
+   * Nhúng nội dung thư (tiêu đề + đầu thân) và so cosine với các mẫu rủi ro.
+   * Trả về {category, level, message, score} của nhóm khớp nhất nếu vượt ngưỡng,
+   * ngược lại null. Chỉ chạy khi AI-trên-máy bật; mọi lỗi -> null (an toàn, không
+   * làm hỏng phần cảnh báo heuristic).
+   */
+  async semanticRisk(text) {
+    if (typeof hMailLocalAI === "undefined" || !hMailLocalAI.enabled()) {
+      return null;
+    }
+    if (!text || text.length < 40) {
+      return null;
+    }
+    if (!this._riskVectors) {
+      this._riskVectors = [];
+      for (const cat of this.RISK_PROTOTYPES) {
+        const vecs = await hMailLocalAI.embedMany(cat.examples);
+        this._riskVectors.push({ ...cat, vecs });
+      }
+    }
+    const vec = await hMailLocalAI.embed(text.slice(0, 800));
+    let best = null;
+    for (const cat of this._riskVectors) {
+      let score = 0;
+      for (const cv of cat.vecs) {
+        score = Math.max(score, hMailLocalAI.similarity(vec, cv));
+      }
+      if (!best || score > best.score) {
+        best = { category: cat.id, level: cat.level, message: cat.message, score };
+      }
+    }
+    return best && best.score >= this.RISK_THRESHOLD ? best : null;
+  },
+
   async analyze(hdr) {
     const out = {
       level: "ok",
@@ -845,6 +914,19 @@ var hMailInsight = {
       note("info", `Thư trả về: ${bounce.title}` +
         (bounce.recipient ? ` (${bounce.recipient})` : ""));
     }
+
+    // --- phân loại ngữ nghĩa on-device (all-MiniLM) -----------------------
+    // Bổ sung cho heuristic ở trên: nhúng nội dung thư rồi so khớp ngữ nghĩa với
+    // các mẫu rủi ro, bắt được cách diễn đạt mới mà regex bỏ sót. Chỉ chạy khi
+    // AI-trên-máy đã bật; lỗi/không bật thì bỏ qua, không ảnh hưởng heuristic.
+    try {
+      const sem = await this.semanticRisk(text);
+      if (sem) {
+        out.facts.semantic = { category: sem.category, score: sem.score };
+        note(sem.level, `${sem.message} (phân tích ngữ nghĩa trên máy, ` +
+          `tương đồng ${Math.round(sem.score * 100)}%).`);
+      }
+    } catch (e) {}
 
     // Wrapped on purpose: these are the "what is this about" half. If one of
     // them throws on an odd message, the warnings above must still reach the
