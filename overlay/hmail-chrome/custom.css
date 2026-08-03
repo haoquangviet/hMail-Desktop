@@ -387,10 +387,23 @@ tr[data-properties~="unread"] .subject {
     background-color: color-mix(in srgb, var(--hmail-accent) 12%, Canvas) !important;
 }
 
-/* --- Left nav rail (spaces toolbar), Outlook-style --- */
+/* --- Left nav rail (spaces toolbar), Outlook-style ---
+ *
+ * Upstream makes this bar `position: fixed` and moves the rest of the window
+ * in by --spaces-total-width, which counts its 1px inline-end border. The
+ * vendored theme drops that border, so the bar renders 1px narrower than the
+ * gap left for it: the window's top edge ran to the bar's right edge and then
+ * stopped short, which is the broken line above the ribbon.
+ *
+ * So the border goes back, and the width is pinned to the same variable the
+ * rest of the window is positioned by — border-box, so the two cannot drift
+ * apart again whatever the theme does to padding or icon size. */
 #spacesToolbar {
     background-color: color-mix(in srgb, var(--hmail-accent) 4%, Canvas) !important;
-    border-inline-end: 1px solid color-mix(in srgb, CanvasText 12%, transparent) !important;
+    border-inline-end: 1px solid var(--spaces-border-color,
+        color-mix(in srgb, CanvasText 12%, transparent)) !important;
+    box-sizing: border-box !important;
+    width: var(--spaces-total-width) !important;
     padding-block-start: 4px !important;
 }
 
@@ -3504,7 +3517,7 @@ unified-toolbar-customization {
    look cut off, and the line was never the radius: it is the tab strip's own
    bottom edge, removed below. */
 #hmail-ribbon {
-    border-radius: 10px !important;
+    border-radius: 0 !important;
     overflow: hidden;
 }
 

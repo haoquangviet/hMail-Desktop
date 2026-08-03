@@ -1074,6 +1074,28 @@ global-search-bar {
 	padding-top: 50px !important;
 }
 
+/* The rail's right edge, put back.
+ *
+ * Upstream gives #spacesToolbar `position: fixed` and moves the rest of the
+ * window in by --spaces-total-width, which counts a 1px inline-end border.
+ * The vendored rule above (`border: 0px`) drops that border, so the rail
+ * renders 1px narrower than the gap reserved for it — the window's top edge
+ * ran along to the rail and then stopped short of it, which is the broken
+ * line above the ribbon.
+ *
+ * This has to live here rather than in custom.css: custom.css is @imported at
+ * the top of this file, so anything below wins over it.
+ *
+ * The width is pinned to the same variable the rest of the window is
+ * positioned by, border-box, so the two cannot drift apart again whatever the
+ * theme does to padding or icon size. */
+#spacesToolbar {
+	border-inline-end: 1px solid var(--spaces-border-color,
+		color-mix(in srgb, CanvasText 12%, transparent)) !important;
+	box-sizing: border-box !important;
+	width: var(--spaces-total-width) !important;
+}
+
 /* Left-nav icons — tighter spacing and slightly bigger */
 #mailButton,
 #addressBookButton,
