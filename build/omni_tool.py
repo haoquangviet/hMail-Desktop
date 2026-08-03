@@ -372,6 +372,41 @@ def render_png(logo: Image.Image, width: int, height: int, opacity: float = 1.0)
     return buf.getvalue()
 
 
+# Support links baked into the code, not read from a preference. Sending an
+# hMail user to Mozilla's support site is wrong twice over: the page describes
+# Thunderbird, and the trademark policy is explicit that a rebuild must not
+# imply an association with Mozilla. app.support.baseURL already points at
+# hMail's own wiki; these are the ones that ignore it.
+SUPPORT_URL_FILES = {
+    "chrome/messenger/content/messenger/msgHdrView.js",
+    "chrome/messenger/content/messenger/aboutImport.xhtml",
+    "chrome/messenger/content/messenger/am-e2e.xhtml",
+    "chrome/messenger/content/messenger/aboutRights.xhtml",
+}
+
+HMAIL_WIKI = "https://github.com/haoquangviet/hMail-Desktop/wiki/"
+
+SUPPORT_URL_MAP = {
+    "https://support.mozilla.org/kb/thunderbird-and-junk-spam-messages":
+        HMAIL_WIKI + "Thu-rac",
+    "https://support.mozilla.org/kb/introduction-to-e2e-encryption":
+        HMAIL_WIKI + "Ma-hoa-dau-cuoi",
+    "https://support.mozilla.org/products/thunderbird":
+        HMAIL_WIKI,
+}
+
+
+def patch_support_urls(text: str) -> str:
+    """Point in-code help links at hMail's own documentation."""
+    for old, new in SUPPORT_URL_MAP.items():
+        text = text.replace(old, new)
+    # Anything else still aimed at SUMO goes to the wiki index rather than to
+    # a page about a different product.
+    text = re.sub(r"https://support\.mozilla\.org/[^\s\"'<>)]*",
+                  HMAIL_WIKI, text)
+    return text
+
+
 def build_replacements(zf: zipfile.ZipFile, repo: Path):
     """Map of omni.ja entry name -> new bytes."""
     logo = Image.open(repo / "branding" / "hMail-transparent.png").convert("RGBA")
@@ -392,6 +427,11 @@ def build_replacements(zf: zipfile.ZipFile, repo: Path):
 
         if name.endswith("content/messenger/aboutDialog.xhtml"):
             repl[name] = patch_about_dialog(
+                zf.read(name).decode("utf-8")).encode("utf-8")
+            continue
+
+        if name in SUPPORT_URL_FILES:
+            repl[name] = patch_support_urls(
                 zf.read(name).decode("utf-8")).encode("utf-8")
             continue
 

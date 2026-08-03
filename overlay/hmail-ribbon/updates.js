@@ -131,4 +131,127 @@ var hMailUpdate = {
       }
     }
   },
+  // ------------------------------------------------- trang Cài đặt
+
+  /**
+   * Replace Thunderbird's update box on the Settings page.
+   *
+   * Mozilla's updater was removed from this build — an hMail install must not
+   * be replaced by a Thunderbird one — so the policy engine reports "updates
+   * are disabled by your administrator", which is true and useless. hMail
+   * publishes its releases on a public repository, so the box says which
+   * version is installed and offers to look for a newer one there.
+   */
+  renderPrefs(doc) {
+    try {
+      const box = doc.getElementById("updateBox") ||
+                  doc.getElementById("updateApp");
+      if (!box || doc.getElementById("hmail-update-box")) {
+        return;
+      }
+      // Everything Thunderbird put in the box refers to a mechanism that is
+      // not in this build.
+      for (const id of ["updateDeck", "updateBox", "updateAllowDescription",
+                        "updateSettingsContainer", "updateRadioGroup",
+                        "showUpdateHistory"]) {
+        const node = doc.getElementById(id);
+        if (node && node !== box) {
+          node.hidden = true;
+        }
+      }
+      for (const node of box.children) {
+        node.hidden = true;
+      }
+
+      const NS = "http://www.w3.org/1999/xhtml";
+      const el = (tag, cls, text) => {
+        const n = doc.createElementNS(NS, tag);
+        if (cls) {
+          n.className = cls;
+        }
+        if (text !== undefined) {
+          n.textContent = text;
+        }
+        return n;
+      };
+
+      const wrap = el("div", "hmail-update-box");
+      wrap.id = "hmail-update-box";
+
+      const line = el("div", "hmail-update-line",
+                      `Phiên bản đang dùng: hMail Desktop ${this.version()}`);
+      wrap.appendChild(line);
+
+      const status = el("div", "hmail-update-status", "");
+      status.id = "hmail-update-status";
+
+      const row = el("div", "hmail-update-actions");
+      const check = el("button", "hmail-update-button", "Kiểm tra cập nhật");
+      check.addEventListener("click", () => {
+        check.disabled = true;
+        status.textContent = "Đang hỏi trang phát hành…";
+        this.latest().then(info => {
+          if (!info) {
+            status.textContent =
+              "Không kết nối được tới trang phát hành. Bạn có thể mở trực " +
+              "tiếp bằng nút bên cạnh.";
+          } else if (Services.vc.compare(info.version, this.version()) <= 0) {
+            status.textContent =
+              `Bạn đang dùng phiên bản mới nhất (${this.version()}).`;
+          } else {
+            status.textContent =
+              `Đã có phiên bản ${info.version}` +
+              (info.name ? ` — ${info.name}` : "") +
+              ". Bấm nút Mở trang tải để lấy bản mới.";
+          }
+        }).finally(() => {
+          check.disabled = false;
+        });
+      });
+
+      const open = el("button", "hmail-update-button", "Mở trang tải");
+      open.addEventListener("click", () => this.openPage(doc.defaultView));
+
+      row.append(check, open);
+      wrap.append(row, status);
+
+      const note = el("div", "hmail-update-note",
+        "hMail không dùng cơ chế cập nhật của Mozilla — bộ cập nhật đó đã " +
+        "được gỡ khỏi bản dựng này để một bản cài hMail không bao giờ bị " +
+        "thay bằng Thunderbird. Bản phát hành của hMail nằm công khai trên " +
+        "kho mã nguồn, kèm mã băm để bạn đối chiếu.");
+      wrap.appendChild(note);
+
+      box.appendChild(wrap);
+    } catch (e) {
+      Cu.reportError("hMail update prefs failed: " + e);
+    }
+  },
+
+  /** The newest published release, or null if the repository cannot be read. */
+  async latest() {
+    try {
+      const res = await fetch(this.API, {
+        headers: { Accept: "application/vnd.github+json" },
+      });
+      if (!res.ok) {
+        return null;
+      }
+      const body = await res.json();
+      const version = String(body.tag_name || "").replace(/^v/, "");
+      return version ? { version, name: String(body.name || "") } : null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  openPage(win) {
+    try {
+      win.openLinkExternally(this.PAGE);
+    } catch (e) {
+      Cc["@mozilla.org/uriloader/external-protocol-service;1"]
+        .getService(Ci.nsIExternalProtocolService)
+        .loadURI(Services.io.newURI(this.PAGE));
+    }
+  },
 };

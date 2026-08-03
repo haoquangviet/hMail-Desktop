@@ -537,7 +537,8 @@ tr[data-properties~="unread"] .subject {
     gap: 0;
     padding-inline: 8px;
     padding-block: 4px 0;
-    overflow-x: auto;
+    /* Never a scrollbar: commands that do not fit go to the "···" menu. */
+    overflow-x: hidden;
 }
 
 .hmail-ribbon-pane.selected {
@@ -3402,10 +3403,10 @@ unified-toolbar-customization {
     display: none !important;
 }
 
-/* The ribbon meets the rounded window edge on the left. */
+/* The ribbon is a surface of its own, so it gets a surface's corners. */
 #hmail-ribbon {
-    border-start-start-radius: 3px;
-    border-end-start-radius: 3px;
+    border-radius: 10px;
+    overflow: hidden;
 }
 
 /* Only the row that is actually selected carries the marker. An account row
@@ -3437,4 +3438,109 @@ unified-toolbar-customization {
 
 .hmail-filter-rule select[hidden] {
     display: none !important;
+}
+
+/* A warning says what to do about it, and gives the buttons to do it. */
+.hmail-warning-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 4px 3px 2px;
+}
+
+.hmail-warning-action {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    padding: 4px 10px !important;
+    border: 1px solid color-mix(in srgb, CanvasText 22%, transparent) !important;
+    border-radius: 3px !important;
+    background-color: Canvas !important;
+    color: inherit !important;
+    font: inherit !important;
+    font-size: 0.92em !important;
+    cursor: pointer !important;
+    box-shadow: 0 1px 2px color-mix(in srgb, CanvasText 10%, transparent);
+}
+
+.hmail-warning-action:hover {
+    background-color: color-mix(in srgb, CanvasText 7%, Canvas) !important;
+    border-color: color-mix(in srgb, CanvasText 35%, transparent) !important;
+}
+
+/* The card layout paints its selection from these variables and from
+   :focus-within, which beat the plain row rules written earlier. A message
+   opened inside a thread came out solid accent with dark text on it. */
+#threadTree,
+#threadTree tbody,
+#threadTree [is="tree-view-table-body"] {
+    --listbox-selected-bg: color-mix(in srgb, var(--hmail-accent) 12%, Canvas) !important;
+    --listbox-focused-selected-bg: color-mix(in srgb, var(--hmail-accent) 16%, Canvas) !important;
+    --listbox-selected-color: CanvasText !important;
+    --listbox-focused-selected-color: CanvasText !important;
+    --selected-item-color: color-mix(in srgb, var(--hmail-accent) 12%, Canvas) !important;
+    --selected-item-text-color: CanvasText !important;
+}
+
+#threadTree tr.selected,
+#threadTree tr.selected:focus-within,
+#threadTree tr.card-layout.selected,
+#threadTree tr.card-layout.selected:focus-within,
+#threadTree tr.table-layout.selected,
+#threadTree tr.table-layout.selected:focus-within {
+    background-color: color-mix(in srgb, var(--hmail-accent) 14%, Canvas) !important;
+    background-image: none !important;
+    color: CanvasText !important;
+}
+
+#threadTree tr.selected .card-container,
+#threadTree tr.selected:focus-within .card-container {
+    background-color: transparent !important;
+    color: CanvasText !important;
+}
+
+/* =====================================================
+   SKELETON — the message pane while a message loads.
+   Clicking through a thread gave no sign anything was happening; on a slow
+   IMAP folder the previous message just sat there.
+   ===================================================== */
+#messagePane.hmail-loading::after,
+#messageBrowser.hmail-loading::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    background-color: Canvas;
+    background-image:
+        linear-gradient(color-mix(in srgb, CanvasText 9%, transparent) 0 100%),
+        linear-gradient(color-mix(in srgb, CanvasText 9%, transparent) 0 100%),
+        linear-gradient(color-mix(in srgb, CanvasText 7%, transparent) 0 100%),
+        linear-gradient(color-mix(in srgb, CanvasText 7%, transparent) 0 100%),
+        linear-gradient(color-mix(in srgb, CanvasText 7%, transparent) 0 100%),
+        linear-gradient(color-mix(in srgb, CanvasText 7%, transparent) 0 100%);
+    background-repeat: no-repeat;
+    background-size:
+        44px 44px,     /* avatar */
+        260px 16px,    /* sender */
+        420px 13px,    /* subject */
+        92% 11px,
+        86% 11px,
+        70% 11px;
+    background-position:
+        20px 20px,
+        76px 24px,
+        20px 84px,
+        20px 124px,
+        20px 148px,
+        20px 172px;
+    animation: hmail-skeleton 1.1s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes hmail-skeleton {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.45; }
+}
+
+#messagePane, #messageBrowser {
+    position: relative;
 }

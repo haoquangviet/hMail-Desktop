@@ -328,7 +328,124 @@ var hMailInsight = {
     }
     bar.appendChild(list);
 
+    const actions = this.actions(win, doc, el, result, bar, key);
+    if (actions) {
+      bar.appendChild(actions);
+    }
+
     host.insertBefore(bar, host.firstChild);
+  },
+
+  /**
+   * A warning that only says what is wrong leaves the reader to go and find
+   * the command themselves. Each warning carries the buttons for what one
+   * would actually do about it, and no more than that — a row of eight
+   * buttons is as useless as none.
+   */
+  actions(win, doc, el, result, bar, key) {
+    const hdr = this.selected(win);
+    if (!hdr) {
+      return null;
+    }
+    const row = el("div", "hmail-warning-actions");
+    const add = (label, title, fn) => {
+      const b = el("button", "hmail-warning-action", label);
+      if (title) {
+        b.title = title;
+      }
+      b.addEventListener("click", () => {
+        try {
+          fn();
+        } catch (e) {
+          Cu.reportError("hMail warning action failed: " + e);
+        }
+      });
+      row.appendChild(b);
+    };
+
+    const verdict = result.facts?.verdict || {};
+    const junked = hdr.getStringProperty("junkscore") === "100";
+
+    if (verdict.spam || verdict.virus || result.level === "danger") {
+      if (!junked) {
+        add("Chuyển vào Thư rác",
+            "Đánh dấu thư rác và chuyển vào thư mục rác của tài khoản này",
+            () => {
+              this.junk(hdr, true);
+              bar.remove();
+            });
+      } else {
+        add("Không phải thư rác", "Bỏ đánh dấu thư rác", () => {
+          this.junk(hdr, false);
+          bar.remove();
+        });
+      }
+    }
+
+    // A lookalike domain or a failed check is about the sender, not the
+    // message: the useful move is to stop hearing from them.
+    if (result.level === "danger" || result.money) {
+      add("Chặn người gửi",
+          "Thêm địa chỉ này vào bộ lọc để thư sau tự vào Thùng rác",
+          () => this.blockSender(win, hdr));
+    }
+
+    if (result.bounce || verdict.action || verdict.spam || verdict.virus) {
+      add("Thiết lập lọc theo máy chủ",
+          "Chọn hMail phải làm gì với thư mà máy chủ đã đánh dấu",
+          () => win.hMailServerFilter?.openTab(win));
+    }
+
+    add("Xem đầu thư", "Mở toàn bộ phần đầu thư để tự kiểm tra",
+        () => this.showSource(win, hdr));
+
+    add("Hỏi trợ lý", "Mở bảng trợ lý cho thư này",
+        () => win.hMailAI?.toggle(win));
+
+    return row.children.length ? row : null;
+  },
+
+  junk(hdr, isJunk) {
+    hdr.setStringProperty("junkscore", isJunk ? "100" : "0");
+    hdr.setStringProperty("junkscoreorigin", "user");
+    if (!isJunk) {
+      return;
+    }
+    try {
+      const junkFolder =
+        hdr.folder.server.rootFolder.getFolderWithFlags(
+          Ci.nsMsgFolderFlags.Junk);
+      if (junkFolder && junkFolder.URI !== hdr.folder.URI) {
+        MailServices.copy.copyMessages(
+          hdr.folder, [hdr], junkFolder, true, null, null, false);
+      }
+    } catch (e) {
+      Cu.reportError("hMail: không chuyển được vào thư rác: " + e);
+    }
+  },
+
+  /** Open the filter editor with the sender filled in, rather than guessing. */
+  blockSender(win, hdr) {
+    try {
+      const address = this.address(hdr.mime2DecodedAuthor || hdr.author || "");
+      const server = hdr.folder.server;
+      win.MsgFilters(address, server);
+    } catch (e) {
+      Cu.reportError("hMail: không mở được bộ lọc: " + e);
+    }
+  },
+
+  showSource(win, hdr) {
+    try {
+      win.MsgViewPageSource?.() ||
+        win.goDoCommand?.("cmd_viewPageSource");
+    } catch (e) {
+      try {
+        const uri = hdr.folder.getUriForMsg(hdr);
+        win.openDialog("chrome://messenger/content/viewSource.xhtml",
+                       "_blank", "all,dialog=no", { URL: uri });
+      } catch (e2) {}
+    }
   },
 
   /** Raw RFC 5322 text of a message. */

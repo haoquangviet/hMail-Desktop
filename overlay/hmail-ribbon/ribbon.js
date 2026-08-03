@@ -629,9 +629,19 @@ var hMailRibbon = {
     }
     overflow.hidden = true;
 
+    // What actually has to fit: the groups, the "···" button, and the pinned
+    // commands, which never move. Measuring scrollWidth is not enough — the
+    // pinned box carries an auto margin that eats the slack and hides the
+    // overflow from the measurement.
+    const pinned = pane.querySelector(".hmail-ribbon-pinned");
+    const budget = () =>
+      pane.clientWidth - (pinned?.getBoundingClientRect().width || 0) - 40;
+    const used = () => groups.reduce(
+      (sum, g) => sum + (g.hidden ? 0 : g.getBoundingClientRect().width), 0);
+
     // Trim from the end until the row fits; the first group is always kept.
     for (let i = groups.length - 1; i >= 1; i--) {
-      if (pane.scrollWidth <= pane.clientWidth + 1) {
+      if (used() <= budget()) {
         break;
       }
       groups[i].hidden = true;
@@ -679,6 +689,8 @@ var hMailRibbon = {
       p.classList.toggle("selected", p.dataset.tab === tabId);
     }
     root.classList.remove("collapsed");
+    doc.defaultView?.setTimeout(
+      () => this.updateOverflow(doc.defaultView, doc), 0);
     if (remember) {
       try {
         Services.prefs.setCharPref(this.ACTIVE_TAB_PREF, tabId);
