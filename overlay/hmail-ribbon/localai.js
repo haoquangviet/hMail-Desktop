@@ -62,34 +62,51 @@ var hMailLocalAI = {
    * laptop will not write like Gemini; it summarises and drafts short replies
    * in Vietnamese acceptably, and it never sends the message anywhere.
    */
+  /**
+   * Models that write, as opposed to the ones above that only turn text into
+   * vectors. A vector model cannot answer a question or draft a reply, so
+   * running the assistant on this machine needs one of these as well.
+   *
+   * The publisher matters as much as the model. Gecko refuses to fetch a
+   * model whose URL is not on Mozilla's allow-list (the
+   * ml-model-allow-deny-list collection in Remote Settings), and the refusal
+   * surfaces from deep inside the runtime as "Backend error: [object
+   * Object]", which says nothing. Only onnx-community, Xenova, Mozilla,
+   * firefoxrecap and model-hub.mozilla.org are permitted — which is why
+   * SmolLM2, published under HuggingFaceTB, could never have worked.
+   */
   CHAT_MODELS: [
-    {
-      id: "HuggingFaceTB/SmolLM2-360M-Instruct",
-      // q8, not q4f16: fp16 activations need WebGPU, and hMail runs these on
-      // the WASM backend, where asking for fp16 fails inside the runtime with
-      // an error that says nothing useful.
-      dtype: "q8",
-      label: "SmolLM2 360M — nhẹ nhất",
-      size: "khoảng 360 MB",
-      note: "Tải nhanh, chạy được trên máy yếu. Câu trả lời ngắn và đơn giản.",
-    },
     {
       id: "onnx-community/Qwen2.5-0.5B-Instruct",
       dtype: "q8",
       label: "Qwen 2.5 — 0.5B",
       size: "khoảng 510 MB",
-      note: "Cân bằng giữa dung lượng và chất lượng. Viết tiếng Việt khá hơn " +
-            "hẳn SmolLM2. Cần khoảng 3 GB RAM trống.",
+      note: "Nhẹ nhất trong số mô hình được phép tải. Tóm tắt và soạn nháp " +
+            "được. Cần khoảng 3 GB RAM trống.",
     },
     {
       id: "onnx-community/Qwen2.5-1.5B-Instruct",
       dtype: "q8",
       label: "Qwen 2.5 — 1.5B",
       size: "khoảng 1,6 GB",
-      note: "Viết tiếng Việt tự nhiên nhất trong ba lựa chọn. Cần khoảng " +
-            "6 GB RAM trống và máy đủ khoẻ.",
+      note: "Viết tiếng Việt tự nhiên hơn hẳn. Cần khoảng 6 GB RAM trống và " +
+            "máy đủ khoẻ.",
     },
   ],
+
+  /**
+   * The publishers Gecko will fetch a model from. Kept here as well so hMail
+   * can say "this model is not allowed" before starting a download, instead
+   * of letting it fail several layers down with an unreadable message.
+   */
+  ALLOWED_PUBLISHERS: [
+    "onnx-community/", "Xenova/", "Mozilla/", "firefoxrecap/",
+  ],
+
+  allowed(modelId) {
+    return this.ALLOWED_PUBLISHERS.some(p => String(modelId).startsWith(p));
+  },
+
 
 
 
@@ -281,8 +298,8 @@ var hMailLocalAI = {
   // ------------------------------------------------------- trả lời tại chỗ
 
   chatModel() {
-    const id = this.pref(this.CHAT_MODEL_PREF, this.CHAT_MODELS[1].id);
-    return this.CHAT_MODELS.find(m => m.id === id) || this.CHAT_MODELS[1];
+    const id = this.pref(this.CHAT_MODEL_PREF, this.CHAT_MODELS[0].id);
+    return this.CHAT_MODELS.find(m => m.id === id) || this.CHAT_MODELS[0];
   },
 
   chatReady() {
@@ -320,6 +337,13 @@ ${e?.stack || ""}`);
   },
 
   async startChatEngine(onProgress) {
+    const wanted = this.chatModel();
+    if (!this.allowed(wanted.id)) {
+      throw new Error(
+        `Mozilla chưa cho phép tải mô hình từ "${wanted.id.split("/")[0]}". ` +
+        "Bộ chạy chỉ nhận mô hình của onnx-community, Xenova, Mozilla và " +
+        "firefoxrecap.");
+    }
     // Whatever happens, do not keep a half-built engine: the next attempt
     // would call postMessage on a port that is null and report that, which
     // says nothing about why the first attempt failed.
