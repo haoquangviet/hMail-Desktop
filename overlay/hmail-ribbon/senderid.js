@@ -48,6 +48,7 @@ var hMailSenderId = {
 
   cache: null,
   pending: new Set(),
+  photos: new Map(),
 
   // ------------------------------------------------------------------ setup
 
@@ -262,13 +263,30 @@ var hMailSenderId = {
     }
   },
 
+  /**
+   * The address book photo, remembered.
+   *
+   * The thread list only builds rows for what is on screen — a folder with
+   * thirty thousand messages still has about twenty <tr> elements — but each
+   * of those is refilled on every scroll tick, and cardForEmailAddress walks
+   * every address book each time it is asked. Scrolling with a finger on the
+   * wheel turned that into hundreds of lookups a second. The answer changes
+   * only when the user edits a contact, so it is worth keeping.
+   */
   bookPhoto(address) {
-    try {
-      const card = MailServices.ab.cardForEmailAddress(address);
-      return card?.photoURL || "";
-    } catch (e) {
-      return "";
+    if (this.photos.has(address)) {
+      return this.photos.get(address);
     }
+    let photo = "";
+    try {
+      photo = MailServices.ab.cardForEmailAddress(address)?.photoURL || "";
+    } catch (e) {}
+    // Bounded: a very large mailbox would otherwise grow this without end.
+    if (this.photos.size > 4000) {
+      this.photos.clear();
+    }
+    this.photos.set(address, photo);
+    return photo;
   },
 
   // ---------------------------------------------------------------- trust
