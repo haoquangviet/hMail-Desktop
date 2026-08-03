@@ -3320,16 +3320,32 @@ unified-toolbar-customization {
     50%      { opacity: 0.25; }
 }
 
+/* A circle needs a square box. This had padding of 2px above and below but
+   6px either side, so "border-radius: 50%" drew an ellipse — the button
+   looked squashed, and only on hover, which is when the background makes the
+   shape visible. Fixed size, and the platform's close icon, the same as the
+   close button on the warning bar. */
 .hmail-import-chip-btn {
     appearance: none !important;
     -moz-appearance: none !important;
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    padding: 0 !important;
     border: none !important;
-    background: transparent !important;
-    color: inherit !important;
-    font: inherit !important;
-    cursor: pointer !important;
-    padding: 2px 6px !important;
     border-radius: 50% !important;
+    background-color: transparent !important;
+    background-image: url("chrome://global/skin/icons/close.svg") !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: 11px 11px !important;
+    -moz-context-properties: fill;
+    fill: currentColor;
+    color: inherit !important;
+    font-size: 0 !important;
+    text-indent: -9999px;
+    overflow: hidden;
+    cursor: pointer !important;
     opacity: 0.6;
 }
 
