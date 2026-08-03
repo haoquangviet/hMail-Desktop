@@ -268,6 +268,13 @@ var hMailAI = {
 
   /** Local runners usually need no key; remote OpenAI-compatible ones do. */
   needsKey() {
+    // The on-device model has no service behind it and therefore no key.
+    // Without this line the check said "provider is not openai, so it needs a
+    // key", and every local request died with "chưa nhập API key" before it
+    // reached the model.
+    if (this.provider() === "local") {
+      return false;
+    }
     return this.provider() !== "openai" ||
            !/^https?:\/\/(127\.0\.0\.1|localhost)/.test(this.endpoint());
   },
@@ -508,12 +515,14 @@ var hMailAI = {
    * use.
    */
   async call(contents, { tools } = {}) {
+    // Answered here, before any talk of keys: nothing about the on-device
+    // model involves an account.
+    if (this.provider() === "local") {
+      return this.callLocal(contents);
+    }
     const key = this.apiKey();
     if (this.needsKey() && !key) {
       throw Object.assign(new Error("chưa có API key"), { code: "no_key" });
-    }
-    if (this.provider() === "local") {
-      return this.callLocal(contents);
     }
     return this.provider() === "openai"
       ? this.callOpenAICompatible(contents, tools, key)

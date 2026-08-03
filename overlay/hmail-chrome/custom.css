@@ -3847,3 +3847,17 @@ unified-toolbar-customization {
     height: 8px;
     margin-block: 2px 6px;
 }
+
+/* The on-device AI page: same rule as the import page — the backdrop is a
+   backdrop, and white belongs on the cards and controls that sit on it. */
+.hmail-localai-page {
+    background-color: color-mix(in srgb, CanvasText 4%, Canvas) !important;
+}
+
+.hmail-localai-model,
+.hmail-localai-page .hmail-ai-field,
+.hmail-localai-page select,
+.hmail-localai-page input:not([type="radio"]),
+.hmail-localai-results > * {
+    background-color: Canvas !important;
+}
