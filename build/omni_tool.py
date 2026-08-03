@@ -382,6 +382,9 @@ SUPPORT_URL_FILES = {
     "chrome/messenger/content/messenger/aboutImport.xhtml",
     "chrome/messenger/content/messenger/am-e2e.xhtml",
     "chrome/messenger/content/messenger/aboutRights.xhtml",
+    # The account hub footer: Support, Release notes and Donate, all three
+    # pointing at Mozilla from inside a dialog headed "hMail Desktop".
+    "chrome/messenger/content/messenger/messenger.xhtml",
 }
 
 HMAIL_WIKI = "https://github.com/haoquangviet/hMail-Desktop/wiki/"

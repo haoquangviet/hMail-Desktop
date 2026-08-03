@@ -139,6 +139,19 @@ var hMailRibbon = {
           ],
         },
         {
+          label: "Tài khoản",
+          buttons: [
+            // Adding a mailbox was reachable only from Settings, three levels
+            // in. It is the first thing a new user needs and the thing an
+            // existing one comes back for whenever they take on another
+            // address, so it belongs on the tab about getting mail.
+            { id: "acct-new", label: "Tài khoản\nmới", icon: "new-mail",
+              size: "large", fn: win => hMailRibbon.newAccount(win) },
+            { id: "acct-settings", label: "Cài đặt tài khoản", icon: "settings",
+              fn: win => win.MsgAccountManager(null) },
+          ],
+        },
+        {
           label: "Máy chủ",
           buttons: [
             { id: "offline", label: "Chế độ ngoại tuyến", icon: "more",
@@ -358,6 +371,27 @@ var hMailRibbon = {
       ],
     },
   ],
+
+  /**
+   * Add a mailbox. Thunderbird 140 has two front ends for this: the newer
+   * account hub dialog, behind a preference, and the older setup tab. Try the
+   * hub, fall back to the tab — the tab is what the application itself opens
+   * on a profile with no accounts, so it is always there.
+   */
+  newAccount(win) {
+    try {
+      if (typeof win.openAccountHub === "function") {
+        win.openAccountHub("MAIL");
+        return;
+      }
+    } catch (e) {}
+    try {
+      win.document.getElementById("tabmail")
+        .openTab("contentTab", { url: "about:accountsetup" });
+    } catch (e) {
+      Cu.reportError("hMail: không mở được trang thêm tài khoản: " + e);
+    }
+  },
 
   init(win) {
     try {

@@ -526,7 +526,7 @@ Object.assign(hMailAI, {
     return box;
   },
 
-  addTurn(win, role, text) {
+  addTurn(win, role, text, serviceId = null) {
     const doc = win.document;
     const log = doc.getElementById("hmail-ai-log");
     if (!log) {
@@ -534,8 +534,23 @@ Object.assign(hMailAI, {
     }
     const turn = this.el(doc, "div", `hmail-ai-turn ${role}`);
     const label = { assistant: "Trợ lý", user: "Bạn", action: "Hành động" };
+
+    const head = this.el(doc, "div", "hmail-ai-role", label[role] || role);
+    // Say who answered. With several providers configured, and a
+    // conversation that can move between them, "Trợ lý" alone does not tell
+    // the reader whose words these are — which matters when one of them runs
+    // on this machine and another sends the mail abroad.
+    if (role === "assistant") {
+      const def = this.serviceDef(serviceId || this.service());
+      const badge = this.el(doc, "span", "hmail-ai-by");
+      badge.dataset.service = def.id;
+      badge.append(this.el(doc, "span", "hmail-ai-by-dot"),
+                   this.el(doc, "span", "hmail-ai-by-name", def.label));
+      head.appendChild(badge);
+    }
+
     turn.append(
-      this.el(doc, "div", "hmail-ai-role", label[role] || role),
+      head,
       role === "assistant"
         ? this.renderMarkdown(doc, text)
         : this.el(doc, "div", "hmail-ai-text", text)
@@ -568,7 +583,7 @@ Object.assign(hMailAI, {
 
     const convo = await this.conversationFor(hdr);
     for (const t of convo.turns) {
-      this.addTurn(win, t.role, t.text);
+      this.addTurn(win, t.role, t.text, t.service || null);
     }
     this.notify(win, convo.turns.length
       ? `${convo.turns.length} lượt trao đổi về thư này`

@@ -4048,3 +4048,67 @@ unified-toolbar-customization {
 .hmail-flow-log-what {
     color: var(--hmail-accent);
 }
+
+/* Who answered. A conversation can move between providers, and one of them
+   runs on this machine while another sends the mail abroad — so the name is
+   worth the six pixels. */
+.hmail-ai-role {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.hmail-ai-by {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-inline-start: auto;
+    padding: 1px 7px 1px 5px;
+    border-radius: 999px;
+    background-color: color-mix(in srgb, CanvasText 7%, transparent);
+    font-size: 0.78em;
+    font-weight: 400;
+    opacity: 0.85;
+    white-space: nowrap;
+}
+
+.hmail-ai-by-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background-color: #7a7a7a;
+    flex: 0 0 auto;
+}
+
+/* Each provider its own colour, so the answer is placed at a glance. */
+.hmail-ai-by[data-service="gemini"]     .hmail-ai-by-dot { background-color: #1a73e8; }
+.hmail-ai-by[data-service="openai"]     .hmail-ai-by-dot { background-color: #10a37f; }
+.hmail-ai-by[data-service="deepseek"]   .hmail-ai-by-dot { background-color: #4d6bfe; }
+.hmail-ai-by[data-service="groq"]       .hmail-ai-by-dot { background-color: #f55036; }
+.hmail-ai-by[data-service="openrouter"] .hmail-ai-by-dot { background-color: #6467f2; }
+.hmail-ai-by[data-service="ollama"]     .hmail-ai-by-dot { background-color: #444444; }
+.hmail-ai-by[data-service="lmstudio"]   .hmail-ai-by-dot { background-color: #8b5cf6; }
+.hmail-ai-by[data-service="foundry"]    .hmail-ai-by-dot { background-color: #0078d4; }
+
+/* Green for the one that never sends the mail anywhere. */
+.hmail-ai-by[data-service="local"] .hmail-ai-by-dot {
+    background-color: #348d00;
+}
+
+.hmail-ai-by[data-service="local"] {
+    background-color: color-mix(in srgb, #348d00 12%, transparent);
+}
+
+/* =====================================================
+   ACCOUNT HUB FOOTER
+
+   The dialog is headed "hMail Desktop" and then offers Support, Release
+   notes and Donate — all three pointing at Mozilla. Donations to Mozilla
+   from inside hMail were removed everywhere else and this was the one place
+   left. Support and release notes stay, redirected to hMail's own pages by
+   the omni patch; the donation link goes.
+   ===================================================== */
+.hub-footer .footer-links li:has(> a[data-l10n-id="account-hub-donate"]),
+#accountHubFooter .footer-links li:has(> a[data-l10n-id="account-hub-donate"]) {
+    display: none !important;
+}

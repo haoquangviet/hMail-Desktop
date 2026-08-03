@@ -517,7 +517,15 @@ var hMailAI = {
 
   async remember(hdr, role, text) {
     const convo = await this.conversationFor(hdr);
-    convo.turns.push({ role, text, at: Date.now() });
+    // Which service produced this. A conversation can span providers — a
+    // question asked of Gemini, the next one of the on-device model — and
+    // without this the transcript reads as one voice.
+    convo.turns.push({
+      role,
+      text,
+      at: Date.now(),
+      service: role === "assistant" ? this.service() : undefined,
+    });
     convo.updated = Date.now();
     if (convo.turns.length > this.MAX_HISTORY_MESSAGES) {
       convo.turns = convo.turns.slice(-this.MAX_HISTORY_MESSAGES);
