@@ -2236,10 +2236,11 @@ select.hmail-ai-field,
 /* --- what a bounce means, in plain words --- */
 
 .hmail-ai-bounce {
-    border-radius: 10px;
+    border-radius: 3px;
     padding: 10px 12px;
-    border-inline-start: 4px solid #B42318;
+    border: 1px solid color-mix(in srgb, #B42318 35%, transparent);
     background-color: color-mix(in srgb, #B42318 8%, var(--hmail-ai-surface));
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--hmail-ai-ink) 10%, transparent);
     display: flex;
     flex-direction: column;
     gap: 5px;
@@ -2247,7 +2248,7 @@ select.hmail-ai-field,
 }
 
 .hmail-ai-bounce.temporary {
-    border-inline-start-color: #B45309;
+    border-color: color-mix(in srgb, #B45309 35%, transparent);
     background-color: color-mix(in srgb, #B45309 8%, var(--hmail-ai-surface));
 }
 
@@ -2287,22 +2288,37 @@ select.hmail-ai-field,
 
 /* --- the same reading, in the assistant panel --- */
 
+/* Styled as one of hMail's own information bars, not as a chat bubble: the
+   same pale accent wash, a hairline border, a 3px radius and a shadow. The
+   thick coloured edge and the 12px radius made this block read as if it came
+   from a different application; the level now shows in the heading colour. */
 .hmail-ai-insight {
-    border: 1px solid var(--hmail-ai-line);
-    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--hmail-accent) 22%, transparent);
+    border-radius: 3px;
     padding: 12px 14px;
-    background-color: var(--hmail-ai-sunk);
+    background-color: color-mix(in srgb, var(--hmail-accent) 6%, Canvas);
+    box-shadow: 0 1px 3px color-mix(in srgb, CanvasText 12%, transparent);
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
 
 .hmail-ai-insight.warn {
-    border-inline-start: 4px solid #B45309;
+    border-color: color-mix(in srgb, #B45309 30%, transparent);
+    background-color: color-mix(in srgb, #B45309 6%, Canvas);
 }
 
 .hmail-ai-insight.danger {
-    border-inline-start: 4px solid #B42318;
+    border-color: color-mix(in srgb, #B42318 30%, transparent);
+    background-color: color-mix(in srgb, #B42318 6%, Canvas);
+}
+
+.hmail-ai-insight.warn .hmail-ai-insight-head {
+    color: #B45309;
+}
+
+.hmail-ai-insight.danger .hmail-ai-insight-head {
+    color: #B42318;
 }
 
 .hmail-ai-insight-head {
@@ -3292,4 +3308,51 @@ unified-toolbar-customization {
 
 @keyframes hmail-spin {
     to { transform: rotate(360deg); }
+}
+
+
+/* =====================================================
+   MESSAGE LIST — selected row must stay readable.
+
+   The base theme paints the selected row with the full accent while leaving
+   the text at its normal dark colour, so the subject sank into the blue.
+   Outlook fills the row with a wash of the accent instead and keeps the text
+   as it was; only the current-row marker needs to be strong.
+   ===================================================== */
+#threadTree tr[selected],
+#threadTree tr[data-properties~="selected"],
+#threadTree tr.selected,
+#threadTree:focus tr[selected],
+#threadTree:focus-within tr[selected] {
+    background-color: color-mix(in srgb, var(--hmail-accent) 12%, Canvas) !important;
+    color: CanvasText !important;
+}
+
+#threadTree tr[selected] .card-container,
+#threadTree tr[data-properties~="selected"] .card-container,
+#threadTree:focus tr[selected] .card-container,
+#threadTree:focus-within tr[selected] .card-container {
+    background-color: transparent !important;
+    color: CanvasText !important;
+}
+
+/* Every line inside the row follows the row, including the parts the theme
+   coloured separately. */
+#threadTree tr[selected] .subject,
+#threadTree tr[selected] .sender,
+#threadTree tr[selected] .date,
+#threadTree tr[selected] .correspondent,
+#threadTree tr[selected] .tag-icon,
+#threadTree:focus tr[selected] .subject,
+#threadTree:focus tr[selected] .sender,
+#threadTree:focus tr[selected] .date,
+#threadTree:focus tr[selected] .correspondent {
+    color: inherit !important;
+}
+
+/* The row the keyboard is on keeps a visible marker, since the fill alone is
+   now too soft to tell "current" from "also selected". */
+#threadTree tr[data-properties~="current"] .card-container,
+#threadTree tr.current .card-container {
+    box-shadow: inset 3px 0 0 var(--hmail-accent) !important;
 }

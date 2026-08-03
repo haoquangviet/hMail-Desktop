@@ -898,10 +898,24 @@ var hMailInsight = {
 
   /**
    * Named and numeric entities alike. Vietnamese mail written in a web editor
-   * arrives full of them, and a list of four was not enough — "&agrave;" left
-   * in the text is as unreadable as a broken charset.
+   * arrives full of them — "CẢNH B&Aacute;O" instead of "CẢNH BÁO" — so the
+   * parser does the work: hand-keeping a table of the several hundred HTML
+   * names is exactly the kind of list that is always missing the one entity
+   * in front of you. The short table below is only the fallback.
    */
   decodeEntities(text) {
+    if (!text.includes("&")) {
+      return text;
+    }
+    try {
+      const doc = new DOMParser().parseFromString(
+        `<!doctype html><body>${text.replace(/</g, "&lt;")}`, "text/html");
+      const decoded = doc.body?.textContent;
+      if (decoded) {
+        return decoded;
+      }
+    } catch (e) {}
+
     return text.replace(/&(#x?[0-9a-f]+|[a-z][a-z0-9]{1,31});/gi,
       (match, name) => {
         if (name[0] === "#") {
