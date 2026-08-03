@@ -65,28 +65,32 @@ var hMailLocalAI = {
   CHAT_MODELS: [
     {
       id: "HuggingFaceTB/SmolLM2-360M-Instruct",
-      dtype: "q4f16",
+      // q8, not q4f16: fp16 activations need WebGPU, and hMail runs these on
+      // the WASM backend, where asking for fp16 fails inside the runtime with
+      // an error that says nothing useful.
+      dtype: "q8",
       label: "SmolLM2 360M — nhẹ nhất",
-      size: "khoảng 270 MB",
+      size: "khoảng 360 MB",
       note: "Tải nhanh, chạy được trên máy yếu. Câu trả lời ngắn và đơn giản.",
     },
     {
       id: "onnx-community/Qwen2.5-0.5B-Instruct",
-      dtype: "q4f16",
+      dtype: "q8",
       label: "Qwen 2.5 — 0.5B",
-      size: "khoảng 480 MB",
+      size: "khoảng 510 MB",
       note: "Cân bằng giữa dung lượng và chất lượng. Viết tiếng Việt khá hơn " +
             "hẳn SmolLM2. Cần khoảng 3 GB RAM trống.",
     },
     {
       id: "onnx-community/Qwen2.5-1.5B-Instruct",
-      dtype: "q4f16",
+      dtype: "q8",
       label: "Qwen 2.5 — 1.5B",
-      size: "khoảng 1,2 GB",
+      size: "khoảng 1,6 GB",
       note: "Viết tiếng Việt tự nhiên nhất trong ba lựa chọn. Cần khoảng " +
             "6 GB RAM trống và máy đủ khoẻ.",
     },
   ],
+
 
 
 
@@ -315,10 +319,19 @@ var hMailLocalAI = {
   },
 
   async startChatEngine(onProgress) {
+    // Whatever happens, do not keep a half-built engine: the next attempt
+    // would call postMessage on a port that is null and report that, which
+    // says nothing about why the first attempt failed.
+    try {
+      await this._chatEngine?.terminate?.();
+    } catch (e) {}
+    this._chatEngine = null;
+
     const { createEngine } = ChromeUtils.importESModule(
       "chrome://global/content/ml/EngineProcess.sys.mjs");
     const model = this.chatModel();
-    this._chatEngine = await createEngine(
+    try {
+      this._chatEngine = await createEngine(
       {
         taskName: "text-generation",
         // featureId comes from a fixed list in EngineProcess.sys.mjs; a name
@@ -344,7 +357,36 @@ var hMailLocalAI = {
           }
         } catch (e) {}
       });
+    } catch (e) {
+      this._chatEngine = null;
+      throw e;
+    }
     return this._chatEngine;
+  },
+
+  /**
+   * The runtime throws objects rather than Errors, so "Backend error:
+   * [object Object]" is what reaches the user unless they are unwrapped.
+   */
+  describe(e) {
+    if (!e) {
+      return "lỗi không rõ";
+    }
+    if (typeof e === "string") {
+      return e;
+    }
+    const parts = [e.message, e.name, e.error, e.reason, e.statusText]
+      .filter(v => typeof v === "string" && v);
+    if (parts.length) {
+      return parts.join(" — ");
+    }
+    try {
+      const json = JSON.stringify(e);
+      if (json && json !== "{}") {
+        return json.slice(0, 300);
+      }
+    } catch (err) {}
+    return String(e);
   },
 
   /**

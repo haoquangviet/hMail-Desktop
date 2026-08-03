@@ -315,7 +315,7 @@ var hMailLocalAIUI = {
       bar.hidden = true;
       Services.prefs.setBoolPref(hMailLocalAI.CHAT_ENABLED_PREF, false);
       this.say(win, "hmail-localai-chat-status",
-        "Không bật được: " + (e.message || e));
+        "Không bật được: " + hMailLocalAI.describe(e));
     } finally {
       const button = doc.getElementById("hmail-localai-chat-activate");
       if (button) {

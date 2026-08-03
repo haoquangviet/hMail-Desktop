@@ -174,6 +174,32 @@ var hMailImport = {
     destRow.appendChild(dest);
     root.appendChild(destRow);
 
+    // --- single files -----------------------------------------------------
+    // A .pst is what you get from an old laptop; a handful of .eml or .msg
+    // files is what you get from a colleague, and hMail could read neither.
+    root.appendChild(el("div", "hmail-import-title2", "Tệp thư rời"));
+    root.appendChild(el("div", "hmail-ai-hint",
+      "Chọn một hoặc nhiều tệp .eml hoặc .msg. Tệp .eml là thư thô, đọc " +
+      "thẳng được. Tệp .msg là định dạng riêng của Outlook — hMail dựng lại " +
+      "thư từ nó, giữ phần đầu thư gốc, nội dung và tệp đính kèm."));
+
+    const fileRow = el("div", "hmail-ai-row");
+    const pickFiles = el("button", "hmail-ai-btn", "Chọn tệp .eml / .msg…");
+    pickFiles.addEventListener("click", () => this.browseFiles(win));
+    const fileDest = el("select", "hmail-ai-field");
+    fileDest.id = "hmail-import-file-dest";
+    for (const folder of this.fileTargets()) {
+      const opt = el("option", null, folder.label);
+      opt.value = folder.uri;
+      fileDest.appendChild(opt);
+    }
+    fileRow.append(pickFiles, fileDest);
+    root.appendChild(fileRow);
+
+    const fileStatus = el("div", "hmail-ai-status", "");
+    fileStatus.id = "hmail-import-file-status";
+    root.appendChild(fileStatus);
+
     const actions = el("div", "hmail-ai-actions");
     const start = el("button", "hmail-ai-btn primary", "Bắt đầu nhập");
     start.id = "hmail-import-start";
@@ -274,6 +300,93 @@ var hMailImport = {
 
   hideChip(win) {
     win.document.getElementById("hmail-import-chip")?.remove();
+  },
+
+  // ------------------------------------------------------ tệp thư rời
+
+  /** Folders a single message can be filed into. */
+  fileTargets() {
+    const list = [];
+    const walk = (folder, depth) => {
+      try {
+        if (folder.canFileMessages) {
+          list.push({
+            uri: folder.URI,
+            label: `${"— ".repeat(depth)}${folder.prettyName}`,
+          });
+        }
+        for (const child of folder.subFolders) {
+          walk(child, depth + 1);
+        }
+      } catch (e) {}
+    };
+    for (const server of MailServices.accounts.allServers) {
+      try {
+        for (const child of server.rootFolder.subFolders) {
+          walk(child, 0);
+        }
+      } catch (e) {}
+    }
+    return list;
+  },
+
+  browseFiles(win) {
+    const picker = Cc["@mozilla.org/filepicker;1"]
+      .createInstance(Ci.nsIFilePicker);
+    picker.init(win.browsingContext, "Chọn tệp thư",
+                Ci.nsIFilePicker.modeOpenMultiple);
+    picker.appendFilter("Tệp thư (*.eml, *.msg)", "*.eml; *.msg");
+    picker.appendFilters(Ci.nsIFilePicker.filterAll);
+    picker.open(result => {
+      if (result !== Ci.nsIFilePicker.returnOK) {
+        return;
+      }
+      const paths = [];
+      for (const file of picker.files) {
+        paths.push(file.QueryInterface(Ci.nsIFile).path);
+      }
+      this.importFiles(win, paths).catch(e =>
+        this.sayFiles(win, "Lỗi: " + (e.message || e)));
+    });
+  },
+
+  sayFiles(win, text) {
+    const node = win.document.getElementById("hmail-import-file-status");
+    if (node) {
+      node.textContent = text;
+    }
+  },
+
+  async importFiles(win, paths) {
+    const uri = win.document.getElementById("hmail-import-file-dest")?.value;
+    const target = uri
+      ? MailServices.folderLookup.getFolderForURL(uri) : null;
+    if (!target) {
+      this.sayFiles(win, "Hãy chọn thư mục để đưa thư vào.");
+      return;
+    }
+
+    let done = 0;
+    let failed = 0;
+    for (const path of paths) {
+      this.sayFiles(win,
+        `Đang nhập ${done + 1}/${paths.length}: ` +
+        path.replace(/\\/g, "/").split("/").pop());
+      try {
+        const rfc822 = /\.msg$/i.test(path)
+          ? hMailMsg.toRfc822(await hMailMsg.read(path))
+          : await hMailMsg.readEml(path);
+        await this.addMessage(target, rfc822, false);
+        done++;
+      } catch (e) {
+        failed++;
+        Cu.reportError(`hMail: không nhập được ${path}: ${e}`);
+      }
+      await new Promise(r => win.setTimeout(r, 0));
+    }
+    this.sayFiles(win,
+      `Xong. Nhập ${done} thư vào "${target.prettyName}"` +
+      (failed ? `, ${failed} tệp không đọc được.` : "."));
   },
 
   destinations() {

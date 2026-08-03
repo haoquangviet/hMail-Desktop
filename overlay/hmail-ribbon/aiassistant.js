@@ -18,6 +18,11 @@
 
 "use strict";
 
+// Two patterns used while reading a message, kept out of the function so
+// the escapes are written once and read easily.
+const BLANK_LINE = /\r?\n\r?\n/;
+const FILENAME = /filename\*?=\s*"?([^";\r\n]+)/gi;
+
 var hMailAI = {
   PANEL_ID: "hmail-ai-panel",
   REALM: "hMail AI",
@@ -334,6 +339,8 @@ var hMailAI = {
         const uri = hdr.folder.getUriForMsg(hdr);
         const service = MailServices.messageServiceFromURI(uri);
         const chunks = [];
+        const LIMIT = 1024 * 1024;
+        let read = 0;
         const listener = {
           QueryInterface: ChromeUtils.generateQI([
             "nsIStreamListener", "nsIRequestObserver",
@@ -343,7 +350,17 @@ var hMailAI = {
             const binary = Cc["@mozilla.org/binaryinputstream;1"]
               .createInstance(Ci.nsIBinaryInputStream);
             binary.setInputStream(stream);
-            chunks.push(binary.readBytes(count));
+            const text = binary.readBytes(count);
+            // A message with a 20 MB attachment is 27 MB of base64, and none
+            // of it is anything the model can read. Reading it all built a
+            // string and a typed array of that size on the main thread, which
+            // is what made the assistant sit still on heavy messages. The
+            // text parts of a message come before its attachments, so a cap
+            // costs nothing that matters.
+            if (read < LIMIT) {
+              chunks.push(text);
+              read += text.length;
+            }
           },
           onStopRequest(request, status) {
             if (Components.isSuccessCode(status)) {
@@ -364,57 +381,46 @@ var hMailAI = {
    * Plain-text rendition of a message, small enough to send: headers the model
    * needs plus a body with markup and quoted history trimmed.
    */
+  /**
+   * The message as text the model can read: headers worth knowing, then the
+   * body with the markup and the attachments gone.
+   *
+   * The extraction is mailinsight's, not a second copy of it. That one picks
+   * the right MIME part, decodes it with the charset the message declares,
+   * and turns entities back into letters — all of which this used to do
+   * worse, and Vietnamese suffered for it.
+   */
   async messageText(hdr) {
     const raw = await this.rawMessage(hdr);
-    const decoded = new TextDecoder("utf-8").decode(
-      Uint8Array.from(raw, c => c.charCodeAt(0) & 0xff));
-
-    const split = decoded.indexOf("\r\n\r\n") >= 0
-      ? decoded.indexOf("\r\n\r\n") + 4
-      : decoded.indexOf("\n\n") + 2;
-    let body = split > 1 ? decoded.slice(split) : decoded;
-
-    // Base64 bodies are unreadable to the model; decode when we can tell.
-    if (/Content-Transfer-Encoding:\s*base64/i.test(decoded.slice(0, split))) {
-      try {
-        body = atob(body.replace(/\s+/g, ""));
-      } catch (e) {}
+    let body = "";
+    try {
+      body = hMailInsight.plainBody(raw);
+    } catch (e) {
+      const split = raw.search(BLANK_LINE);
+      body = split >= 0 ? raw.slice(split + 2) : raw;
     }
-    // Quoted-printable soft breaks and escapes.
-    if (/Content-Transfer-Encoding:\s*quoted-printable/i.test(decoded.slice(0, split))) {
-      body = body.replace(/=\r?\n/g, "")
-                 .replace(/=([0-9A-F]{2})/gi,
-                          (m, h) => String.fromCharCode(parseInt(h, 16)));
-    }
-
-    body = body
-      .replace(/<style[\s\S]*?<\/style>/gi, " ")
-      .replace(/<script[\s\S]*?<\/script>/gi, " ")
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<\/p>/gi, "\n")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/&nbsp;/gi, " ")
-      .replace(/&amp;/gi, "&")
-      .replace(/&lt;/gi, "<")
-      .replace(/&gt;/gi, ">")
-      .replace(/&quot;/gi, '"')
-      .replace(/[ \t]+/g, " ")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
 
     const limit = this.pref("hmail.ai.maxChars", 12000);
     if (body.length > limit) {
       body = body.slice(0, limit) + "\n\n[... nội dung đã được cắt bớt ...]";
     }
 
+    // Attachments are described rather than sent: the model cannot open
+    // them, and their bytes are the reason heavy messages failed at all.
+    const attachments = [...raw.matchAll(FILENAME)]
+      .map(m => m[1].trim()).filter(Boolean).slice(0, 12);
+
     return [
       `Từ: ${hdr.mime2DecodedAuthor || ""}`,
       `Đến: ${hdr.mime2DecodedRecipients || ""}`,
       `Tiêu đề: ${hdr.mime2DecodedSubject || ""}`,
       `Ngày: ${new Date(hdr.date / 1000).toLocaleString()}`,
+      attachments.length
+        ? `Tệp đính kèm: ${[...new Set(attachments)].join(", ")}`
+        : "",
       "",
       body,
-    ].join("\n");
+    ].filter(line => line !== "").join("\n");
   },
 
   // -------------------------------------------------------------- history
