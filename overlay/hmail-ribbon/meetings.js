@@ -1,5 +1,5 @@
 /* hMail Desktop — Họp trực tuyến (Google Meet, Microsoft Teams)
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * CalDAV carries events but not conference links: Meet links exist only in
  * the Google Calendar REST API, Teams links only in Microsoft Graph. Both

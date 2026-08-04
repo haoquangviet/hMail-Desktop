@@ -1,5 +1,5 @@
 /* hMail Desktop — sửa hai chỗ vướng trong Trung tâm tài khoản
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * Two things go wrong for a Vietnamese business mailbox, and both are about
  * assumptions that were true fifteen years ago.

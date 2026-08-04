@@ -1,5 +1,5 @@
 /* hMail Desktop — AI assistant
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * Written for hMail rather than adapted from an add-on. The add-on this
  * replaces was built around popup windows and kept the "which message am I

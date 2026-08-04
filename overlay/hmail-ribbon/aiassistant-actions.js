@@ -1,5 +1,5 @@
 /* hMail Desktop — actions the AI assistant can take
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * The assistant can do things, not just talk: file a message, tag it, mark it,
  * or open a reply with a draft already written. Implemented with the model's

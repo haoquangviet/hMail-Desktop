@@ -1,5 +1,5 @@
 /* hMail Desktop — Lịch, Danh bạ và Tác vụ trên máy chủ
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * Thunderbird can talk CalDAV and CardDAV, but only after someone types the
  * server address, the user name and the password again — three times, once per

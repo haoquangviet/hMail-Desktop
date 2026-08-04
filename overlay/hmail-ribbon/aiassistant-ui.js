@@ -1,5 +1,5 @@
 /* hMail Desktop — AI assistant, panel and automation
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * The chat surface itself, plus the "run a prompt when a message is opened"
  * automation. Loaded after aiassistant.js, which holds the model, message and

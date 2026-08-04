@@ -1,5 +1,5 @@
 /* hMail Desktop — gửi hàng loạt
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * One letter, many recipients, each addressed personally.
  *

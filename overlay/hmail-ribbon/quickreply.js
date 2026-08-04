@@ -1,5 +1,5 @@
 /* hMail Desktop — trả lời nhanh ngay dưới thư
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * Most replies are one or two sentences. Opening a whole composer window for
  * "vâng, em nhận được rồi" is more ceremony than the answer deserves, so the

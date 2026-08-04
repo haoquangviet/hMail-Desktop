@@ -1,5 +1,5 @@
 /* hMail Desktop — dịch thư ngay trong nội dung thư
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * A translation shown in a side panel is a translation you read twice: once
  * to find your place in the original, once to read the sentence. The point of

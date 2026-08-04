@@ -1,5 +1,5 @@
 /* hMail Desktop — Outlook-style ribbon
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * Injected into every mail:3pane window by hmail.cfg (autoconfig runs with
  * full chrome privileges, so no add-on is needed and omni.ja stays untouched).

@@ -1,5 +1,5 @@
 /* hMail Desktop — ribbon cho cửa sổ soạn thư
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * The main window puts every command on a ribbon; the composer should work
  * the same way rather than growing extra buttons on Thunderbird's own

@@ -1,5 +1,5 @@
 /* hMail Desktop — AI chạy trên máy, không cần API key
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * Not every useful thing an assistant does needs a large language model or a
  * paid API. Turning a message into a vector — an embedding — is enough for the

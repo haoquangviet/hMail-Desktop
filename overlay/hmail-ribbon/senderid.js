@@ -1,5 +1,5 @@
 /* hMail Desktop — người gửi trong danh sách thư
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * A card in the message list showed a display name and a subject. A display
  * name is the one part of a message the sender writes themselves, so

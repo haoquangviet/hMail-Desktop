@@ -1,5 +1,5 @@
 /* hMail Desktop — trang quản lý quy tắc tự động
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * One card per rule, read top to bottom as a sentence: when a message
  * arrives that looks like this, do that. The log underneath is the other

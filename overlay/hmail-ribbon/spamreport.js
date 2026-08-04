@@ -1,5 +1,5 @@
 /* hMail Desktop — spam report & quarantine
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * Talks to the HQV spam-report backend so a user can report spam and manage
  * the mail the filter is holding for their address.

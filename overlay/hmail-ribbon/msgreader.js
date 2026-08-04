@@ -1,5 +1,5 @@
 /* hMail Desktop — đọc tệp .msg của Outlook
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * A .msg file is a Compound File Binary container ([MS-CFB]) holding one
  * message as a set of MAPI property streams ([MS-OXMSG]). It is the format

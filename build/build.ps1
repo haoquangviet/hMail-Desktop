@@ -1,4 +1,4 @@
-# MIT License — Copyright (c) 2026 HQV Software
+# Giấy phép Cộng đồng hMail (LICENSE-HQV.md) — Copyright (c) 2026 HQV Software
 # build.ps1 — reproducible build of hMail Desktop from the pinned official
 # Mozilla Thunderbird release (see UPSTREAM.md). Windows PowerShell 5.1+.
 #

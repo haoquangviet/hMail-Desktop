@@ -1,5 +1,5 @@
 /* hMail Desktop — màn hình cho AI chạy trên máy
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * One tab holds the whole feature: pick a model, download it, index the mail,
  * then search by meaning. Keeping it together means the person deciding

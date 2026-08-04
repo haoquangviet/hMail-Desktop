@@ -1,4 +1,4 @@
-; hMail Desktop — NSIS installer (MIT License, Copyright (c) 2026 HQV Software)
+; hMail Desktop — NSIS installer (Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software)
 ; Compiled by build\build.ps1:
 ;   makensis /DVERSION=0.1.0 /DAPPDIR=<work\app> /DOUTDIR=<dist> installer\hmail.nsi
 

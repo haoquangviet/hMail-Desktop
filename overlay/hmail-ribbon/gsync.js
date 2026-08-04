@@ -1,5 +1,5 @@
 /* hMail Desktop — Đồng bộ Lịch và Danh bạ Google
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * Google publishes CalDAV and CardDAV like everyone else, but behind OAuth
  * instead of a password, so the generic auto-setup in davsync.js walks past

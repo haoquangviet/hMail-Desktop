@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# MIT License — Copyright (c) 2026 HQV Software
+# Giấy phép Cộng đồng hMail (LICENSE-HQV.md) — Copyright (c) 2026 HQV Software
 """
 fix_pe_certdir.py — clear a stale Authenticode certificate-table pointer.
 

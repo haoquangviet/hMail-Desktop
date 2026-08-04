@@ -1,5 +1,5 @@
 /* hMail Desktop — những việc đang chạy
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * hMail has grown several jobs that outlive the click that started them: an
  * Outlook import that runs for hours, a model download of half a gigabyte,

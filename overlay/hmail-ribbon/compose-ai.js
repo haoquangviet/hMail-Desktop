@@ -1,5 +1,5 @@
 /* hMail Desktop — the assistant inside the message composer
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * Writing is where an assistant earns its place, so the composer gets the same
  * docked panel the reading window has: draft a reply, translate, tighten,

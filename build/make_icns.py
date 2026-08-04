@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# MIT License — Copyright (c) 2026 HQV Software
+# Giấy phép Cộng đồng hMail (LICENSE-HQV.md) — Copyright (c) 2026 HQV Software
 """
 make_icns.py — build a macOS .icns icon from a PNG, without macOS tooling.
 

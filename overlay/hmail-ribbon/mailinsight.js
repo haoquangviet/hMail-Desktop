@@ -1,5 +1,5 @@
 /* hMail Desktop — đọc hiểu thư ngay trên máy
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * Everything here runs locally: no network call, no cost, no message leaving
  * the machine. It answers the two questions worth asking before reading a

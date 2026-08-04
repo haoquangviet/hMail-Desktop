@@ -1,5 +1,5 @@
 /* hMail Desktop — bộ đọc tệp PST/OST của Outlook
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * Lõi đọc dữ liệu cho tính năng "Nhập dữ liệu từ Outlook": mở tệp .pst/.ost,
  * liệt kê cây thư mục và dựng lại từng thư thành chuỗi RFC 822 ghi ra .eml.

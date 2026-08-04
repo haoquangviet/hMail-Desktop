@@ -1,6 +1,6 @@
 ĐIỀU KHOẢN SỬ DỤNG PHẦN MỀM hMAIL DESKTOP
 
-Phiên bản 0.1 — HQV SOFTWARE CO., LTD (HAO QUANG VIET SOFTWARE COMPANY
+Phiên bản 1.1 — HQV SOFTWARE CO., LTD (HAO QUANG VIET SOFTWARE COMPANY
 LIMITED), Thành phố Hồ Chí Minh, Việt Nam.
 
 Vui lòng đọc trước khi cài đặt. Bằng việc cài đặt hoặc sử dụng hMail Desktop,
@@ -10,10 +10,11 @@ bạn xác nhận đã đọc, hiểu và đồng ý với các điều khoản 
 
 1. GIẤY PHÉP
 
-hMail Desktop được xây dựng trên mã nguồn mở Mozilla Thunderbird và được cung
-cấp theo các giấy phép mã nguồn mở tương ứng: Mozilla Public License 2.0 cho
-phần mã kế thừa từ Thunderbird, và giấy phép MIT cho phần do HQV Software
-viết. Toàn văn các giấy phép này xem trong ứng dụng tại mục Trợ giúp ▸ Giới
+hMail Desktop được xây dựng trên mã nguồn mở Mozilla Thunderbird. Phần mã kế
+thừa từ Thunderbird theo Mozilla Public License 2.0. Phần do HQV Software
+viết theo Giấy phép Cộng đồng hMail: MIỄN PHÍ cho sử dụng cá nhân, phi thương
+mại; việc sử dụng bởi hoặc cho doanh nghiệp, tổ chức, cơ quan cần giấy phép
+thương mại có phí từ HQV Software (liên hệ hqv@haoquangviet.com). Toàn văn các giấy phép này xem trong ứng dụng tại mục Trợ giúp ▸ Giới
 thiệu ▸ Thông tin giấy phép.
 
 Tên gọi "hMail", "hMail Desktop" và biểu tượng hMail là nhãn hiệu và tài sản

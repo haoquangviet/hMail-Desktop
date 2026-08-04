@@ -1,5 +1,5 @@
 /* hMail Desktop — báo hiệu khi thư đang được nạp
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * Clicking a message in a thread gave no sign that anything had happened: the
  * previous message stayed on screen until the new one arrived, which on a slow

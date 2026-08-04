@@ -1,5 +1,5 @@
 /* hMail Desktop — nhập dữ liệu từ Outlook
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * Thunderbird's own importer can read an Outlook profile, but not the .pst
  * file people are actually given when they leave a company or change laptop.

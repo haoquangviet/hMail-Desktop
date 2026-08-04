@@ -24,8 +24,13 @@ Bản cài đặt phát hành tại [GitHub Releases](https://github.com/haoquan
   - **Ngay trong trình soạn thảo**: soạn thư trả lời, gợi ý trả lời nhanh, viết lại, rút gọn, sửa chính tả, dịch — kết quả chèn vào thư khi bạn bấm, không bao giờ tự gửi.
   - **Chọn nhà cung cấp tuỳ ý**: Google Gemini, OpenAI, DeepSeek, Groq, OpenRouter, hoặc AI chạy ngay trên máy (Ollama, LM Studio, Windows AI Foundry Local) — mỗi dịch vụ giữ cấu hình và API key riêng.
   - **Biết mình tiêu bao nhiêu**: đếm số token thật do nhà cung cấp báo về và quy ra chi phí ước tính, theo từng dịch vụ.
+- **Nhập dữ liệu từ Outlook (.pst)**: đọc thẳng tệp .pst — không cần cài Outlook — giữ nguyên cây thư mục và trạng thái đã đọc; nhập hàng trăm nghìn thư, dừng giữa chừng chạy lại tự bỏ qua thư đã nhập; nhận cả tệp .eml/.msg rời. Công cụ chuyển đổi trọn vẹn cho người rời Outlook.
+- **Cảnh báo thư đáng ngờ & phân tích nội dung**: hMail soi từng thư đến — người lạ mới vào chuỗi thư, tên miền nhìn giống tên miền quen (đánh tráo ký tự), xác thực SPF/DKIM/DMARC không đạt, liên kết trỏ đi nơi khác với chữ hiển thị — và cảnh báo ngay trên thư kèm giải thích vấn đề bằng lời dễ hiểu, trước khi bạn kịp trả lời hay bấm nhầm. Huy hiệu xác thực người gửi (BIMI) hiển thị cạnh tên.
 - **Quản lý thư rác trên máy chủ**: báo cáo spam, xem và nhận lại thư bị bộ lọc giữ, ngay trong hMail. Đánh dấu thư rác cũng tự huấn luyện máy chủ lọc.
-- **Đầy đủ Lịch, Công việc, Danh bạ** — giữ nguyên năng lực của nền tảng Thunderbird.
+- **Trả lời nhanh dưới thư**: ô trả lời nằm ngay dưới nội dung — gõ, Enter, xong; cần viết dài thì mở soạn thảo đầy đủ, chữ đã gõ vẫn giữ nguyên.
+- **Gửi hàng loạt (mail merge)**: mỗi người nhận một bản riêng, thay tên và thông tin từng người, giãn cách gửi để không bị máy chủ chặn.
+- **Tự động hóa bằng AI (hMail Flow)**: đặt quy tắc khi thư đến — điều kiện thường kết hợp câu hỏi ngữ nghĩa cho AI — tự gắn nhãn, phân loại, tóm tắt, trả lời; có hạn mức chi phí và nhật ký từng hành động.
+- **Đầy đủ Lịch, Công việc, Danh bạ**: đồng bộ lịch + danh bạ Google tự động sau một lần cấp quyền; máy chủ CalDAV/CardDAV tự phát hiện từ tài khoản thư; tạo họp **Google Meet / Microsoft Teams** một nút bấm ngay trên tab Lịch.
 - **Tinh gọn**: đã loại bỏ Chat, Newsgroups, RSS; tắt telemetry; không có quảng cáo/quyên góp.
 - **Kênh cập nhật riêng**: ứng dụng kiểm tra phiên bản mới qua GitHub Releases của repo này.
 
@@ -43,9 +48,9 @@ Chi tiết giấy phép trong [LICENSE.md](LICENSE.md):
 | Thành phần | Giấy phép |
 |---|---|
 | Mã Mozilla Thunderbird + các file Mozilla được sửa đổi (trong `omni-patches/`) | MPL 2.0 |
-| File mới do HQV Software viết (script build, cấu hình, CSS tùy biến, installer) | MIT |
+| File mới do HQV Software viết (script build, cấu hình, CSS tùy biến, installer) | [Giấy phép Cộng đồng hMail](LICENSE-HQV.md) — miễn phí cho cá nhân, doanh nghiệp cần giấy phép thương mại |
 | Theme cơ sở từ [Browmew/thunderbird-outlook-theme](https://github.com/Browmew/thunderbird-outlook-theme) | MIT |
-| Trợ lý AI, ribbon, ngăn bên, tích hợp lọc thư rác (do HQV Software phát triển) | MIT |
+| Trợ lý AI, ribbon, ngăn bên, lịch & họp Meet/Teams, nhập PST, lọc thư rác (do HQV Software phát triển) | [Giấy phép Cộng đồng hMail](LICENSE-HQV.md) — miễn phí cho cá nhân, doanh nghiệp cần giấy phép thương mại |
 | Logo và tên "hMail" | © HQV Software, bảo lưu mọi quyền |
 
 ## Build từ source
@@ -78,8 +83,6 @@ $env:HMAIL_SIGN_PIN        = "<PIN token>"
 .\build\build.ps1 -Sign -SignVia local
 ```
 
-Thông tin ký số **không được ghi vào mã nguồn** — repo này công khai. Chỉ truyền qua
-biến môi trường hoặc tham số dòng lệnh.
 
 ## Trademark
 

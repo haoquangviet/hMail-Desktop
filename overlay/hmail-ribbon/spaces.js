@@ -1,5 +1,5 @@
 /* hMail Desktop — thanh điều hướng bên trái luôn hiện
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * Thunderbird lets the spaces toolbar be collapsed. At Thunderbird's own
  * width that trade is arguable; at ours it is not — the rail is already down

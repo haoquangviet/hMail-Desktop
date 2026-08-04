@@ -1,5 +1,5 @@
 /* hMail Desktop — tiếp tục chạy khi đóng cửa sổ
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * Closing the window quits Thunderbird, which means no new mail, no reminders
  * and no notifications until the program is started again. Outlook does not

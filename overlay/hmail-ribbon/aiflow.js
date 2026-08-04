@@ -1,5 +1,5 @@
 /* hMail Desktop — quy tắc tự động có AI đọc hiểu
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * Thunderbird's own filters match on strings: a sender, a word in the subject.
  * That covers "everything from the bank goes in the Bank folder" and nothing

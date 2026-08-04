@@ -1,5 +1,5 @@
 /* hMail Desktop — kiểm tra cập nhật
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * Mozilla's updater is removed from this build, so its "Check for updates"
  * button reports that updates are disabled by an administrator — true, but

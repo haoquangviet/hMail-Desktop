@@ -1,5 +1,5 @@
 /* hMail Desktop — right-hand AI sidebar
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * The bundled assistant opens its chat with browser.windows.create({type:
  * "popup"}), which lands as a floating window. Outlook-style assistants dock

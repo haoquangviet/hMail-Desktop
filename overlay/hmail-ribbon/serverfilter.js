@@ -1,5 +1,5 @@
 /* hMail Desktop — hành động theo kết luận của bộ lọc máy chủ
- * MIT License, Copyright (c) 2026 HQV Software
+ * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
  *
  * The mail server has already run a filter over every message: it writes what
  * it concluded into the headers — a class ("spam", "virus"), a score, and
