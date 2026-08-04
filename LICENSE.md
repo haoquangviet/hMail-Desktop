@@ -24,15 +24,47 @@ repository.
   `about:license`, in-file MPL headers) are preserved unmodified in the shipped
   binaries.
 
-## 2. Files authored by HQV Software — hMail Community License
+## 2. Files authored by HQV Software
 
-All files in this repository that are **not** modified copies of Mozilla files
-and **not** third-party components — including the build scripts (`build/`),
-installer scripts (`installer/`), configuration overlay
-(`overlay/distribution/`, `overlay/defaults/`, `overlay/hmail.cfg`), the
-ribbon/sidebar/AI/import/calendar modules in `overlay/hmail-ribbon/`, and CSS
-written by HQV Software — are licensed under the **hMail Community License**
-(see [LICENSE-HQV.md](LICENSE-HQV.md)):
+### 2a. Build scripts, configuration, custom CSS, installer — MIT License
+
+The build scripts (`build/`), installer scripts (`installer/`), configuration
+overlay (`overlay/distribution/`, `overlay/defaults/`, `overlay/hmail.cfg`),
+the start page (`docs/`) and CSS written by HQV Software are licensed under
+the MIT License:
+
+```
+MIT License
+
+Copyright (c) 2026 HQV Software (Hào Quang Việt)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### 2b. Feature modules — hMail Community License
+
+The application feature modules written by HQV Software — everything in
+[`overlay/hmail-ribbon/`](overlay/hmail-ribbon/): the AI assistant, ribbon,
+sidebar, quick reply, mail insight/warnings, Outlook (.pst) import, Google
+calendar/contacts sync, Meet/Teams meetings, mail merge, spam reporting,
+server filters and related modules — are licensed under the
+**hMail Community License** (see [LICENSE-HQV.md](LICENSE-HQV.md)):
 
 - **free of charge for personal, non-commercial use**;
 - **use by or for a business, organization or government requires a paid
@@ -52,7 +84,8 @@ the derived CSS files. That theme in turn uses Microsoft's
 ## 4. hMail AI — hMail Community License
 
 The AI assistant is **written by HQV Software**, not adapted from anyone
-else's work, and is covered by the hMail Community License in section 2 above. It lives in
+else's work, and is covered by the hMail Community License in section 2b
+above. It lives in
 [`overlay/hmail-ribbon/aiassistant.js`](overlay/hmail-ribbon/aiassistant.js),
 `aiassistant-actions.js`, `aiassistant-ui.js` and `compose-ai.js`.
 

@@ -1,7 +1,7 @@
 /* hMail Desktop UI — Outlook-style customization layer.
  * Derived from Browmew/thunderbird-outlook-theme (MIT License) and
  * FluentBird by Danny King (MIT License). hMail additions:
- * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software.
+ * MIT License, Copyright (c) 2026 HQV Software.
  * (Upstream wallpaper feature removed for hMail.) */
 
 /* =====================================================
@@ -300,7 +300,7 @@ tr[selected="true"] .card-container::after {
 }
 
 /* =====================================================
-   hMAIL DESKTOP OVERRIDES (Giấy phép Cộng đồng hMail — HQV Software)
+   hMAIL DESKTOP OVERRIDES (MIT — HQV Software)
    ===================================================== */
 
 /* --- Outlook accent color --- */

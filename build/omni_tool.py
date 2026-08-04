@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Giấy phép Cộng đồng hMail (LICENSE-HQV.md) — Copyright (c) 2026 HQV Software
+# MIT License — Copyright (c) 2026 HQV Software
 """
 omni_tool.py — rebrand a Thunderbird application directory into hMail Desktop.
 

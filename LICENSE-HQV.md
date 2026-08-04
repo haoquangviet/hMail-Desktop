@@ -3,11 +3,12 @@
 Copyright (c) 2026 HQV SOFTWARE CO., LTD (HAO QUANG VIET SOFTWARE COMPANY
 LIMITED), Thành phố Hồ Chí Minh, Việt Nam — <https://haoquangviet.com>
 
-Giấy phép này áp dụng cho các thành phần do HQV Software tự viết trong
-hMail Desktop (xem phạm vi tại [LICENSE.md](LICENSE.md) §2), gọi chung là
-"Phần mềm". Nó **không** áp dụng cho mã Mozilla Thunderbird hay các file
-Mozilla được sửa đổi (MPL 2.0), cũng không áp dụng cho các thành phần bên
-thứ ba (giữ giấy phép gốc của chúng).
+Giấy phép này áp dụng cho các mô-đun tính năng do HQV Software tự viết trong
+hMail Desktop (xem phạm vi tại [LICENSE.md](LICENSE.md) §2b — thư mục
+`overlay/hmail-ribbon/`), gọi chung là "Phần mềm". Nó **không** áp dụng cho
+mã Mozilla Thunderbird hay các file Mozilla được sửa đổi (MPL 2.0), không
+áp dụng cho phần phụ trợ theo giấy phép MIT (LICENSE.md §2a), và không áp
+dụng cho các thành phần bên thứ ba (giữ giấy phép gốc của chúng).
 
 ## 1. Sử dụng cá nhân — miễn phí
 

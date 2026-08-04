@@ -1,5 +1,5 @@
 /* hMail Desktop — Vietnamese/English switch
- * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
+ * MIT License, Copyright (c) 2026 HQV Software
  *
  * Both languages ship in the markup as data-vi / data-en, so switching is
  * instant and the page still says something sensible with scripting off:

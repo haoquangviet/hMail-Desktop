@@ -1,5 +1,5 @@
 /* hMail Desktop — kiểm thử bộ đọc PST ngoài Thunderbird
- * Giấy phép Cộng đồng hMail (xem LICENSE-HQV.md), Copyright (c) 2026 HQV Software
+ * MIT License, Copyright (c) 2026 HQV Software
  *
  * pstreader.js chạy trong chrome JS đặc quyền, nơi IOUtils là API sẵn có. Ở đây
  * ta dựng một sandbox tối thiểu có IOUtils giả lập bằng fs rồi eval tệp đó — nhờ

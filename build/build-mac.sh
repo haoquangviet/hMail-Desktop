@@ -1,5 +1,5 @@
 #!/bin/bash
-# Giấy phép Cộng đồng hMail (LICENSE-HQV.md) — Copyright (c) 2026 HQV Software
+# MIT License — Copyright (c) 2026 HQV Software
 #
 # build-mac.sh — reproducible build of hMail Desktop for macOS from the pinned
 # official Mozilla Thunderbird release (see UPSTREAM.md). Run on a Mac.

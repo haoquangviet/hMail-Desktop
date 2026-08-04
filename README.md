@@ -48,7 +48,7 @@ Chi tiết giấy phép trong [LICENSE.md](LICENSE.md):
 | Thành phần | Giấy phép |
 |---|---|
 | Mã Mozilla Thunderbird + các file Mozilla được sửa đổi (trong `omni-patches/`) | MPL 2.0 |
-| File mới do HQV Software viết (script build, cấu hình, CSS tùy biến, installer) | [Giấy phép Cộng đồng hMail](LICENSE-HQV.md) — miễn phí cho cá nhân, doanh nghiệp cần giấy phép thương mại |
+| File mới do HQV Software viết (script build, cấu hình, CSS tùy biến, installer) | MIT |
 | Theme cơ sở từ [Browmew/thunderbird-outlook-theme](https://github.com/Browmew/thunderbird-outlook-theme) | MIT |
 | Trợ lý AI, ribbon, ngăn bên, lịch & họp Meet/Teams, nhập PST, lọc thư rác (do HQV Software phát triển) | [Giấy phép Cộng đồng hMail](LICENSE-HQV.md) — miễn phí cho cá nhân, doanh nghiệp cần giấy phép thương mại |
 | Logo và tên "hMail" | © HQV Software, bảo lưu mọi quyền |

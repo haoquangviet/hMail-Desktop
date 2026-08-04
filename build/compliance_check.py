@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Giấy phép Cộng đồng hMail (LICENSE-HQV.md) — Copyright (c) 2026 HQV Software
+# MIT License — Copyright (c) 2026 HQV Software
 """
 compliance_check.py — verify a built hMail Desktop tree against the
 Mozilla trademark / MPL 2.0 obligations documented in docs/COMPLIANCE.md.
