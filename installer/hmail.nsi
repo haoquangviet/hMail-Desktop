@@ -138,6 +138,12 @@ Section "hMail Desktop" SecMain
   WriteRegStr HKLM "SOFTWARE\Classes\hMail.Url.mailto\DefaultIcon" "" "$INSTDIR\hmail.exe,0"
   WriteRegStr HKLM "SOFTWARE\Classes\hMail.Url.mailto\shell\open\command" "" '"$INSTDIR\hmail.exe" -osint -compose "%1"'
 
+  ; hmail:// deep links (OAuth callbacks from the system browser, app links)
+  WriteRegStr HKLM "SOFTWARE\Classes\hmail" "" "hMail Desktop Link"
+  WriteRegStr HKLM "SOFTWARE\Classes\hmail" "URL Protocol" ""
+  WriteRegStr HKLM "SOFTWARE\Classes\hmail\DefaultIcon" "" "$INSTDIR\hmail.exe,0"
+  WriteRegStr HKLM "SOFTWARE\Classes\hmail\shell\open\command" "" '"$INSTDIR\hmail.exe" -osint -hmail-url "%1"'
+
   ; --- Shortcuts ---
   CreateDirectory "$SMPROGRAMS\hMail Desktop"
   CreateShortCut "$SMPROGRAMS\hMail Desktop\hMail Desktop.lnk" "$INSTDIR\hmail.exe" "" "$INSTDIR\hmail.exe" 0
@@ -170,5 +176,6 @@ Section "Uninstall"
   DeleteRegKey HKLM "${MAILCLIENT}"
   DeleteRegValue HKLM "SOFTWARE\RegisteredApplications" "${PRODUCT_NAME}"
   DeleteRegKey HKLM "SOFTWARE\Classes\hMail.Url.mailto"
+  DeleteRegKey HKLM "SOFTWARE\Classes\hmail"
   DeleteRegKey HKLM "${ARP_KEY}"
 SectionEnd

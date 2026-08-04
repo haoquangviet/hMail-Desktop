@@ -72,9 +72,9 @@
     font-weight: normal !important;
 }
 
-/* --- Thread/reply chain rows: teal left border only --- */
+/* --- Thread/reply chain rows: flat, no side bar --- */
 #threadTree .card-layout.children .card-container {
-    border-left: 3px solid #6aadb5 !important;
+    border-left: none !important;
 }
 
 /* (hMail keeps #threadPaneHeaderBar visible — it carries the folder name and
@@ -213,12 +213,7 @@
 }
 
 /* --- Unread message highlighting --- */
-/* Blue left border on unread cards */
-tr[data-properties~="unread"] .card-container {
-    border-left: 3px solid #2b84d8 !important;
-    padding-inline-start: 47px !important;
-    min-height: 68px !important;
-}
+/* Unread stands out through weight and color alone — no bars, no boxes. */
 
 /* Ensure subject/snippet row is always visible on unread */
 tr[data-properties~="unread"] .thread-card-subject-container {
@@ -335,15 +330,6 @@ tr[selected="true"] .card-container::after {
 #threadTree tr:not([data-properties~="unread"]) .date {
     font-weight: 400 !important;
     color: inherit !important;
-}
-
-#threadTree tr:not([data-properties~="unread"]) .card-container {
-    border-left: 3px solid transparent !important;
-}
-
-/* Unread rows. */
-tr[data-properties~="unread"] .card-container {
-    border-left-color: var(--hmail-accent) !important;
 }
 
 tr[data-properties~="unread"] .sender {
@@ -4607,4 +4593,67 @@ unified-toolbar-customization {
 .hmail-flow-chip:has(input:checked) {
     background-color: rgba(15, 108, 189, 0.12);
     border-color: #0f6cbd;
+}
+
+/* =====================================================
+   FLAT COMPACT MESSAGE LIST — Outlook-style rhythm
+   One tight flat row for read and unread alike: no card
+   chrome, hairline dividers, minimal padding. Selectors
+   carry #threadTree so they outrank the theme rules that
+   userChrome.css declares after this file is imported.
+   ===================================================== */
+#threadTree .card-container {
+    padding-block: 0 !important;
+    padding-inline: 12px 8px !important;
+    min-height: 0 !important;
+    border: none !important;
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 7%, transparent) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
+/* The td column carries the real inner air: its own padding plus a gap
+   between the sender row, subject row and snippet row. Collapse both. */
+#threadTree .card-container .thread-card-column {
+    padding-block: 2px !important;
+    gap: 0 !important;
+}
+
+#threadTree tr[data-properties~="unread"] .card-container {
+    padding-inline-start: 12px !important;
+    min-height: 0 !important;
+    border: none !important;
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 7%, transparent) !important;
+}
+
+/* Selection: flat highlight, no box outline. */
+#threadTree .card-layout.selected .card-container,
+#threadTree .card-layout.selected.current .card-container {
+    border: none !important;
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 7%, transparent) !important;
+}
+
+#threadTree .sender {
+    margin-top: 0 !important;
+    font-size: 1.02rem !important;
+}
+
+#threadTree .thread-card-subject-container {
+    margin-top: 0 !important;
+    width: 100% !important;
+}
+
+#threadTree .thread-card-subject-container .thread-card-snippet {
+    margin-top: 0 !important;
+}
+
+#threadTree .date {
+    margin-top: 0 !important;
+}
+
+#threadTree .thread-card-dynamic-row {
+    gap: 0 !important;
+    row-gap: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
 }

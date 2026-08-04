@@ -120,7 +120,8 @@ var hMailImport = {
 
     root.appendChild(el("div", "hmail-import-title", "Nhập dữ liệu từ Outlook"));
     root.appendChild(el("div", "hmail-ai-hint",
-      "Chọn tệp dữ liệu Outlook (.pst hoặc .ost). hMail chỉ đọc tệp, không " +
+      "Chọn tệp dữ liệu Outlook (.pst — tệp .ost chưa được hỗ trợ, hãy " +
+      "xuất ra .pst trước). hMail chỉ đọc tệp, không " +
       "sửa gì trong đó, và thư được đưa vào một nhánh thư mục mới nên dữ " +
       "liệu sẵn có không bị đụng tới."));
 
@@ -401,11 +402,48 @@ var hMailImport = {
       }
     } catch (e) {}
     for (const server of MailServices.accounts.allServers) {
-      if (server.type === "imap" || server.type === "pop3") {
+      // POP3 accounts are left out: their folder tree lives in the local
+      // store with quirks (deferred/global inbox) that made the import sit
+      // silently. Local Folders covers that use case and just works.
+      if (server.type === "imap") {
         list.push(server);
       }
     }
     return list;
+  },
+
+  /**
+   * True when Outlook is running. Outlook opens .pst files exclusively, so
+   * an import that races it dies halfway with a sharing violation.
+   */
+  async outlookRunning() {
+    if (Services.appinfo.OS !== "WINNT") {
+      return false;
+    }
+    try {
+      const { Subprocess } = ChromeUtils.importESModule(
+        "resource://gre/modules/Subprocess.sys.mjs");
+      const proc = await Subprocess.call({
+        command: Services.env.get("SystemRoot") + "\\System32\\tasklist.exe",
+        arguments: ["/FI", "IMAGENAME eq OUTLOOK.EXE", "/FO", "CSV", "/NH"],
+      });
+      let out = "";
+      let chunk;
+      while ((chunk = await proc.stdout.readString())) {
+        out += chunk;
+      }
+      await proc.wait();
+      return /OUTLOOK\.EXE/i.test(out);
+    } catch (e) {
+      // No way to tell — let the import try rather than block on a guess.
+      return false;
+    }
+  },
+
+  /** Folder names that mean "trash" in a .pst, in Outlook's languages. */
+  isTrashNode(node) {
+    return /^(deleted items|trash|bin|deleted messages|thùng rác|thư đã xóa|đã xóa)$/i
+      .test(String(node.name || "").trim());
   },
 
   /** Outlook keeps its data files in a couple of well-known places. */
@@ -432,7 +470,7 @@ var hMailImport = {
         continue;
       }
       for (const file of names) {
-        if (!/\.(pst|ost)$/i.test(file)) {
+        if (!/\.pst$/i.test(file)) {
           continue;
         }
         let size = 0;
@@ -463,7 +501,7 @@ var hMailImport = {
       .createInstance(Ci.nsIFilePicker);
     picker.init(win.browsingContext, "Chọn tệp dữ liệu Outlook",
                 Ci.nsIFilePicker.modeOpen);
-    picker.appendFilter("Tệp Outlook (*.pst, *.ost)", "*.pst; *.ost");
+    picker.appendFilter("Tệp Outlook (*.pst)", "*.pst");
     picker.appendFilters(Ci.nsIFilePicker.filterAll);
     picker.open(result => {
       if (result === Ci.nsIFilePicker.returnOK && picker.file) {
@@ -477,6 +515,21 @@ var hMailImport = {
   async load(win, path) {
     const doc = win.document;
     doc.getElementById("hmail-import-path").value = path;
+    if (/\.ost$/i.test(path)) {
+      // An .ost is Outlook's private sync cache and its format drifts with
+      // every Exchange build; reading one reliably is a different project.
+      this.notify(win,
+        "Tệp .ost là bộ đệm đồng bộ của Outlook và chưa được hỗ trợ. " +
+        "Trong Outlook, hãy xuất hộp thư ra .pst (Tệp → Mở & Xuất → " +
+        "Nhập/Xuất → Xuất ra tệp) rồi chọn tệp .pst đó.");
+      return;
+    }
+    if (await this.outlookRunning()) {
+      this.notify(win,
+        "Outlook đang mở và có thể giữ chặt tệp dữ liệu. Hãy đóng Outlook " +
+        "trước khi đọc tệp.");
+      return;
+    }
     this.notify(win, "Đang đọc tệp…", "busy");
     doc.getElementById("hmail-import-tree").textContent = "";
 
@@ -514,23 +567,33 @@ var hMailImport = {
     const box = doc.getElementById("hmail-import-tree");
     box.textContent = "";
 
-    const render = (nodes, depth) => {
+    let trashSeen = false;
+    const render = (nodes, depth, inTrash) => {
       for (const node of nodes) {
+        const isTrash = inTrash || this.isTrashNode(node);
+        trashSeen = trashSeen || isTrash;
         const row = this.el(doc, "label", "hmail-import-row");
         row.style.paddingInlineStart = `${depth * 18}px`;
         const box2 = this.el(doc, "input");
         box2.type = "checkbox";
-        box2.checked = (node.messageCount || 0) > 0;
+        // Trash starts unchecked: nobody misses deleted mail, and some IMAP
+        // servers refuse a folder by that name, which used to sink the whole
+        // run. Ticking it by hand still works.
+        box2.checked = (node.messageCount || 0) > 0 && !isTrash;
         box2.dataset.path = node.path;
         row.append(box2,
           this.el(doc, "span", "hmail-import-name", node.name),
           this.el(doc, "span", "hmail-import-count",
                   node.messageCount ? `${node.messageCount}` : ""));
         box.appendChild(row);
-        render(node.children || [], depth + 1);
+        render(node.children || [], depth + 1, isTrash);
       }
     };
-    render(this.tree, 0);
+    render(this.tree, 0, false);
+    if (trashSeen) {
+      box.appendChild(this.el(doc, "div", "hmail-ai-hint",
+        "Thùng rác được bỏ chọn sẵn — thư đã xóa hiếm khi đáng mang theo."));
+    }
   },
 
   selected(win) {
@@ -726,6 +789,19 @@ var hMailImport = {
       this.notify(win, "Không tìm thấy nơi nhận.");
       return;
     }
+    if (server.type === "pop3") {
+      this.notify(win,
+        "Tài khoản POP3 chưa nhận thư nhập được — hãy chọn " +
+        "“Thư mục cục bộ” làm nơi nhận.");
+      return;
+    }
+
+    if (await this.outlookRunning()) {
+      this.notify(win,
+        "Outlook đang mở và sẽ giữ chặt tệp dữ liệu. Hãy đóng Outlook " +
+        "rồi bấm Bắt đầu nhập lại.");
+      return;
+    }
 
     this.cancelled = false;
     doc.getElementById("hmail-import-start").hidden = true;
@@ -750,10 +826,12 @@ var hMailImport = {
       const root = await this.ensureFolder(server.rootFolder,
                                            `Outlook — ${label}`);
 
+      const folderErrors = [];
       for (const node of folders) {
         if (this.cancelled) {
           break;
         }
+        try {
         // Mirror the tree: a/b/c becomes nested folders under the root. The
         // .pst's own top node ("Top of Outlook data file") is dropped — it is
         // an artefact of the file format, not a folder anyone made.
@@ -818,6 +896,19 @@ var hMailImport = {
             target.gettingNewMessages = false;
           } catch (e) {}
         }
+        } catch (e) {
+          // The .pst going unreadable mid-run means another program grabbed
+          // it — stop the whole import and say so. Anything else is this
+          // folder's own problem (a name the server refuses, usually):
+          // note it and carry on with the rest.
+          if (/access|denied|sharing|NS_ERROR_FILE/i.test(
+                String(e.message || e))) {
+            throw e;
+          }
+          folderErrors.push(node.name);
+          this.notify(win,
+            `Bỏ qua thư mục "${node.name}": ${e.message || e}`, "busy");
+        }
       }
 
       const errors = (this.handle?.errors || []).length;
@@ -827,11 +918,20 @@ var hMailImport = {
         : `Xong. Nhập ${(done - failed).toLocaleString("vi-VN")} thư vào ` +
           `"Outlook — ${label}"` +
           (failed || errors
-            ? `, bỏ qua ${failed + errors} thư không đọc được.`
+            ? `, bỏ qua ${failed + errors} thư không đọc được`
+            : "") +
+          (folderErrors.length
+            ? `; không nhập được thư mục: ${folderErrors.join(", ")}.`
             : "."),
         1);
     } catch (e) {
-      this.notify(win, "Lỗi khi nhập: " + (e.message || e), null);
+      const locked = /access|denied|sharing|NS_ERROR_FILE/i.test(
+        String(e.message || e));
+      this.notify(win, locked
+        ? "Tệp dữ liệu đang bị chương trình khác giữ (thường là Outlook " +
+          "vừa được mở). Đóng Outlook rồi bấm Bắt đầu nhập lại — những thư " +
+          "đã nhập sẽ tự được bỏ qua."
+        : "Lỗi khi nhập: " + (e.message || e), null);
     } finally {
       this.running = false;
       hMailBusy.end("import-pst");

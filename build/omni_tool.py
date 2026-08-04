@@ -26,6 +26,7 @@ files and remain MPL 2.0 (see LICENSE.md). This tool itself is MIT.
 
 import argparse
 import io
+import json
 import re
 import sys
 import zipfile
@@ -358,6 +359,40 @@ def load_repo_patch(repo: Path, rel: str):
     return p.read_bytes() if p.exists() else None
 
 
+def strip_fence(text: str, tag: str) -> str:
+    """Drop the block between `// TAG>>` and `// <<TAG` (fences included)."""
+    return re.sub(rf"// {tag}>>.*?// <<{tag}\n?", "", text, flags=re.S)
+
+
+def load_oauth_clients(repo: Path):
+    """OAuth client registrations from the untracked secrets/ directory —
+    the repo is public, so credentials live outside it. Returns a map of
+    placeholder -> value plus the set of providers that are present."""
+    values = {}
+    providers = set()
+
+    google = repo / "secrets" / "google-oauth.json"
+    if google.exists():
+        try:
+            installed = json.loads(google.read_text("utf-8"))["installed"]
+            values["@GOOGLE_CLIENT_ID@"] = installed["client_id"]
+            values["@GOOGLE_CLIENT_SECRET@"] = installed["client_secret"]
+            providers.add("GOOGLE")
+        except (KeyError, ValueError):
+            sys.exit("secrets/google-oauth.json is not a Desktop-app client file")
+
+    microsoft = repo / "secrets" / "microsoft-oauth.json"
+    if microsoft.exists():
+        try:
+            data = json.loads(microsoft.read_text("utf-8"))
+            values["@MS_CLIENT_ID@"] = data["client_id"]
+            providers.add("MICROSOFT")
+        except (KeyError, ValueError):
+            sys.exit("secrets/microsoft-oauth.json needs a client_id")
+
+    return values, providers
+
+
 def render_png(logo: Image.Image, width: int, height: int, opacity: float = 1.0) -> bytes:
     """Render the hMail logo centered on a transparent canvas of given size."""
     canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
@@ -460,6 +495,21 @@ def build_replacements(zf: zipfile.ZipFile, repo: Path):
                 text,
             )
             repl[name] = text.encode("utf-8")
+            continue
+
+        # Swap Mozilla's Google/Microsoft OAuth clients for hMail's own.
+        if name == "modules/OAuth2Providers.sys.mjs":
+            extra = load_repo_patch(
+                repo, "appended/OAuth2Providers.append.mjs")
+            values, providers = load_oauth_clients(repo)
+            if extra and providers:
+                text = extra.decode("utf-8")
+                for tag in ("GOOGLE", "MICROSOFT"):
+                    if tag not in providers:
+                        text = strip_fence(text, tag)
+                for placeholder, value in values.items():
+                    text = text.replace(placeholder, value)
+                repl[name] = zf.read(name) + b"\n" + text.encode("utf-8")
             continue
 
         # Append hMail rules to the Account Central stylesheet.

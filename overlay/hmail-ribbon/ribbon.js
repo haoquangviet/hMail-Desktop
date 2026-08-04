@@ -250,6 +250,15 @@ var hMailRibbon = {
           ],
         },
         {
+          label: "Họp trực tuyến",
+          buttons: [
+            { id: "c-meet", label: "Họp\nMeet", icon: "calendar-col", size: "large",
+              fn: win => win.hMailMeet.createMeet(win) },
+            { id: "c-teams", label: "Họp\nTeams", icon: "chat-col", size: "large",
+              fn: win => win.hMailMeet.createTeams(win) },
+          ],
+        },
+        {
           label: "Sự kiện",
           buttons: [
             { id: "c-edit", label: "Sửa", icon: "templates",
@@ -352,6 +361,8 @@ var hMailRibbon = {
             { id: "dav-sync", label: "Đồng bộ Lịch & Danh bạ",
               icon: "calendar",
               fn: win => win.hMailDav.setupAll(win, { quiet: false }) },
+            { id: "google-sync", label: "Đồng bộ Google", icon: "sync",
+              fn: win => win.hMailGSync.setupAll(win, { quiet: false }) },
           ],
         },
         {

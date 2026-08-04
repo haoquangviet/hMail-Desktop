@@ -34,3 +34,6 @@ work-mac/
 # Extension build cache/output
 extensions/*/.cache/
 extensions/*/dist/
+
+# OAuth client credentials (repo is public) — never commit
+secrets/
