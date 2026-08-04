@@ -376,7 +376,8 @@ var hMailRibbon = {
               fn: win => win.hMailServerFilter.openTab(win) },
             { id: "h-flow", label: "Tự động hoá AI", icon: "ai",
               fn: win => win.hMailFlowUI.openTab(win) },
-
+            { id: "h-diag", label: "Gỡ lỗi kết nối", icon: "sync",
+              fn: win => win.hMailDiag.openTab(win) },
           ],
         },
       ],

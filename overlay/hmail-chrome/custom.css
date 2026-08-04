@@ -4657,3 +4657,50 @@ unified-toolbar-customization {
     padding: 0 !important;
     margin: 0 !important;
 }
+
+/* =====================================================
+   CONNECTION DIAGNOSTICS
+   A checklist, not a log: one line per step, the verdict
+   mark carrying the colour so the eye finds the failure.
+   ===================================================== */
+.hmail-diag-results {
+    margin-top: 12px;
+}
+
+.hmail-diag-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 7px 10px;
+    border-radius: 6px;
+}
+
+.hmail-diag-row + .hmail-diag-row {
+    border-top: 1px solid color-mix(in srgb, CanvasText 8%, transparent);
+}
+
+.hmail-diag-mark {
+    flex: 0 0 18px;
+    text-align: center;
+    font-weight: 700;
+    line-height: 1.5;
+}
+
+.hmail-diag-ok .hmail-diag-mark { color: #1a7f37; }
+.hmail-diag-warn .hmail-diag-mark { color: #b26a00; }
+.hmail-diag-fail .hmail-diag-mark { color: #c0392b; }
+.hmail-diag-info .hmail-diag-mark { opacity: 0.55; }
+
+.hmail-diag-fail { background: color-mix(in srgb, #c0392b 7%, transparent); }
+.hmail-diag-warn { background: color-mix(in srgb, #b26a00 6%, transparent); }
+
+.hmail-diag-label {
+    font-weight: 500;
+}
+
+.hmail-diag-detail {
+    font-size: 0.9em;
+    opacity: 0.75;
+    margin-top: 2px;
+    word-break: break-word;
+}
