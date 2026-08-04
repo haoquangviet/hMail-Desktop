@@ -1,35 +1,21 @@
-/* hMail Desktop — OAuth for calendar and meetings.
+/* hMail Desktop — OAuth for Microsoft Graph.
  *
- * Mail sign-in stays on Thunderbird's stock clients: Google and Microsoft
- * have long since approved them for the mail scopes, so Gmail and Outlook
- * accounts just work. HQV Software's own registrations serve only the
- * calendar-side features — Google Calendar/Contacts sync plus Meet links,
- * and Teams meetings through Microsoft Graph — each under its own issuer
- * so the refresh tokens live next to the mail ones without touching them.
+ * Google needs nothing here. Thunderbird's own client already asks a Gmail
+ * account for the calendar and address-book scopes alongside mail, and maps
+ * apidata.googleusercontent.com / www.googleapis.com to it — so CalDAV,
+ * CardDAV and the Calendar REST call that creates a Meet link all ride on
+ * the token the mail account already holds. Registering a second Google
+ * client only bought an extra consent screen at start-up.
  *
- * The placeholders are filled in at build time from files under secrets/
- * (the repo is public, so credentials never appear here). A provider whose
- * secrets file is missing simply loses its extra feature: omni_tool.py
- * drops that block, marked by the GOOGLE>>/MICROSOFT>> comment fences.
+ * Microsoft is the opposite case: Thunderbird's client carries mail scopes
+ * only, and Teams meetings need Microsoft Graph. That is what HQV's own
+ * Azure app is for, under its own issuer so its refresh token sits beside
+ * the mail one without touching it.
+ *
+ * The placeholder is filled in at build time from secrets/microsoft-oauth.json
+ * (the repo is public, so credentials never appear here). Without that file
+ * omni_tool.py drops the block and hMail simply has no Teams button.
  */
-// GOOGLE>>
-kIssuers.set("hmail-google-dav", {
-  name: "hmail-google-dav",
-  builtIn: true,
-  clientId: "@GOOGLE_CLIENT_ID@",
-  clientSecret: "@GOOGLE_CLIENT_SECRET@",
-  authorizationEndpoint: "https://accounts.google.com/o/oauth2/auth",
-  tokenEndpoint: "https://oauth2.googleapis.com/token",
-});
-kHostnames.set("apidata.googleusercontent.com", [
-  "hmail-google-dav",
-  GOOGLE_SCOPES.caldav,
-]);
-kHostnames.set("www.googleapis.com", [
-  "hmail-google-dav",
-  GOOGLE_SCOPES.carddav,
-]);
-// <<GOOGLE
 // MICROSOFT>>
 kIssuers.set("hmail-microsoft-graph", {
   name: "hmail-microsoft-graph",

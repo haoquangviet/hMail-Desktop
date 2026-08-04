@@ -4704,3 +4704,19 @@ unified-toolbar-customization {
     margin-top: 2px;
     word-break: break-word;
 }
+
+/* Migration entry on the classic account-setup screen: a quiet link beside
+   the buttons, not a third button competing with Continue. */
+#hmail-setup-import {
+    background: none !important;
+    border: none !important;
+    color: var(--hmail-accent, #0F6CBD) !important;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 0 12px !important;
+    font-size: 1em;
+}
+
+#hmail-setup-import:hover {
+    opacity: 0.8;
+}

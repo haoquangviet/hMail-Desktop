@@ -23,7 +23,7 @@
 "use strict";
 
 var hMailAccountHub = {
-  SKIP_AFTER_MS: 6000,
+  SKIP_AFTER_MS: 4000,
 
   init(win) {
     try {
@@ -45,9 +45,81 @@ var hMailAccountHub = {
 
   tick(win) {
     try {
+      this.nameTab(win);
+      this.offerImport(win);
       this.fillUsernames(win);
       this.offerSkip(win);
     } catch (e) {}
+  },
+
+  /**
+   * A first run opens the hub over a tab with no title at all, so the strip
+   * shows an empty button and nobody can tell what it is.
+   */
+  nameTab(win) {
+    try {
+      const tabmail = win.document.getElementById("tabmail");
+      const tab = tabmail?.selectedTab;
+      const isSetup = win.document.getElementById("accountHub") ||
+                      win.document.getElementById("continueButton");
+      if (isSetup && tab && !String(tab.title || "").trim()) {
+        tab.title = "Thiết lập tài khoản";
+        tabmail.setTabTitle?.(tab);
+      }
+    } catch (e) {}
+  },
+
+  /**
+   * Someone arriving from Outlook or another client wants their old mail,
+   * not a blank mailbox — but neither setup screen offers the migration.
+   * This puts it beside the account fields, where it is looked for.
+   *
+   * Two screens exist and which one appears depends on the platform and the
+   * account-hub pref: the hub (a grid of choices) and the classic wizard
+   * (name/address/password with a button row). Both get the entry.
+   */
+  offerImport(win) {
+    const doc = win.document;
+    const NS = "http://www.w3.org/1999/xhtml";
+    const openImport = closeFirst => {
+      if (closeFirst) {
+        this.finish(win, { sync: false });
+      }
+      win.setTimeout(() => {
+        try {
+          win.hMailImport?.openTab(win);
+        } catch (e) {}
+      }, 300);
+    };
+
+    // --- the account hub -------------------------------------------------
+    const grid = this.find(win, ".hub-body-grid");
+    if (grid && !grid.querySelector("#hmail-hub-import")) {
+      const button = doc.createElementNS(NS, "button");
+      button.id = "hmail-hub-import";
+      button.className = "button button-account";
+      button.textContent = "Chuyển & Nhập dữ liệu";
+      button.title = "Mang thư, danh bạ và lịch từ Outlook hoặc ứng dụng " +
+                     "thư khác sang hMail";
+      button.addEventListener("click", () => openImport(true));
+      grid.append(button);
+    }
+
+    // --- the classic wizard ----------------------------------------------
+    const cancel = doc.getElementById("cancelButton");
+    if (cancel && !doc.getElementById("hmail-setup-import")) {
+      const link = doc.createElementNS(NS, "button");
+      link.id = "hmail-setup-import";
+      link.className = "btn-link";
+      link.textContent = "Chuyển & Nhập dữ liệu từ ứng dụng khác";
+      link.title = "Đọc thẳng tệp .pst của Outlook, hoặc nhập hồ sơ thư, " +
+                   "danh bạ và lịch";
+      link.addEventListener("click", e => {
+        e.preventDefault();
+        openImport(false);
+      });
+      cancel.parentNode?.insertBefore(link, cancel);
+    }
   },
 
   /** Every open shadow root under the hub, because the hub is built of them. */
@@ -125,7 +197,9 @@ var hMailAccountHub = {
    */
   offerSkip(win) {
     const spinner = this.find(win,
-      "#syncingAccountsSubheader, .account-hub-sync, #syncAccountsForm");
+      "#syncingAccountsSubheader, .account-hub-sync, #syncAccountsForm, " +
+      "#emailSyncAccountsForm, account-hub-email-sync, " +
+      "[id*='ync'] .loading-container, .account-hub-view[name*='ync']");
     const dialog = this.find(win, "#accountHubDialog") ||
                    win.document.getElementById("accountHub");
     if (!spinner || !dialog || spinner.hidden) {
@@ -169,7 +243,7 @@ var hMailAccountHub = {
   },
 
   /** Close the hub and hand the discovery to hMail's own CalDAV setup. */
-  finish(win) {
+  finish(win, { sync = true } = {}) {
     try {
       const close = this.find(win, "#closeButton, .close-button, [dialog-close]");
       if (close) {
@@ -178,6 +252,9 @@ var hMailAccountHub = {
         win.document.getElementById("accountHub")?.close?.();
       }
     } catch (e) {}
+    if (!sync) {
+      return;
+    }
     try {
       win.setTimeout(() => win.hMailDav?.setupAll(win, { quiet: true }), 1500);
     } catch (e) {}

@@ -204,6 +204,14 @@ var hMailQuickReply = {
     };
     input.addEventListener("input", grow);
     input.addEventListener("keydown", e => {
+      // A Vietnamese input method uses Enter to commit the syllable it is
+      // still composing ("thuwr" -> "thử"). Taking that Enter away sends the
+      // half-typed text and drops the raw keystrokes into the message, so
+      // composition always wins: isComposing covers the standard event, and
+      // keyCode 229 the platforms that only report it there.
+      if (e.isComposing || e.keyCode === 229) {
+        return;
+      }
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         this.send(win, input, false);

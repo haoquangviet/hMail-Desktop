@@ -162,6 +162,18 @@ var hMailInsight = {
   RISKY_ATTACHMENTS:
     /\.(exe|scr|com|pif|bat|cmd|js|jse|vbs|vbe|wsf|hta|msi|lnk|iso|img|jar|ps1)$/i,
 
+  /**
+   * The extension people are meant to read, in a name whose real extension
+   * is something else: "hoa-don.pdf.exe". Windows hides the last extension
+   * by default, so the file shows up as "hoa-don.pdf" and gets double
+   * clicked. Almost nothing legitimate is named this way.
+   */
+  DECOY_EXTENSIONS:
+    /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|jpg|jpeg|png|gif|txt|csv|zip|rar|htm|html|mp4|mp3)\.[a-z0-9]{1,8}$/i,
+
+  /** Right-to-left override and friends: "annexe‮fdp.exe" reads as .pdf. */
+  BIDI_TRICK: /[‪-‮⁦-⁩]/,
+
   STOPWORDS: new Set([
     "và", "là", "của", "có", "cho", "các", "được", "trong", "với", "này",
     "đó", "một", "những", "để", "khi", "từ", "đã", "sẽ", "không", "nếu",
@@ -926,6 +938,26 @@ var hMailInsight = {
     const attachments = (raw.match(/filename="?([^"\r\n;]+)"?/gi) || [])
       .map(s => s.replace(/^filename="?/i, "").replace(/"$/, "").trim());
     for (const name of attachments) {
+      // Checked before the plain risky-extension test: a decoy name is the
+      // more specific finding and deserves the more specific sentence.
+      if (this.DECOY_EXTENSIONS.test(name)) {
+        const real = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
+        const shown = name.slice(0, name.lastIndexOf("."));
+        note("danger",
+          `Tệp đính kèm "${name}" giả dạng: tên hiển thị là "${shown}" ` +
+          `nhưng đuôi thật là .${real}. Windows ẩn đuôi cuối nên tệp trông ` +
+          `như tài liệu bình thường — kiểu đặt tên này gần như chỉ có ở thư ` +
+          `chứa mã độc hoặc lừa đảo. Đừng mở; nếu là thư quen, hãy gọi điện ` +
+          `hỏi lại người gửi.`);
+        continue;
+      }
+      if (this.BIDI_TRICK.test(name)) {
+        note("danger",
+          `Tệp đính kèm "${name.replace(this.BIDI_TRICK, "")}" có ký tự đảo ` +
+          `chiều chữ ẩn trong tên, dùng để làm đuôi tệp hiện ra ngược lại. ` +
+          `Đây là thủ thuật của thư chứa mã độc — đừng mở.`);
+        continue;
+      }
       if (this.RISKY_ATTACHMENTS.test(name)) {
         note("danger", `Tệp đính kèm "${name}" có thể chạy được mã — ` +
                        `chỉ mở khi bạn chắc chắn đã yêu cầu tệp này.`);

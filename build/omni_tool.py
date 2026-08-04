@@ -366,20 +366,11 @@ def strip_fence(text: str, tag: str) -> str:
 
 def load_oauth_clients(repo: Path):
     """OAuth client registrations from the untracked secrets/ directory —
-    the repo is public, so credentials live outside it. Returns a map of
-    placeholder -> value plus the set of providers that are present."""
+    the repo is public, so credentials live outside it. Only Microsoft needs
+    one: Google rides on Thunderbird's own client (see the append file).
+    Returns a map of placeholder -> value plus the providers present."""
     values = {}
     providers = set()
-
-    google = repo / "secrets" / "google-oauth.json"
-    if google.exists():
-        try:
-            installed = json.loads(google.read_text("utf-8"))["installed"]
-            values["@GOOGLE_CLIENT_ID@"] = installed["client_id"]
-            values["@GOOGLE_CLIENT_SECRET@"] = installed["client_secret"]
-            providers.add("GOOGLE")
-        except (KeyError, ValueError):
-            sys.exit("secrets/google-oauth.json is not a Desktop-app client file")
 
     microsoft = repo / "secrets" / "microsoft-oauth.json"
     if microsoft.exists():
@@ -504,7 +495,7 @@ def build_replacements(zf: zipfile.ZipFile, repo: Path):
             values, providers = load_oauth_clients(repo)
             if extra and providers:
                 text = extra.decode("utf-8")
-                for tag in ("GOOGLE", "MICROSOFT"):
+                for tag in ("MICROSOFT",):
                     if tag not in providers:
                         text = strip_fence(text, tag)
                 for placeholder, value in values.items():

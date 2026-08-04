@@ -3,10 +3,10 @@
  *
  * CalDAV carries events but not conference links: Meet links exist only in
  * the Google Calendar REST API, Teams links only in Microsoft Graph. Both
- * APIs accept the OAuth tokens hMail's own clients already mint — Google's
- * calendar scope covers REST as well as CalDAV, and the Graph scopes ride
- * on the same Microsoft sign-in — so creating a meeting is one authorized
- * POST. The event lands in the account's calendar, the CalDAV copy in the
+ * Both APIs accept a token the account already holds: Google's calendar
+ * scope, granted with the mail sign-in, covers the REST API as well as
+ * CalDAV, while Teams needs the Graph scopes on HQV's own Azure app. Either
+ * way, creating a meeting is one authorized POST. The event lands in the account's calendar, the CalDAV copy in the
  * app catches up on its next refresh, and the join link goes straight to
  * the clipboard.
  */
