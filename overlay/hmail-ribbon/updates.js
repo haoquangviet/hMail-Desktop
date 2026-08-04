@@ -7,8 +7,10 @@
  * GitHub Releases feed of the source repository, compared against the
  * version this build was stamped with.
  *
- * Nothing is downloaded or installed automatically. The check reads one JSON
- * document and, if there is something newer, offers to open the release page.
+ * Nothing is installed automatically. The check reads one JSON document and,
+ * if there is a newer release carrying a build for this machine, offers the
+ * installer itself — the release page lists both platforms, and picking the
+ * wrong file is a mistake worth not offering.
  */
 
 "use strict";
@@ -62,6 +64,18 @@ var hMailUpdate = {
     }
   },
 
+  /** The installer in a release that belongs to the machine we run on. */
+  assetFor(assets) {
+    const mac = Services.appinfo.OS === "Darwin";
+    const wanted = mac ? /\.dmg$/i : /\.exe$/i;
+    for (const asset of assets) {
+      if (wanted.test(String(asset.name || ""))) {
+        return String(asset.browser_download_url || "");
+      }
+    }
+    return "";
+  },
+
   /**
    * @param {boolean} manual  Asked for by the user, so say something either
    *   way. The automatic check stays quiet when there is nothing new.
@@ -69,7 +83,7 @@ var hMailUpdate = {
   async check(win, manual = false) {
     const current = this.version();
     let latest = "";
-    let notes = "";
+    let download = "";
 
     try {
       const res = await fetch(this.API, {
@@ -80,7 +94,15 @@ var hMailUpdate = {
       }
       const body = await res.json();
       latest = String(body.tag_name || "").replace(/^v/, "");
-      notes = String(body.name || "");
+      // A release that carries no build for this machine is not an update
+      // anyone here can install: the Windows and macOS artefacts are made on
+      // different machines and one can be published minutes before the other.
+      // Better to stay quiet than to send someone to a page with nothing on
+      // it for them.
+      download = this.assetFor(body.assets || []);
+      if (!download) {
+        latest = "";
+      }
     } catch (e) {
       if (manual) {
         Services.prompt.alert(win, "Kiểm tra cập nhật",
@@ -98,7 +120,8 @@ var hMailUpdate = {
     if (!latest) {
       if (manual) {
         Services.prompt.alert(win, "Kiểm tra cập nhật",
-          "Chưa có bản phát hành nào được công bố.");
+          `Bạn đang dùng phiên bản ${current}. Chưa có bản cài mới cho ` +
+          "hệ điều hành này trên trang phát hành.");
       }
       return;
     }
@@ -116,18 +139,19 @@ var hMailUpdate = {
       Services.prompt.BUTTON_POS_1 * Services.prompt.BUTTON_TITLE_IS_STRING;
     const choice = Services.prompt.confirmEx(
       win, "hMail Desktop",
-      `Đã có phiên bản ${latest}${notes ? ` — ${notes}` : ""}.\n` +
+      `Đã có phiên bản ${latest}.\n` +
       `Bạn đang dùng ${current}.\n\n` +
-      "Mở trang tải bản mới?",
-      flags, "Mở trang tải", "Để sau", null, null, {});
+      "Tải bản cài đặt mới ngay bây giờ?",
+      flags, "Tải bản mới", "Để sau", null, null, {});
 
     if (choice === 0) {
+      const url = download || this.PAGE;
       try {
-        win.openLinkExternally(this.PAGE);
+        win.openLinkExternally(url);
       } catch (e) {
         Cc["@mozilla.org/uriloader/external-protocol-service;1"]
           .getService(Ci.nsIExternalProtocolService)
-          .loadURI(Services.io.newURI(this.PAGE));
+          .loadURI(Services.io.newURI(url));
       }
     }
   },
@@ -198,11 +222,16 @@ var hMailUpdate = {
           } else if (Services.vc.compare(info.version, this.version()) <= 0) {
             status.textContent =
               `Bạn đang dùng phiên bản mới nhất (${this.version()}).`;
+          } else if (!info.download) {
+            status.textContent =
+              `Đã có phiên bản ${info.version} nhưng chưa có bản cài cho hệ ` +
+              "điều hành này.";
           } else {
             status.textContent =
-              `Đã có phiên bản ${info.version}` +
-              (info.name ? ` — ${info.name}` : "") +
-              ". Bấm nút Mở trang tải để lấy bản mới.";
+              `Đã có phiên bản ${info.version}. Bấm nút bên cạnh để tải ` +
+              "bản cài đặt.";
+            open.textContent = `Tải hMail Desktop ${info.version}`;
+            open.dataset.hmailDownload = info.download;
           }
         }).finally(() => {
           check.disabled = false;
@@ -210,7 +239,8 @@ var hMailUpdate = {
       });
 
       const open = el("button", "hmail-update-button", "Mở trang tải");
-      open.addEventListener("click", () => this.openPage(doc.defaultView));
+      open.addEventListener("click", () =>
+        this.openPage(doc.defaultView, open.dataset.hmailDownload));
 
       row.append(check, open);
       wrap.append(row, status);
@@ -239,19 +269,21 @@ var hMailUpdate = {
       }
       const body = await res.json();
       const version = String(body.tag_name || "").replace(/^v/, "");
-      return version ? { version, name: String(body.name || "") } : null;
+      const download = this.assetFor(body.assets || []);
+      return version ? { version, download } : null;
     } catch (e) {
       return null;
     }
   },
 
-  openPage(win) {
+  openPage(win, url) {
+    const target = url || this.PAGE;
     try {
-      win.openLinkExternally(this.PAGE);
+      win.openLinkExternally(target);
     } catch (e) {
       Cc["@mozilla.org/uriloader/external-protocol-service;1"]
         .getService(Ci.nsIExternalProtocolService)
-        .loadURI(Services.io.newURI(this.PAGE));
+        .loadURI(Services.io.newURI(target));
     }
   },
 };

@@ -3,6 +3,7 @@
 ;   makensis /DVERSION=0.1.0 /DAPPDIR=<work\app> /DOUTDIR=<dist> installer\hmail.nsi
 
 !include "MUI2.nsh"
+!include "LogicLib.nsh"
 
 !ifndef VERSION
   !define VERSION "0.1.1"
@@ -22,11 +23,6 @@
 
 Var DataDir
 
-Function .onInit
-  ; The usual place, so anyone who does not care can press Next twice.
-  StrCpy $DataDir "$APPDATA\hMail Desktop"
-FunctionEnd
-
 Name "${PRODUCT_NAME}"
 OutFile "${OUTDIR}\hMailDesktopSetup-${VERSION}.exe"
 InstallDir "$PROGRAMFILES64\hMail Desktop"
@@ -42,6 +38,65 @@ VIAddVersionKey /LANG=0 "FileDescription" "${PRODUCT_NAME} Setup"
 VIAddVersionKey /LANG=0 "FileVersion" "${VERSION}"
 VIAddVersionKey /LANG=0 "ProductVersion" "${VERSION}"
 VIAddVersionKey /LANG=0 "LegalCopyright" "(c) ${COMPANY}. Based on Mozilla Thunderbird (MPL 2.0)."
+
+; Windows will not let the installer overwrite a running program, and the
+; failure arrives file by file as a wall of "cannot write" errors. So: ask,
+; then close it properly — a request to quit first, so anything half-written
+; to a mailbox is flushed, and a forced kill only if it will not go.
+!macro CloseHMail un
+Function ${un}CloseRunningApp
+  Push $0
+  Push $1
+  StrCpy $1 0
+
+  hmail_loop:
+    nsExec::ExecToStack 'cmd /c tasklist /FI "IMAGENAME eq hmail.exe" /NH | find /I "hmail.exe"'
+    Pop $0
+    ${If} $0 != 0
+      Goto hmail_done
+    ${EndIf}
+
+    ${If} $1 == 0
+      MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "hMail Desktop dang chay. Bam OK de dong lai va tiep tuc." IDOK +2
+      Goto hmail_abort
+    ${EndIf}
+
+    ${If} $1 < 3
+      nsExec::ExecToStack 'cmd /c taskkill /IM hmail.exe'
+      Pop $0
+      Sleep 3000
+    ${Else}
+      nsExec::ExecToStack 'cmd /c taskkill /F /IM hmail.exe'
+      Pop $0
+      Sleep 2000
+      Goto hmail_done
+    ${EndIf}
+
+    IntOp $1 $1 + 1
+    Goto hmail_loop
+
+  hmail_abort:
+    Pop $1
+    Pop $0
+    Abort
+
+  hmail_done:
+    Pop $1
+    Pop $0
+FunctionEnd
+!macroend
+!insertmacro CloseHMail ""
+!insertmacro CloseHMail "un."
+
+Function .onInit
+  ; The usual place, so anyone who does not care can press Next twice.
+  StrCpy $DataDir "$APPDATA\hMail Desktop"
+  Call CloseRunningApp
+FunctionEnd
+
+Function un.onInit
+  Call un.CloseRunningApp
+FunctionEnd
 
 !define MUI_ICON "..\branding\hmail.ico"
 !define MUI_UNICON "..\branding\hmail.ico"
