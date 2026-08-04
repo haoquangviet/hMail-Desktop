@@ -665,8 +665,36 @@ def patch_info_plist(app: Path):
     ):
         text = set_key(key, value, text)
 
+    text = add_url_scheme(text)
     plist.write_text(text, encoding="utf-8")
     log("Info.plist rebranded")
+
+
+def add_url_scheme(text: str) -> str:
+    """Register hmail:// with Launch Services, the macOS half of what the
+    Windows installer writes into the registry. Thunderbird's plist already
+    declares mailto:, so the entry is appended to the existing array."""
+    if "hmail</string>" in text:
+        return text
+    entry = (
+        "\t\t<dict>\n"
+        "\t\t\t<key>CFBundleURLName</key>\n"
+        "\t\t\t<string>hMail Desktop Link</string>\n"
+        "\t\t\t<key>CFBundleURLSchemes</key>\n"
+        "\t\t\t<array>\n"
+        "\t\t\t\t<string>hmail</string>\n"
+        "\t\t\t</array>\n"
+        "\t\t</dict>\n"
+    )
+    m = re.search(r"(<key>CFBundleURLTypes</key>\s*<array>\n)", text)
+    if m:
+        return text[:m.end()] + entry + text[m.end():]
+    block = ("\t<key>CFBundleURLTypes</key>\n\t<array>\n" + entry + "\t</array>\n")
+    marker = "</dict>\n</plist>"
+    if marker in text:
+        return text.replace(marker, block + marker, 1)
+    log("WARN: could not register the hmail:// URL scheme")
+    return text
 
 
 def main():

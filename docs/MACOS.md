@@ -43,6 +43,20 @@ Kết quả: `dist/hMailDesktop-<version>.dmg`.
 Ghi đè bằng biến môi trường khi cần: `VERSION`, `TB_VERSION`, `LOCALE`,
 `SIGN_IDENTITY`, `NOTARY_PROFILE`.
 
+### Thông tin OAuth cho lịch Google và họp Teams
+
+Thư mục `secrets/` **không nằm trong repo** (repo công khai). Nếu máy Mac
+chưa có, hãy chép từ máy build Windows sang trước khi chạy:
+
+```
+secrets/google-oauth.json      # client "Desktop app" từ Google Cloud
+secrets/microsoft-oauth.json   # {"client_id": "..."} của app Azure
+```
+
+Thiếu thư mục này thì bản build vẫn chạy bình thường, chỉ mất phần đồng bộ
+lịch/danh bạ Google và nút họp Meet/Teams — đăng nhập thư Gmail/Outlook
+không bị ảnh hưởng.
+
 ## Những khác biệt so với Windows
 
 | Hạng mục | Windows | macOS |
@@ -53,6 +67,8 @@ Ghi đè bằng biến môi trường khi cần: `VERSION`, `TB_VERSION`, `LOCAL
 | Autoconfig | `hmail.cfg` cạnh exe | `Contents/Resources/hmail.cfg` |
 | Ký số | Authenticode (SSL.com) | Developer ID + **notarize bắt buộc** |
 | Đóng gói | NSIS installer | `.dmg` kéo-thả vào Applications |
+| Giao thức `hmail://` | Khóa registry trong installer | `CFBundleURLTypes` trong `Info.plist` |
+| Kiểm tra Outlook đang mở (khi nhập .pst) | Có | Không cần — Outlook for Mac không khóa tệp .pst |
 
 ## Vì sao bắt buộc notarize
 

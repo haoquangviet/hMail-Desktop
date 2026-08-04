@@ -17,7 +17,7 @@
 #
 set -euo pipefail
 
-VERSION="${VERSION:-0.1.1}"
+VERSION="${VERSION:-1.0.4}"
 TB_VERSION="${TB_VERSION:-140.13.0esr}"
 LOCALE="${LOCALE:-vi}"
 SIGN_IDENTITY="${SIGN_IDENTITY:-Developer ID Application: HAO QUANG VIET SOFTWARE COMPANY LIMITED}"
@@ -157,6 +157,17 @@ cp -R "$REPO/overlay/hmail-ribbon" "$RES/hmail-ribbon"
 printf 'pref("hmail.version", "%s");\n' "$VERSION" > "$RES/defaults/pref/hmail.js"
 # One-shot startup cache purge on first launch (GreD is Contents/Resources).
 : > "$RES/.purgecaches"
+
+# The start page ships inside the application so the message pane still has
+# something to show with no network. docs/ is the single source: the same
+# files serve the public site on GitHub Pages.
+log "Bundling the start page"
+rm -rf "$RES/hmail-start"
+mkdir -p "$RES/hmail-start/assets"
+cp "$REPO/docs/start.html" "$RES/hmail-start/"
+for asset in brand.css i18n.js hMail.svg; do
+    cp "$REPO/docs/assets/$asset" "$RES/hmail-start/assets/"
+done
 
 # The AI assistant is privileged chrome in overlay/hmail-ribbon/aiassistant*.js,
 # not an add-on; it ships with the rest of the overlay copied above.
