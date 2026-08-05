@@ -122,12 +122,16 @@ var hMailRibbon = {
         {
           label: "Gửi/Nhận",
           buttons: [
+            // cmd_getNewMessages fetches the selected folder's account;
+            // cmd_getMsgsForAuthAccounts sweeps every account that can log
+            // in. The two were the wrong way round, so "Tất cả" fetched one
+            // account and "thư mục này" fetched all of them.
             { id: "get-all", label: "Gửi/Nhận\nTất cả", icon: "sync", size: "large",
-              cmd: "cmd_getNewMessages" },
-            { id: "get-folder", label: "Nhận thư\nmục này", icon: "inbox", size: "large",
               cmd: "cmd_getMsgsForAuthAccounts" },
+            { id: "get-folder", label: "Nhận thư\nmục này", icon: "inbox", size: "large",
+              cmd: "cmd_getNewMessages" },
             { id: "send-unsent", label: "Gửi thư\nchờ gửi", icon: "outbox", size: "large",
-              fn: win => win.SendUnsentMessages() },
+              cmd: "cmd_sendUnsentMsgs" },
           ],
         },
         {
@@ -818,10 +822,63 @@ var hMailRibbon = {
     }
   },
 
+  /**
+   * Run a command wherever its controller happens to live.
+   *
+   * goDoCommand() asks the focused element's dispatcher, and in this version
+   * the message list is a document inside a browser of its own: with focus
+   * in there, the outer window's controller — the one holding Get Messages,
+   * Send Unsent and the rest — is never consulted and the click does nothing
+   * at all. So each layer is asked in turn, starting with the focused one so
+   * context-sensitive commands still behave as they do from the menus.
+   */
+  dispatch(win, cmd) {
+    const tryController = controller => {
+      try {
+        if (controller && controller.isCommandEnabled(cmd)) {
+          controller.doCommand(cmd);
+          return true;
+        }
+      } catch (e) {}
+      return false;
+    };
+    const fromWindow = w => {
+      try {
+        return w?.controllers?.getControllerForCommand(cmd) || null;
+      } catch (e) {
+        return null;
+      }
+    };
+
+    try {
+      if (tryController(
+            win.document.commandDispatcher.getControllerForCommand(cmd))) {
+        return true;
+      }
+    } catch (e) {}
+    if (tryController(fromWindow(win))) {
+      return true;
+    }
+    const tabmail = win.document.getElementById("tabmail");
+    for (const inner of [tabmail?.currentAbout3Pane,
+                         tabmail?.currentAboutMessage,
+                         tabmail?.currentTabInfo?.browser?.contentWindow]) {
+      if (tryController(fromWindow(inner))) {
+        return true;
+      }
+    }
+    // Last resort: the original call, so nothing that used to work stops.
+    try {
+      win.goDoCommand(cmd);
+      return true;
+    } catch (e) {}
+    return false;
+  },
+
   run(win, btn) {
     try {
       if (btn.cmd) {
-        win.goDoCommand(btn.cmd);
+        this.dispatch(win, btn.cmd);
         return;
       }
       if (btn.fn) {
@@ -842,9 +899,27 @@ var hMailRibbon = {
     for (const b of root.querySelectorAll(".hmail-ribbon-button[data-cmd]")) {
       let enabled = true;
       try {
-        const controller = win.top.document.commandDispatcher
-          .getControllerForCommand(b.dataset.cmd);
-        enabled = !!controller && controller.isCommandEnabled(b.dataset.cmd);
+        const cmd = b.dataset.cmd;
+        const tabmail = win.document.getElementById("tabmail");
+        const candidates = [];
+        try {
+          candidates.push(win.top.document.commandDispatcher
+            .getControllerForCommand(cmd));
+        } catch (e) {}
+        for (const w of [win, tabmail?.currentAbout3Pane,
+                         tabmail?.currentAboutMessage]) {
+          try {
+            candidates.push(w?.controllers?.getControllerForCommand(cmd));
+          } catch (e) {}
+        }
+        // Enabled anywhere means the click will land somewhere.
+        enabled = candidates.some(c => {
+          try {
+            return c && c.isCommandEnabled(cmd);
+          } catch (e) {
+            return false;
+          }
+        });
       } catch (e) {
         enabled = true; // never disable a button just because probing failed
       }

@@ -773,7 +773,8 @@ Object.assign(hMailAI, {
         turns.push({
           role: "user",
           text: "Bạn là trợ lý trong ứng dụng thư hMail Desktop. Trả lời " +
-                "ngắn gọn bằng tiếng Việt.",
+                "ngắn gọn bằng tiếng Việt có dấu đầy đủ, đúng chính tả; " +
+                "không viết tiếng Việt không dấu.",
         });
         for (const t of this.looseTurns || []) {
           turns.push(t);
