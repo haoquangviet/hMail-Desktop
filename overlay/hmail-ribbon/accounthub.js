@@ -47,6 +47,7 @@ var hMailAccountHub = {
     try {
       this.nameTab(win);
       this.offerImport(win);
+      this.offerAccountOptions(win);
       this.fillUsernames(win);
       this.offerSkip(win);
     } catch (e) {}
@@ -240,6 +241,89 @@ var hMailAccountHub = {
 
     wrap.append(note, button);
     spinner.parentNode?.insertBefore(wrap, spinner.nextSibling);
+  },
+
+  /**
+   * The hub finishes on a page of "explore these options" links — encryption
+   * and signatures. What a new account actually needs first is the settings
+   * that decide how much of the mailbox lands on this machine: how far back
+   * to keep messages (IMAP) or when to remove them from the server (POP3).
+   * Those live in the account manager and nobody finds them by accident, so
+   * the finish page points at them, named for the account that was just made.
+   */
+  offerAccountOptions(win) {
+    const doc = win.document;
+    if (doc.getElementById("hmail-hub-account-options")) {
+      return;
+    }
+    // The success page is the one carrying those links.
+    const anchor = this.find(win,
+      "#emailSyncAccountsForm ~ *, .account-hub-success a, " +
+      "a[href*='e2e'], #hubEncryptionLink, #hubSignatureLink");
+    const list = anchor?.parentNode;
+    if (!list) {
+      return;
+    }
+
+    const server = this.newestServer();
+    if (!server) {
+      return;
+    }
+    const pop = server.type === "pop3";
+
+    const NS = "http://www.w3.org/1999/xhtml";
+    const wrap = doc.createElementNS(NS, "div");
+    wrap.id = "hmail-hub-account-options";
+
+    const add = (label, page) => {
+      const link = doc.createElementNS(NS, "a");
+      link.href = "#";
+      link.textContent = label;
+      link.className = "hmail-hub-option-link";
+      link.addEventListener("click", e => {
+        e.preventDefault();
+        this.finish(win, { sync: false });
+        win.setTimeout(() => {
+          try {
+            win.MsgAccountManager(page, server);
+          } catch (err) {
+            Cu.reportError("hMail hub options failed: " + err);
+          }
+        }, 300);
+      });
+      wrap.appendChild(link);
+    };
+
+    add(pop ? "Dung lượng đĩa (giữ thư bao lâu, khi nào xoá trên máy chủ)"
+            : "Đồng bộ hoá & lưu trữ (tải thư về máy, giữ bao nhiêu ngày)",
+        "am-offline.xhtml");
+    add("Cài đặt máy chủ (cổng, mã hoá, kiểm tra thư mới)",
+        "am-server.xhtml");
+    add("Soạn thảo & địa chỉ, chữ ký, thư rác…", "am-main.xhtml");
+
+    list.appendChild(wrap);
+  },
+
+  /** The account made last — the one the hub has just finished setting up. */
+  newestServer() {
+    let newest = null;
+    try {
+      for (const server of MailServices.accounts.allServers) {
+        if (!["imap", "pop3"].includes(server.type)) {
+          continue;
+        }
+        // Server keys are handed out in order, so the highest number is the
+        // one that was created most recently.
+        const n = parseInt(String(server.key).replace(/\D/g, ""), 10) || 0;
+        const best = newest
+          ? parseInt(String(newest.key).replace(/\D/g, ""), 10) || 0
+          : -1;
+        if (n > best) {
+          newest = server;
+        }
+      }
+    } catch (e) {}
+    return newest;
   },
 
   /** Close the hub and hand the discovery to hMail's own CalDAV setup. */

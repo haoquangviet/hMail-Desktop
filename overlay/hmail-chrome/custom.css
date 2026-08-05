@@ -4720,3 +4720,22 @@ unified-toolbar-customization {
 #hmail-setup-import:hover {
     opacity: 0.8;
 }
+
+/* Account-hub finish page: the settings a new mailbox actually needs first,
+   listed the way the hub lists its own links. */
+#hmail-hub-account-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.hmail-hub-option-link {
+    color: var(--hmail-accent, #0F6CBD);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.hmail-hub-option-link:hover {
+    text-decoration: underline;
+}
