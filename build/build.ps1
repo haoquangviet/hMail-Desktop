@@ -221,14 +221,14 @@ foreach ($asset in @("brand.css", "i18n.js", "hMail.svg")) {
 # Open / Compose / Quit, each item handed back to the application as an
 # hmail:// link. Built with the csc that ships with Windows, so the installer
 # carries no runtime of its own.
-$Csc = "$env:WINDIR\Microsoft.NET\Framework644.0.30319\csc.exe"
+$Csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 if (Test-Path $Csc) {
     Log "Building the tray helper"
     $TrayExe = Join-Path $App "hmailtray.exe"
     & $Csc /nologo /target:winexe /optimize+ /out:"$TrayExe" `
         /reference:System.dll /reference:System.Drawing.dll `
         /reference:System.Windows.Forms.dll `
-        (Join-Path $RepoRoot "installer	ray\hMailTray.cs")
+        (Join-Path $RepoRoot "installer\tray\hMailTray.cs")
     if ($LASTEXITCODE -ne 0) { throw "tray helper build failed" }
     if ($Sign) { Invoke-CodeSign $TrayExe }
 } else {

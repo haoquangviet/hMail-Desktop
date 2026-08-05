@@ -75,7 +75,11 @@ var hMailBackground = {
       Subprocess.call({
         command: exe.path,
         arguments: [`--pid=${Services.appinfo.processID}`,
-                    `--app=${app.path}`],
+                    `--app=${app.path}`,
+                    // A development or portable run uses a profile that is
+                    // not the default one; without passing it on, the tray's
+                    // second launch would open a different mailbox.
+                    `--profile=${Services.dirsvc.get("ProfD", Ci.nsIFile).path}`],
         stderr: "pipe",
       }).catch(e => {
         this.trayStarted = false;

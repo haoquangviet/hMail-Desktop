@@ -24,6 +24,7 @@ using System.Windows.Forms;
 internal static class HMailTray
 {
     private static string _appPath = "";
+    private static string _profile = "";
     private static NotifyIcon _icon;
 
     [STAThread]
@@ -39,6 +40,10 @@ internal static class HMailTray
             else if (arg.StartsWith("--app=", StringComparison.OrdinalIgnoreCase))
             {
                 _appPath = arg.Substring(6).Trim('"');
+            }
+            else if (arg.StartsWith("--profile=", StringComparison.OrdinalIgnoreCase))
+            {
+                _profile = arg.Substring(10).Trim('"');
             }
         }
 
@@ -67,13 +72,17 @@ internal static class HMailTray
             };
 
             var menu = new ContextMenuStrip();
-            menu.Items.Add(Item("Mở hMail", "hmail://open"));
-            menu.Items.Add(Item("Soạn thư mới", "hmail://compose"));
+            // Opening and composing are things the program already accepts on
+            // its command line; only quitting needs hMail's own handler. Using
+            // the built-in flags means those two work even if the hmail://
+            // scheme is not registered on this machine.
+            menu.Items.Add(Item("Mở hMail", "-mail"));
+            menu.Items.Add(Item("Soạn thư mới", "-compose"));
             menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add(Item("Thoát hMail", "hmail://quit"));
+            menu.Items.Add(Item("Thoát hMail", "-hmail-url \"hmail://quit\""));
             _icon.ContextMenuStrip = menu;
             // Double click is the shortcut everyone tries first.
-            _icon.DoubleClick += (s, e) => Send("hmail://open");
+            _icon.DoubleClick += (s, e) => Send("-mail");
 
             WatchParent(parentPid);
             Application.Run();
@@ -85,10 +94,10 @@ internal static class HMailTray
         return 0;
     }
 
-    private static ToolStripMenuItem Item(string label, string url)
+    private static ToolStripMenuItem Item(string label, string arguments)
     {
         var item = new ToolStripMenuItem(label);
-        item.Click += (s, e) => Send(url);
+        item.Click += (s, e) => Send(arguments);
         return item;
     }
 
@@ -104,15 +113,25 @@ internal static class HMailTray
         }
     }
 
-    /// <summary>Hand a link to hMail; the running instance picks it up.</summary>
-    private static void Send(string url)
+    /// <summary>
+    /// Run hMail again with these arguments. A second launch does not start a
+    /// second program: the one already running picks the command line up and
+    /// acts on it. The profile is passed along when this helper was started
+    /// with one, or the second launch would open a different mailbox.
+    /// </summary>
+    private static void Send(string arguments)
     {
         try
         {
+            string args = arguments;
+            if (!string.IsNullOrEmpty(_profile))
+            {
+                args = "-profile \"" + _profile + "\" " + args;
+            }
             Process.Start(new ProcessStartInfo
             {
                 FileName = _appPath,
-                Arguments = "-osint -hmail-url \"" + url + "\"",
+                Arguments = args,
                 UseShellExecute = false,
             });
         }
