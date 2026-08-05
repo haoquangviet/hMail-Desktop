@@ -1429,19 +1429,24 @@ var hMailInsight = {
    */
   plainBody(raw) {
     const part = this.textPart(raw);
-    let body = part.body;
+    return this.stripHtml(this.decodeBytes(
+      this.decodeTransfer(part.body, part.encoding), part.charset));
+  },
 
-    if (/base64/i.test(part.encoding)) {
+  /** Undo Content-Transfer-Encoding, leaving bytes for the charset decoder. */
+  decodeTransfer(body, encoding) {
+    if (/base64/i.test(encoding)) {
       try {
-        body = atob(body.replace(/[^A-Za-z0-9+/=]/g, ""));
-      } catch (e) {}
-    } else if (/quoted-printable/i.test(part.encoding) ||
-               /=[0-9A-F]{2}/.test(body)) {
-      body = body.replace(/=\r?\n/g, "").replace(
+        return atob(String(body).replace(/[^A-Za-z0-9+/=]/g, ""));
+      } catch (e) {
+        return body;
+      }
+    }
+    if (/quoted-printable/i.test(encoding) || /=[0-9A-F]{2}/.test(body)) {
+      return String(body).replace(/=\r?\n/g, "").replace(
         /=([0-9A-F]{2})/gi, (_m, hex) => String.fromCharCode(parseInt(hex, 16)));
     }
-
-    return this.stripHtml(this.decodeBytes(body, part.charset));
+    return body;
   },
 
   /**
@@ -1469,6 +1474,7 @@ var hMailInsight = {
     const parts = raw.split(new RegExp(
       `--${boundary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:--)?\\r?\\n`));
     let html = null;
+    let plain = null;
     for (const chunk of parts.slice(1)) {
       const end = chunk.search(/\r?\n\r?\n/);
       if (end === -1) {
@@ -1480,15 +1486,40 @@ var hMailInsight = {
         charset: charsetOf(head),
         encoding: encodingOf(head),
       };
-      if (/Content-Type\s*:\s*text\/plain/i.test(head)) {
-        return value;
+      if (!plain && /Content-Type\s*:\s*text\/plain/i.test(head)) {
+        plain = value;
       }
       if (!html && /Content-Type\s*:\s*text\/html/i.test(head)) {
         html = value;
       }
     }
-    return html || { body: rest, charset: charsetOf(top),
-                     encoding: encodingOf(top) };
+    // Plain text is the easier read, but some senders write it without
+    // Vietnamese diacritics while the HTML they actually display carries
+    // them. Reading the plain part then quotes the message back at the user
+    // in a form they never saw. When the two disagree that way, follow what
+    // is on screen.
+    if (plain && html && this.losesDiacritics(plain, html)) {
+      return html;
+    }
+    return plain || html || { body: rest, charset: charsetOf(top),
+                              encoding: encodingOf(top) };
+  },
+
+  /** True when the HTML alternative is accented Vietnamese and plain is not. */
+  losesDiacritics(plain, html) {
+    try {
+      const marks = /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i;
+      const plainText = this.decodeBytes(
+        this.decodeTransfer(plain.body, plain.encoding), plain.charset);
+      if (marks.test(plainText)) {
+        return false;
+      }
+      const htmlText = this.decodeBytes(
+        this.decodeTransfer(html.body, html.encoding), html.charset);
+      return marks.test(htmlText);
+    } catch (e) {
+      return false;
+    }
   },
 
   /** Byte string -> text, honouring the declared charset. */
@@ -1625,6 +1656,16 @@ var hMailInsight = {
 
     const sentences = clean
       .split(/(?<=[.!?…])\s+|\n{2,}/)
+      // A tracking link can run to four hundred characters and swallow the
+      // sentence it sits in. The reader needs to know a link is there, not
+      // to read it, so it is named by its host and the rest dropped.
+      .map(s => s.replace(/https?:\/\/[^\s<>"']{40,}/g, url => {
+        try {
+          return `[liên kết tới ${new URL(url).host}]`;
+        } catch (e) {
+          return "[liên kết]";
+        }
+      }))
       .map(s => s.replace(/\s+/g, " ").trim())
       .filter(s => s.length >= 30 && s.length <= 400);
     if (!sentences.length) {

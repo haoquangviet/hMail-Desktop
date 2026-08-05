@@ -102,7 +102,8 @@ var hMailQuickReply = {
    * message document itself — padding on its body — rather than by pushing
    * the browser element up. A margin on the browser left a strip of the
    * window showing through below the message, which is not part of the page
-   * the user is reading; padding on the body is.
+   * the user is reading. The space is taken from the element the browser
+   * sits in, so the message document keeps its own layout untouched.
    */
   reserveSpace(win, doc, box) {
     const pane = doc.getElementById("messagepane");
@@ -123,31 +124,26 @@ var hMailQuickReply = {
         doc.documentElement.style.setProperty(
           "--hmail-quickreply-height", `${height}px`);
 
-        // Whatever is last in the column is what the bar covers. With an
-        // attachment bar on screen that is the attachment bar — reserving
-        // inside the message document instead pushed it down behind the
-        // reply box, so a message with attachments looked like it had none.
-        // Set on the body directly rather than through a variable that
-        // userContent.css reads: that sheet only reaches documents whose URL
-        // matches its @-moz-document list, and a message can be rendered from
-        // more schemes than that list will ever cover. An inline style always
-        // lands.
+        // Reserve the space by shrinking the box the message is drawn in,
+        // not by padding the message itself. A message brings its own CSS
+        // and can override, ignore or out-scroll padding on its body — the
+        // last lines then sit behind the reply bar with no way to reach
+        // them. Margin on the element below the browser shrinks the
+        // viewport instead, so the document's own scrollbar accounts for
+        // the bar and the end of the message is always reachable.
         const body = pane?.contentDocument?.body;
-        if (lastVisible() === attachments) {
-          attachments.style.marginBlockEnd = `${height}px`;
-          if (body) {
-            body.style.paddingBottom = "";
-          }
-        } else {
-          if (attachments) {
-            attachments.style.marginBlockEnd = "";
-          }
-          if (body) {
-            body.style.paddingBottom = `${height + 12}px`;
-          }
+        if (body) {
+          body.style.paddingBottom = "";
+        }
+        if (attachments) {
+          attachments.style.marginBlockEnd = "";
         }
         if (pane) {
           pane.style.marginBlockEnd = "";
+        }
+        const target = lastVisible();
+        if (target) {
+          target.style.marginBlockEnd = `${height}px`;
         }
       } catch (e) {}
     };

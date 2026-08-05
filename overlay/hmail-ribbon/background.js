@@ -28,6 +28,8 @@ var hMailBackground = {
         return;
       }
       win.addEventListener("close", event => this.onClose(win, event), true);
+      this.syncTray(win);
+      Services.prefs.addObserver(this.PREF, () => this.syncTray(win));
     } catch (e) {
       Cu.reportError("hMail background init failed: " + e);
     }
@@ -38,6 +40,49 @@ var hMailBackground = {
       return Services.prefs.getBoolPref(this.PREF);
     } catch (e) {
       return false;
+    }
+  },
+
+  /**
+   * The tray icon lives in a helper process of its own (hmailtray.exe): the
+   * platform's icon is built in C++ and has no menu to attach to. It only
+   * makes sense while hMail keeps running behind a closed window, so it
+   * comes and goes with that setting.
+   */
+  syncTray(win) {
+    try {
+      if (Services.appinfo.OS !== "WINNT") {
+        return;
+      }
+      if (!this.enabled()) {
+        return; // The helper exits by itself when hMail does.
+      }
+      if (this.trayStarted) {
+        return;
+      }
+      const exe = Services.dirsvc.get("GreD", Ci.nsIFile).clone();
+      exe.append("hmailtray.exe");
+      const app = Services.dirsvc.get("XREExeF", Ci.nsIFile);
+      if (!exe.exists() || !app.exists()) {
+        return;
+      }
+      // Subprocess rather than nsIProcess: it takes the argument list as
+      // data instead of building a command line, so a program directory
+      // with a space in it cannot split "--app=" in half.
+      const { Subprocess } = ChromeUtils.importESModule(
+        "resource://gre/modules/Subprocess.sys.mjs");
+      this.trayStarted = true;
+      Subprocess.call({
+        command: exe.path,
+        arguments: [`--pid=${Services.appinfo.processID}`,
+                    `--app=${app.path}`],
+        stderr: "pipe",
+      }).catch(e => {
+        this.trayStarted = false;
+        Cu.reportError("hMail tray helper did not start: " + e);
+      });
+    } catch (e) {
+      Cu.reportError("hMail tray helper failed: " + e);
     }
   },
 

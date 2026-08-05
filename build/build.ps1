@@ -215,6 +215,26 @@ foreach ($asset in @("brand.css", "i18n.js", "hMail.svg")) {
 # quoting the mail always ran on empty content. It is now privileged chrome in
 # overlay/hmail-ribbon/aiassistant*.js, shipped with the rest of the overlay.
 
+# --------------------------------------------------- tray helper (Windows)
+# The platform's own tray icon is created in C++ and carries no menu, so a
+# right-click does nothing. This is hMail's own icon: a few kilobytes with
+# Open / Compose / Quit, each item handed back to the application as an
+# hmail:// link. Built with the csc that ships with Windows, so the installer
+# carries no runtime of its own.
+$Csc = "$env:WINDIR\Microsoft.NET\Framework644.0.30319\csc.exe"
+if (Test-Path $Csc) {
+    Log "Building the tray helper"
+    $TrayExe = Join-Path $App "hmailtray.exe"
+    & $Csc /nologo /target:winexe /optimize+ /out:"$TrayExe" `
+        /reference:System.dll /reference:System.Drawing.dll `
+        /reference:System.Windows.Forms.dll `
+        (Join-Path $RepoRoot "installer	ray\hMailTray.cs")
+    if ($LASTEXITCODE -ne 0) { throw "tray helper build failed" }
+    if ($Sign) { Invoke-CodeSign $TrayExe }
+} else {
+    Log "WARNING: csc.exe not found - shipping without the tray helper"
+}
+
 # version pref consumed by the hMail update channel in hmail.cfg
 Set-Content -Encoding ASCII -Path (Join-Path $App "defaults\pref\hmail.js") `
     -Value "pref(""hmail.version"", ""$Version"");"

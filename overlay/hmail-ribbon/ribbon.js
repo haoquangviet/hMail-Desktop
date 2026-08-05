@@ -299,23 +299,28 @@ var hMailRibbon = {
         {
           label: "Mới",
           buttons: [
+            // The address book is a page of its own and these are its own
+            // functions, not window commands: cmd_createContact never
+            // existed anywhere, so that button did nothing at all.
             { id: "a-new-contact", label: "Liên hệ\nmới", icon: "contact", size: "large",
-              cmd: "cmd_createContact" },
+              fn: win => hMailRibbon.inAddressBook(win, ab => ab.createContact()) },
             { id: "a-new-list", label: "Danh sách\nmới", icon: "list", size: "large",
-              cmd: "cmd_createList" },
+              fn: win => hMailRibbon.inAddressBook(win, ab => ab.createList()) },
             { id: "a-new-book", label: "Sổ địa chỉ\nmới", icon: "book", size: "large",
-              cmd: "cmd_createAddressBook" },
+              fn: win => hMailRibbon.inAddressBook(win, ab => ab.createBook()) },
           ],
         },
         {
           label: "Tác vụ",
           buttons: [
+            // The card pane's own buttons, clicked from here: the address
+            // book answers these by element id, not through a controller.
             { id: "a-compose", label: "Viết thư", icon: "new-mail",
-              cmd: "cmd_compose" },
+              fn: win => hMailRibbon.clickInAddressBook(win, "detailsWriteButton") },
+            { id: "a-edit", label: "Sửa liên hệ", icon: "templates",
+              fn: win => hMailRibbon.clickInAddressBook(win, "editButton") },
             { id: "a-delete", label: "Xóa", icon: "trash",
-              cmd: "cmd_delete" },
-            { id: "a-print", label: "In", icon: "list",
-              cmd: "cmd_print" },
+              fn: win => hMailRibbon.clickInAddressBook(win, "detailsDeleteButton") },
           ],
         },
         {
@@ -873,6 +878,39 @@ var hMailRibbon = {
       return true;
     } catch (e) {}
     return false;
+  },
+
+  /** The address-book page, when that is the tab in front. */
+  addressBookWindow(win) {
+    try {
+      const inner = win.document.getElementById("tabmail")
+        ?.currentTabInfo?.browser?.contentWindow;
+      return String(inner?.location?.href || "").startsWith("about:addressbook")
+        ? inner : null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  inAddressBook(win, fn) {
+    const ab = this.addressBookWindow(win);
+    if (!ab) {
+      return;
+    }
+    try {
+      fn(ab);
+    } catch (e) {
+      Cu.reportError("hMail ribbon: address book action failed: " + e);
+    }
+  },
+
+  clickInAddressBook(win, id) {
+    this.inAddressBook(win, ab => {
+      const node = ab.document.getElementById(id);
+      if (node && !node.disabled && !node.hidden) {
+        node.click();
+      }
+    });
   },
 
   run(win, btn) {
