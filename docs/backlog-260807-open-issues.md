@@ -79,6 +79,17 @@ File: `overlay/hmail-ribbon/meetings.js` (+ css tương ứng). Tham khảo các
 >   patch omni thêm bước tra `calendar.getItem(uid)` trước khi render nút, và render phần
 >   tĩnh (parse ics) ngay khi thư mở, đừng chờ itip processing.
 
+## 7. 🆕 (07/08 tối) `hmail://quit` không còn tác dụng với instance đang chạy
+
+Phát hiện khi deploy: `hmail.exe -osint -hmail-url "hmail://quit"` từng hoạt động (xác nhận 05/08),
+nay gửi tới instance đang chạy thì không có gì xảy ra (app idle, không dialog chặn, window vẫn mở,
+thử nhiều lần 45–60s). Đây cũng là đường Quit của **menu khay hệ thống** → nếu hỏng thật thì user
+không thoát được app từ tray. Cần: repro với app vừa khởi động sạch (không index), kiểm tra
+command-line forwarding có gọi tới handler trong hmail.cfg không (thêm log tạm), soát lại
+`Services.startup.quit(eAttemptQuit|eForceQuit)` — hai hằng này KHÔNG phải bitflag, OR ra 0x03
+(eForceQuit) vẫn đúng nhưng nên viết tường minh. Lưu ý file JS/CSS deploy được khi app đang chạy
+(không bị khoá) — chỉ cần restart tự nhiên để nhận.
+
 ## Checklist hoàn tất
 
 1. ~~Review diff 5 file (nhất là 3 file "SỬA DỞ")~~ ✅
