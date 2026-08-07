@@ -53,6 +53,32 @@ Dấu vết từ diff dở dang: nguyên nhân là extension bị cài qua **`po
 
 KHÔNG phải bug hMail Desktop hay mailserver. Log `cyrus/http` trên mail.haoquangviet.com sạch (chỉ REPORT 207, không có PUT lỗi). Lỗi "Server Replied with 400" (mã 0x80004005) đến từ **Google CalDAV** khi Thunderbird PUT `X-MOZ-LASTACK` (dismiss) lên event sinh nhật trên lịch Google ("Gia đình"/Gmail). Workaround cho user: chuột phải lịch Google → Thuộc tính → "Chỉ đọc" hoặc tắt "Hiện lời nhắc". Cải tiến tương lai (tùy chọn): surface lỗi ghi lịch rõ hơn thay vì dialog chung chung.
 
+## 6. 🆕 (07/08 chiều) Banner "Lời mời họp" (meetings.js): chậm + vỡ layout + không check trạng thái
+
+Screenshot owner: thư mời Google Calendar (invite.ics, METHOD:REQUEST) mở trong hMail Desktop —
+banner "Lời mời họp" CÓ hiện nhưng: (1) **hiện rất chậm** (owner tưởng không có); (2) **bảng vỡ layout** —
+các cột (Sự kiện/Thời gian/Địa điểm/Người tổ chức) bị ép rộng ~1 ký tự, chữ xuống dòng dọc từng ký tự
+(table không có width/table-layout trong pane hẹp; cần đổi sang layout dọc label:value hoặc grid + min-width,
+responsive theo độ rộng message pane); (3) nút Chấp nhận/Có thể/Từ chối **không check CalDAV** xem event
+(cùng UID) đã tồn tại/đã trả lời chưa → bấm nhiều lần tạo trùng sự kiện. Yêu cầu owner: check lịch theo UID
+trước khi render (hiện "Đã chấp nhận ✓" + cho đổi câu trả lời thay vì 3 nút trơn), tạo event idempotent theo UID,
+và tối ưu tốc độ hiện banner (parse ics + render trước, đừng chờ network).
+File: `overlay/hmail-ribbon/meetings.js` (+ css tương ứng). Tham khảo cách webmail làm: `hqv_itip` (mailserver repo).
+
+> **CẬP NHẬT 07/08 ~16:15 (điều tra + fix một phần):**
+> - Banner này KHÔNG phải meetings.js (file đó là tạo họp Meet/Teams). Nó là **panel built-in
+>   của Thunderbird**: `imip-bar.js` + custom element `calendar-invitation-panel` (shadow DOM).
+> - Vì shadow DOM nên userChrome/custom.css KHÔNG với tới — mọi chỉnh giao diện phải append vào
+>   `chrome/calendar/skin/.../shared/widgets/calendar-invitation-panel.css` **trong omni.ja**
+>   (đã thêm case trong `build/omni_tool.py`, commit `209897f`).
+> - ✅ (2) Vỡ layout: đã fix — bảng props xếp dọc nhãn-trên-giá-trị, sống ở mọi độ rộng pane.
+>   Đã hot-patch omni.ja bản Windows đang cài (kèm .purgecaches); vào bản build kế cho macOS.
+> - ⏳ (1) Chậm hiện banner và (3) check trạng thái theo UID/idempotent: chưa làm — nằm trong
+>   logic `imip-bar.js`/`calItipUtils` (itip lookup chờ calendar khởi động xong; nút Accept
+>   không hỏi lịch CalDAV xem UID đã có/đã trả lời chưa). Cần thư mời thật để repro; hướng:
+>   patch omni thêm bước tra `calendar.getItem(uid)` trước khi render nút, và render phần
+>   tĩnh (parse ics) ngay khi thư mở, đừng chờ itip processing.
+
 ## Checklist hoàn tất
 
 1. ~~Review diff 5 file (nhất là 3 file "SỬA DỞ")~~ ✅
