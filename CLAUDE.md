@@ -33,6 +33,13 @@
   việc nặng (stream thư để phân tích, mở panel AI, gắn bar trả lời nhanh) nhường
   Thunderbird khởi động xong đã — giữ nguyên quy ước này khi thêm watcher mới.
 
+## Dữ liệu người dùng
+
+- **Hồ sơ (profile) nằm ở `%APPDATA%\Thunderbird\Profiles\…` — là CHỦ ĐÍCH**,
+  không phải bug: đường dẫn profile được compile sẵn trong Gecko, và giữ nguyên
+  để bản cài hMail đè lên Thunderbird cũ không mất thư/cấu hình của người dùng.
+  Đổi sang thư mục riêng đòi hỏi migration cẩn thận — chưa làm. Đừng "sửa" vu vơ.
+
 ## Bẫy DOM/Gecko đã trả giá để biết
 
 - **Cây DOM runtime của about:message KHÁC aboutMessage.xhtml**: `#messagepane`
