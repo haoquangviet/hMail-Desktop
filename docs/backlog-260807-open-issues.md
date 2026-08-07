@@ -7,6 +7,11 @@
 > toggle nút "+" (click lại không đóng menu vì e.target là SVG con); áp cùng fix tab-riêng cho
 > `mailinsight.js` (selected() + chỗ gắn banner) và `spamreport.js`. Comment CSS "blocked by
 > policy" hoá ra đã được sửa sẵn trong diff dở dang. Còn lại: build 1.0.7 + user test (mục 2, 3).
+>
+> **CẬP NHẬT 07/08 ~10:30:** đã build + ký số Windows `dist/hMailDesktopSetup-1.0.7.exe`
+> (Authenticode Valid, SHA-256 `CFFF2E16AA0269EED5BF829794D98DC34D0AD9A825110E45E078FF48C364EC6E`).
+> Lưu ý build.ps1 phải chạy với `-Sign` (kèm HMAIL_SIGN_TOKEN) — lần chạy đầu thiếu cờ, ra bản
+> không ký. Chưa build macOS, chưa release GitHub — chờ user test theo checklist mục 5.
 
 ## Trạng thái working tree (git status)
 
