@@ -201,7 +201,9 @@ var hMailUpdate = {
       const run = Services.prompt.confirmEx(
         win, "hMail Desktop",
         `Đã tải xong bản ${version} vào:\n${file.path}\n\n` +
-        (mac ? "Mở tệp cài đặt ngay?"
+        (mac ? "Mở tệp cài đặt ngay?\n\nLƯU Ý: trong cửa sổ hiện ra, hãy " +
+               "KÉO hMail Desktop vào thư mục Applications và chọn " +
+               "Replace. Bấm \"Mở hiện có\" sẽ chỉ mở lại bản cũ."
              : "Chạy bộ cài ngay? hMail sẽ tự đóng để cập nhật."),
         flags, mac ? "Mở tệp cài đặt" : "Cài ngay", "Để sau",
         null, null, {});
