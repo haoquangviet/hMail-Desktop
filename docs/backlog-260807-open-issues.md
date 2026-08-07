@@ -90,6 +90,17 @@ command-line forwarding có gọi tới handler trong hmail.cfg không (thêm lo
 (eForceQuit) vẫn đúng nhưng nên viết tường minh. Lưu ý file JS/CSS deploy được khi app đang chạy
 (không bị khoá) — chỉ cần restart tự nhiên để nhận.
 
+## 8. 🆕 (07/08 đêm) hmailmovedata.exe: Process.Start(hmail.exe) sau khi chuyển không nổ máy
+
+Move thật sang D:\hMailData: copy + trỏ profiles.ini + xoá nguồn đều chuẩn, nhưng bước
+`Process.Start(app)` của helper không làm hMail chạy (không exception, không process) → helper
+chờ 60s không thấy app rồi bung prompt "chuyển ngược" (may là chưa ai bấm Yes). Chạy tay
+`explorer.exe hmail.exe` ngay sau đó thì lên bình thường trên đúng profile mới. Nghi:
+môi trường/working-dir của tiến trình helper. Hướng: đặt ProcessStartInfo WorkingDirectory =
+thư mục app + UseShellExecute=true, hoặc mở qua explorer.exe như deploy-dev; thêm retry +
+báo lỗi rõ nếu app không xuất hiện sau 10s. Cũng nên sửa monitor grep profiles.ini trong
+quy trình vận hành (lần này grep bash báo âm tính giả do escaping, gây chẩn đoán nhầm).
+
 ## Checklist hoàn tất
 
 1. ~~Review diff 5 file (nhất là 3 file "SỬA DỞ")~~ ✅
