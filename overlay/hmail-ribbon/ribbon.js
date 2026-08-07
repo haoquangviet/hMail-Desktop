@@ -245,10 +245,10 @@ var hMailRibbon = {
                   if (!fp) {
                     return;
                   }
-                  const active = fp.activeModes;
-                  fp.activeModes = active.includes("smart")
-                    ? active.filter(m => m !== "smart")
-                    : [...active, "smart"];
+                  // A switch, not an addition: showing "smart" beside "all"
+                  // lists every account twice, once per tree.
+                  fp.activeModes = fp.activeModes.includes("smart")
+                    ? ["all"] : ["smart"];
                 } catch (e) {
                   Cu.reportError("hMail unified toggle failed: " + e);
                 }
