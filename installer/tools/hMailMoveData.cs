@@ -89,7 +89,7 @@ internal static class MoveData
                     MessageBox.Show("Không chuyển được: " + ex.Message +
                         "\n\nDữ liệu gốc vẫn còn nguyên tại:\n" + profile,
                         "hMail — Di chuyển dữ liệu");
-                    try { Process.Start(app); } catch { }
+                    try { StartApp(app); } catch { }
                     form.Close();
                 });
             }
@@ -222,7 +222,7 @@ internal static class MoveData
         try { File.Delete(JournalPath()); } catch { }
 
         Status("Đang mở lại hMail…", dst);
-        Process.Start(app);
+        StartApp(app);
 
         // Theo dõi sau chuyển: hMail phải sống qua phút đầu tiên. Chết yểu
         // (crash khi mở hồ sơ ở chỗ mới) thì đề nghị chuyển ngược — dữ liệu
@@ -251,7 +251,7 @@ internal static class MoveData
                 Status("Đang chuyển ngược về chỗ cũ…", dst + " → " + src);
                 MoveBack(dst, src);
                 RewriteProfilesIni(dst, src);
-                Process.Start(app);
+                StartApp(app);
             }
         }
     }
@@ -352,6 +352,23 @@ internal static class MoveData
                 lines[i] = "IsRelative=0";
         }
         File.WriteAllLines(ini, lines, new UTF8Encoding(false));
+    }
+
+    /// <summary>
+    /// Mở hMail qua explorer: Process.Start thẳng exe từ tiến trình này đã
+    /// từng im lặng không nổ máy (đo thực tế 07/08); explorer mở hộ thì
+    /// app chạy trong phiên người dùng bình thường, lần nào cũng lên.
+    /// </summary>
+    private static void StartApp(string app)
+    {
+        try
+        {
+            Process.Start("explorer.exe", "\"" + app + "\"");
+        }
+        catch
+        {
+            try { Process.Start(app); } catch { }
+        }
     }
 
     private static string Arg(string[] args, string name)

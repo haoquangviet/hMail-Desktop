@@ -90,7 +90,7 @@ command-line forwarding có gọi tới handler trong hmail.cfg không (thêm lo
 (eForceQuit) vẫn đúng nhưng nên viết tường minh. Lưu ý file JS/CSS deploy được khi app đang chạy
 (không bị khoá) — chỉ cần restart tự nhiên để nhận.
 
-## 8. 🆕 (07/08 đêm) hmailmovedata.exe: Process.Start(hmail.exe) sau khi chuyển không nổ máy
+## 8. ✅ (07/08 đêm, ĐÃ FIX) hmailmovedata.exe không tự mở lại app sau move
 
 Move thật sang D:\hMailData: copy + trỏ profiles.ini + xoá nguồn đều chuẩn, nhưng bước
 `Process.Start(app)` của helper không làm hMail chạy (không exception, không process) → helper
