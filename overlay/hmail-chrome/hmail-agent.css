@@ -77,7 +77,20 @@ description.text-blurb {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    margin-block-start: 4px;
+    margin-block: 4px 14px;
+    /* Chiếm trọn hàng: hộp chủ trên trang Cài đặt xếp con theo hàng ngang,
+       hai hộp của hMail (Thư mục dữ liệu, Phiên bản) từng bị ép đứng cạnh
+       nhau thành hai cột chữ hẹp. */
+    flex-basis: 100% !important;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Hộp chủ chứa các hộp hMail phải cho phép xuống hàng thì flex-basis 100%
+   ở trên mới thành mỗi hộp một hàng. */
+#updateBox,
+#updateApp {
+    flex-wrap: wrap;
 }
 
 .hmail-update-line {
