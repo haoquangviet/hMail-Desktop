@@ -1290,19 +1290,20 @@ Object.assign(hMailAI, {
   },
 
   /**
-   * Whether rebuilding the panel right now would land on top of the user:
-   * either they are mid-keystroke in the composer, or they have a draft
-   * sitting there unsent. Either way a rebuild replaces the textarea under
-   * them, which loses the draft and — worse — breaks IME composition (a
-   * Vietnamese "thuwr" mid-commit lands as raw "thuwr" in a fresh element
-   * instead of becoming "thử").
+   * Whether refreshing the panel right now would land on top of the user:
+   * they are mid-keystroke in the composer, where DOM churn beside the
+   * focused textarea can break IME composition (a Vietnamese "thuwr"
+   * mid-commit lands as raw "thuwr" instead of becoming "thử" — UniKey
+   * injects backspaces into whatever holds focus, and it must not waver).
+   *
+   * An unsent draft alone does NOT count as busy: restore() only rebuilds
+   * the log, never the composer, so the draft survives a refresh untouched.
+   * Treating a parked draft as busy froze the panel on the previous message
+   * whenever something was left in the box.
    */
   composerBusy(win) {
     const input = win.document.getElementById("hmail-ai-input");
-    if (!input) {
-      return false;
-    }
-    return win.document.activeElement === input || input.value.trim() !== "";
+    return !!input && win.document.activeElement === input;
   },
 
   /**
@@ -1334,9 +1335,8 @@ Object.assign(hMailAI, {
     this._watching = true;
     this._autoDone = new Set();
     this._pendingRestore = false;
-    // Delegated so it keeps working across restore()'s rebuilds — the input
-    // element itself is replaced each time, a listener bound to it directly
-    // would not survive that.
+    // Delegated so it survives a full panel rebuild (close/open replaces
+    // the input element; a listener bound to it directly would be lost).
     win.document.addEventListener("blur", e => {
       if (e.target?.id === "hmail-ai-input") {
         win.setTimeout(() => this.flushPendingRestore(win), 0);
@@ -1425,8 +1425,7 @@ Object.assign(hMailAI, {
       if (key !== lastKey) {
         lastKey = key;
         if (this.composerBusy(win)) {
-          // The user is typing (or has a draft sitting in the box): leave
-          // the panel alone and catch up once they blur or clear it.
+          // The user is typing: leave the panel alone and catch up on blur.
           this._pendingRestore = true;
           return;
         }

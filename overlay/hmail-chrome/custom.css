@@ -1320,7 +1320,9 @@ select.hmail-ai-field,
 
 .hmail-ai-composer {
     display: flex;
-    align-items: flex-end;
+    /* Center, not flex-end: the textarea's padding makes it taller than the
+       32px round buttons, and bottom-pinning left them visibly sagging. */
+    align-items: center;
     gap: 8px;
     padding: 5px 5px 5px 14px;
     border: 1px solid var(--hmail-ai-line);
@@ -2325,7 +2327,8 @@ select.hmail-ai-field,
 
 .hmail-quickreply-row {
     display: flex;
-    align-items: flex-end;
+    /* Center, not flex-end — see .hmail-ai-composer. */
+    align-items: center;
     gap: 8px;
     padding: 5px 5px 5px 14px;
     border: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
@@ -2381,31 +2384,104 @@ select.hmail-ai-field,
     filter: brightness(1.1);
 }
 
-.hmail-quickreply-tools {
-    display: flex;
+/* "+" next to the input, same visual language as the assistant panel's. */
+.hmail-quickreply-plus {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    border: none !important;
+    flex: 0 0 auto;
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    border-radius: 50% !important;
+    display: inline-flex !important;
     align-items: center;
-    gap: 14px;
-    padding-inline-start: 14px;
-    font-size: 0.82em;
+    justify-content: center;
+    padding: 0 !important;
+    background-color: color-mix(in srgb, CanvasText 8%, Canvas) !important;
+    color: CanvasText !important;
+    cursor: pointer;
+    transition: background-color 0.12s ease, color 0.12s ease;
 }
 
-.hmail-quickreply-link {
+.hmail-quickreply-plus:hover {
+    background-color: color-mix(in srgb, CanvasText 14%, Canvas) !important;
+}
+
+.hmail-quickreply-plus[aria-expanded="true"] {
+    background-color: var(--hmail-accent) !important;
+    color: #ffffff !important;
+}
+
+/* The secondary actions, one per row, opened above the bar so the popup
+   never leaves the message pane. */
+.hmail-quickreply-menu {
+    position: absolute;
+    left: 12px;
+    bottom: 100%;
+    margin-bottom: 8px;
+    min-width: 220px;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, CanvasText 14%, transparent);
+    background-color: Canvas;
+    box-shadow: 0 4px 14px color-mix(in srgb, CanvasText 14%, transparent),
+                0 16px 40px color-mix(in srgb, CanvasText 20%, transparent);
+    z-index: 6;
+}
+
+.hmail-quickreply-menu-item {
+    display: flex !important;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
     appearance: none !important;
+    -moz-appearance: none !important;
     border: none !important;
     background: transparent !important;
-    padding: 0 !important;
-    color: var(--hmail-accent) !important;
-    cursor: pointer;
+    color: inherit !important;
+    text-align: start;
+    padding: 8px 10px !important;
+    border-radius: 8px !important;
     font: inherit !important;
+    font-size: 0.9em !important;
+    cursor: pointer;
 }
 
-.hmail-quickreply-link:hover {
-    text-decoration: underline;
+.hmail-quickreply-menu-item:hover,
+.hmail-quickreply-menu-item:focus-visible {
+    background-color: color-mix(in srgb, CanvasText 8%, Canvas) !important;
+    outline: none !important;
+}
+
+.hmail-quickreply-menu-icon {
+    flex: 0 0 auto;
+    width: 1.4em;
+    text-align: center;
+    opacity: 0.75;
+}
+
+.hmail-quickreply-menu-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .hmail-quickreply-status {
-    margin-inline-start: auto;
+    padding-inline-start: 14px;
+    font-size: 0.82em;
     opacity: 0.65;
+}
+
+/* No message means no extra line: the bar stays one row tall. */
+.hmail-quickreply-status:empty {
+    display: none;
 }
 
 /* --- what a bounce means, in plain words --- */

@@ -136,15 +136,32 @@ var hMailQuickReply = {
           body.style.paddingBottom = "";
         }
         if (attachments) {
-          attachments.style.marginBlockEnd = "";
+          attachments.style.removeProperty("margin-block-end");
         }
         if (pane) {
-          pane.style.marginBlockEnd = "";
+          pane.style.removeProperty("margin-block-end");
         }
         const target = lastVisible();
         if (target) {
-          target.style.marginBlockEnd = `${height}px`;
+          // "important", because an inline margin without it loses to any
+          // !important rule a theme or Thunderbird stylesheet may carry —
+          // and a lost margin here is the message's last lines hiding
+          // behind the reply bar with no way to scroll to them.
+          target.style.setProperty("margin-block-end", `${height}px`,
+                                   "important");
         }
+        // Geometry snapshot for support: prefs survive a restart, so a
+        // "the bar covers the message" report can be read from prefs.js
+        // instead of reproduced.
+        try {
+          Services.prefs.setCharPref("hmail.quickreply.debug", JSON.stringify({
+            barHeight: height,
+            target: target?.id || null,
+            margin: doc.defaultView?.getComputedStyle(target)?.marginBlockEnd,
+            targetBottom: Math.round(target.getBoundingClientRect().bottom),
+            barTop: Math.round(box.getBoundingClientRect().top),
+          }));
+        } catch (e) {}
       } catch (e) {}
     };
     apply();
@@ -178,7 +195,7 @@ var hMailQuickReply = {
       for (const id of ["messagepane", "attachmentView"]) {
         const node = doc.getElementById(id);
         if (node) {
-          node.style.marginBlockEnd = "";
+          node.style.removeProperty("margin-block-end");
         }
       }
       doc.documentElement.style.removeProperty("--hmail-quickreply-height");
@@ -219,31 +236,94 @@ var hMailQuickReply = {
     send.appendChild(hMailAI.arrowIcon(doc));
     send.addEventListener("click", () => this.send(win, input, false));
 
-    row.append(input, send);
+    // The secondary actions used to be a row of links under the input, a
+    // permanent extra line the bar had to reserve space for. They live
+    // behind a "+" now, like the assistant's sample commands: the bar is
+    // one line shorter and covers that much less of the message.
+    const plus = el("button", "hmail-quickreply-plus");
+    plus.type = "button";
+    plus.title = "Trả lời tất cả, nhờ AI viết, mở soạn thảo đầy đủ";
+    plus.setAttribute("aria-haspopup", "true");
+    plus.setAttribute("aria-expanded", "false");
+    plus.appendChild(hMailAI.plusIcon(doc));
+    plus.addEventListener("click", e => {
+      e.stopPropagation();
+      this.toggleMenu(win, doc, box, plus, input);
+    });
+
+    row.append(plus, input, send);
     box.appendChild(row);
 
-    const tools = el("div", "hmail-quickreply-tools");
-
-    const all = el("button", "hmail-quickreply-link", "Trả lời tất cả");
-    all.addEventListener("click", () => this.send(win, input, true));
-
-    const ai = el("button", "hmail-quickreply-link", "Nhờ AI viết");
-    ai.id = "hmail-quickreply-ai";
-    // The spinner lives inside the button so the wait is attached to the
-    // thing that started it, not to a status line somewhere else.
-    ai.appendChild(el("span", "hmail-quickreply-spin"));
-    ai.addEventListener("click", () => this.draft(win, input, ai));
-
-    const full = el("button", "hmail-quickreply-link", "Mở soạn thảo đầy đủ");
-    full.addEventListener("click", () => this.expand(win, input));
-
-    const status = el("span", "hmail-quickreply-status", "");
+    // Status keeps its own line but only when it has something to say —
+    // .hmail-quickreply-status:empty collapses in CSS.
+    const status = el("div", "hmail-quickreply-status", "");
     status.id = "hmail-quickreply-status";
-
-    tools.append(all, ai, full, status);
-    box.appendChild(tools);
+    box.appendChild(status);
     hMailAI.applyLook(win, box);
     return box;
+  },
+
+  /** The "+" popup: one row per secondary action, opened above the bar. */
+  toggleMenu(win, doc, box, anchor, input) {
+    if (doc.getElementById("hmail-quickreply-menu")) {
+      this.closeMenu(doc);
+      return;
+    }
+    const el = (t, c, x) => this.el(doc, t, c, x);
+    const menu = el("div", "hmail-quickreply-menu");
+    menu.id = "hmail-quickreply-menu";
+    menu.setAttribute("role", "menu");
+
+    const item = (icon, label, run) => {
+      const b = el("button", "hmail-quickreply-menu-item");
+      b.type = "button";
+      b.setAttribute("role", "menuitem");
+      b.append(el("span", "hmail-quickreply-menu-icon", icon),
+               el("span", "hmail-quickreply-menu-label", label));
+      b.addEventListener("click", () => {
+        this.closeMenu(doc);
+        run();
+      });
+      menu.appendChild(b);
+    };
+
+    item("↩", "Trả lời tất cả", () => this.send(win, input, true));
+    item("✎", "Nhờ AI viết", () => this.draft(win, input, anchor));
+    item("⧉", "Mở soạn thảo đầy đủ", () => this.expand(win, input));
+
+    box.appendChild(menu);
+    anchor.setAttribute("aria-expanded", "true");
+
+    const onKeyDown = e => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        this.closeMenu(doc);
+        anchor.focus();
+      }
+    };
+    const onPointerDown = e => {
+      // anchor.contains, not a bare comparison: the button's label is an
+      // SVG, so a click on the button lands on the SVG node (same lesson
+      // as the assistant panel's "+").
+      if (!menu.contains(e.target) && !anchor.contains(e.target)) {
+        this.closeMenu(doc);
+      }
+    };
+    doc.addEventListener("keydown", onKeyDown, true);
+    doc.addEventListener("mousedown", onPointerDown, true);
+    this._menuCleanup = () => {
+      doc.removeEventListener("keydown", onKeyDown, true);
+      doc.removeEventListener("mousedown", onPointerDown, true);
+    };
+    menu.querySelector(".hmail-quickreply-menu-item")?.focus();
+  },
+
+  closeMenu(doc) {
+    doc.getElementById("hmail-quickreply-menu")?.remove();
+    doc.querySelector(".hmail-quickreply-plus")
+      ?.setAttribute("aria-expanded", "false");
+    this._menuCleanup?.();
+    this._menuCleanup = null;
   },
 
   say(win, text) {
