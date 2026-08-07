@@ -129,6 +129,18 @@ if [ -d "$SPOTLIGHT/thunderbird.mdimporter" ]; then
     log "Rebranded the Spotlight importer"
 fi
 
+# The menu-bar application name does NOT come from Info.plist: macOS prefers
+# the localized CFBundleName in Contents/Resources/*.lproj/InfoPlist.strings,
+# and Thunderbird ships one that still says "Thunderbird" — which is exactly
+# what the menu bar then shows, brand rules and Info.plist notwithstanding.
+find "$RES" -name "InfoPlist.strings" -print0 | while IFS= read -r -d '' f; do
+    for key in CFBundleName CFBundleDisplayName; do
+        /usr/libexec/PlistBuddy -c "Set :$key \"hMail Desktop\"" "$f" 2>/dev/null ||
+        /usr/libexec/PlistBuddy -c "Add :$key string \"hMail Desktop\"" "$f" 2>/dev/null || true
+    done
+done
+log "Localized InfoPlist.strings rebranded"
+
 # The media plugin helper's executable name is user-visible (it appears in the
 # Force Quit list and in permission prompts), so it carries the brand too.
 MPH="$MACOS/media-plugin-helper.app"
