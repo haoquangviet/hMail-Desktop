@@ -120,3 +120,12 @@ description.text-blurb {
     font-size: 0.92em;
     max-width: 60ch;
 }
+
+/* Thêm tài khoản: hMail chỉ có tài khoản thư — nút "Tài khoản mới" đã đi
+   thẳng vào thêm email (hmail.cfg); giấu các lựa chọn nguồn cấp / nhóm tin /
+   chat để lối vào bằng bàn phím cũng không lạc vào ngõ cụt. */
+#accountActionsAddChatAccount,
+#accountActionsAddFeedAccount,
+#accountActionsAddOtherAccount {
+  display: none !important;
+}
