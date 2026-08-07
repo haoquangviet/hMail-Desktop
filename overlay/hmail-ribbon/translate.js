@@ -33,6 +33,37 @@ var hMailTranslate = {
 
   init(win) {
     this.load();
+    // The bar lives in the about:message document, which survives from one
+    // message to the next — the body is re-rendered per message, the bar is
+    // not, so "Đang xem bản dịch" was still up over messages that had never
+    // been translated. Watch the displayed message: clear leftovers when it
+    // changes, and when the new message has a stored translation, offer it.
+    try {
+      let last = null;
+      win.setInterval(() => {
+        try {
+          const hdr = hMailInsight.selected(win);
+          const now = hdr ? this.msgKey(hdr) : null;
+          if (now === last) {
+            return;
+          }
+          last = now;
+          this.reset(win);
+          if (!hdr) {
+            return;
+          }
+          const lang = this.LANGUAGES.find(
+            l => this.cache?.[this.key(hdr, l.id)]);
+          if (lang) {
+            this.offerBar(win, lang.id);
+          }
+        } catch (e) {}
+      }, 700);
+    } catch (e) {}
+  },
+
+  msgKey(hdr) {
+    return `${hdr.folder?.URI}#${hdr.messageKey}`;
   },
 
   el(doc, tag, cls, text) {
