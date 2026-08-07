@@ -233,6 +233,26 @@ var hMailRibbon = {
                   pane.hidden = !pane.hidden;
                 }
               } },
+            // Thunderbird's Unified Folders ("smart" folder mode): one
+            // Inbox/Sent/Trash tree across every account. The stock UI only
+            // offers it from the folder-pane gear menu, which the ribbon
+            // replaced — so it gets a first-class toggle here.
+            { id: "v-unified", label: "Hộp thư hợp nhất", icon: "folder",
+              fn: win => {
+                try {
+                  const fp = win.document.getElementById("tabmail")
+                    ?.currentAbout3Pane?.folderPane;
+                  if (!fp) {
+                    return;
+                  }
+                  const active = fp.activeModes;
+                  fp.activeModes = active.includes("smart")
+                    ? active.filter(m => m !== "smart")
+                    : [...active, "smart"];
+                } catch (e) {
+                  Cu.reportError("hMail unified toggle failed: " + e);
+                }
+              } },
           ],
         },
       ],

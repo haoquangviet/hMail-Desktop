@@ -156,8 +156,8 @@ Section "hMail Desktop" SecMain
   ; an existing installation at an empty folder — that reads to the user as
   ; "all my mail is gone", and the mail is still on disk where they cannot see
   ; it.
-  CreateDirectory "$DataDir"
   IfFileExists "$APPDATA\Thunderbird\profiles.ini" keep_profiles 0
+    CreateDirectory "$DataDir"
     CreateDirectory "$APPDATA\Thunderbird"
     WriteINIStr "$APPDATA\Thunderbird\profiles.ini" "Profile0" "Name" "default"
     WriteINIStr "$APPDATA\Thunderbird\profiles.ini" "Profile0" "IsRelative" "0"

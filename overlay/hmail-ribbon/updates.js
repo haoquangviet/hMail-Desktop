@@ -325,9 +325,96 @@ var hMailUpdate = {
         "kho mã nguồn, kèm mã băm để bạn đối chiếu.");
       wrap.appendChild(note);
 
+      // ------------------------------------------------- thư mục dữ liệu
+      if (Services.appinfo.OS === "WINNT") {
+        const dataWrap = el("div", "hmail-update-box");
+        dataWrap.id = "hmail-data-box";
+        const profile = Services.dirsvc.get("ProfD", Ci.nsIFile).path;
+        dataWrap.appendChild(el("div", "hmail-update-line",
+          `Thư mục dữ liệu (thư, lịch, danh bạ, cấu hình): ${profile}`));
+
+        const dataStatus = el("div", "hmail-update-status", "");
+        const dataRow = el("div", "hmail-update-actions");
+        const move = el("button", "hmail-update-button",
+                        "Di chuyển dữ liệu…");
+        move.addEventListener("click", () =>
+          this.moveData(doc.defaultView, dataStatus));
+        dataRow.appendChild(move);
+        dataWrap.append(dataRow, dataStatus);
+
+        dataWrap.appendChild(el("div", "hmail-update-note",
+          "Hộp thư lớn dần theo thời gian. Nút này chuyển toàn bộ dữ liệu " +
+          "sang ổ đĩa hoặc thư mục khác: hMail sẽ thoát, chuyển xong tự mở " +
+          "lại. Bản cài đặt và cập nhật sau này tự nhận nơi đã chuyển."));
+        box.appendChild(dataWrap);
+      }
+
       box.appendChild(wrap);
     } catch (e) {
       Cu.reportError("hMail update prefs failed: " + e);
+    }
+  },
+
+  /**
+   * Move the profile to a folder of the user's choosing. The move itself is
+   * done by hmail-move-data.ps1 shipped beside the program: a live profile
+   * cannot relocate itself, so the app quits, the helper waits for that,
+   * moves the folder, points profiles.ini at the new absolute path — the
+   * same mechanism the installer's "Nơi lưu dữ liệu" page uses on a fresh
+   * machine — and starts hMail again.
+   */
+  moveData(win, status) {
+    try {
+      const fp = Cc["@mozilla.org/filepicker;1"]
+        .createInstance(Ci.nsIFilePicker);
+      fp.init(win.browsingContext, "Chọn nơi lưu dữ liệu mới",
+              Ci.nsIFilePicker.modeGetFolder);
+      fp.open(rv => {
+        if (rv !== Ci.nsIFilePicker.returnOK) {
+          return;
+        }
+        const target = fp.file.path;
+        const current = Services.dirsvc.get("ProfD", Ci.nsIFile).path;
+        if (target === current) {
+          return;
+        }
+        const flags =
+          Services.prompt.BUTTON_POS_0 *
+            Services.prompt.BUTTON_TITLE_IS_STRING +
+          Services.prompt.BUTTON_POS_1 *
+            Services.prompt.BUTTON_TITLE_IS_STRING;
+        const go = Services.prompt.confirmEx(
+          win, "Di chuyển dữ liệu hMail",
+          "Toàn bộ thư, lịch, danh bạ và cấu hình sẽ chuyển sang:\n" +
+          target + "\n\nhMail sẽ thoát trong lúc chuyển và tự mở lại " +
+          "khi xong. Với hộp thư lớn chuyển sang ổ khác, việc này có " +
+          "thể mất vài phút.\n\nTiếp tục?",
+          flags, "Chuyển và thoát", "Hủy", null, null, {});
+        if (go !== 0) {
+          return;
+        }
+
+        const psExe = Cc["@mozilla.org/file/local;1"]
+          .createInstance(Ci.nsIFile);
+        psExe.initWithPath(
+          "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+        const helper = Services.dirsvc.get("GreD", Ci.nsIFile);
+        helper.append("hmail-move-data.ps1");
+        const app = Services.dirsvc.get("XREExeF", Ci.nsIFile);
+        const proc = Cc["@mozilla.org/process/util;1"]
+          .createInstance(Ci.nsIProcess);
+        proc.init(psExe);
+        proc.run(false, [
+          "-NoProfile", "-ExecutionPolicy", "Bypass",
+          "-WindowStyle", "Hidden", "-File", helper.path,
+          "-ProfilePath", current, "-Target", target, "-AppExe", app.path,
+        ], 13);
+        Services.startup.quit(Services.startup.eAttemptQuit);
+      });
+    } catch (e) {
+      if (status) {
+        status.textContent = "Không di chuyển được: " + (e.message || e);
+      }
     }
   },
 
