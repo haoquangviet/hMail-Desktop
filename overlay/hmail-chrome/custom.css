@@ -1494,6 +1494,11 @@ select.hmail-ai-field,
     background-color: var(--hmail-ai-line);
 }
 
+/* Idle status is empty by design; give its line back to the log then. */
+.hmail-ai-status:empty {
+    display: none;
+}
+
 .hmail-ai-tip {
     font-size: 0.72em;
     opacity: 0.5;
@@ -2341,7 +2346,7 @@ select.hmail-ai-field,
     align-items: center;
     gap: 8px;
     padding: 11px 20px 11px 16px;
-    border-radius: 999px;
+    border-radius: 30px;
     border: none;
     background-color: var(--hmail-accent, #0F6CBD);
     color: #ffffff;

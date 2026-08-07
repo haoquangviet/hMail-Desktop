@@ -1557,10 +1557,16 @@ var hMailInsight = {
   /** Markup out, entities in. */
   stripHtml(text) {
     return this.decodeEntities(text
+      .replace(/<!--[\s\S]*?-->/g, " ")
       .replace(/<style[\s\S]*?<\/style>/gi, " ")
       .replace(/<script[\s\S]*?<\/script>/gi, " ")
       .replace(/<(?:br|\/p|\/div|\/tr)\s*\/?>/gi, "\n")
       .replace(/<[^>]+>/g, " "))
+      // Invisible padding — soft hyphens, zero-widths, grapheme joiners.
+      // Marketing mail stuffs hundreds of them into its hidden preheader
+      // (often as entities, hence after the decode), and an extractive
+      // summary shows them as stray marks squeezed between words.
+      .replace(/[­͏؜​-‏⁠-⁤﻿]/g, "")
       .replace(/[ \t]+/g, " ")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
@@ -1679,8 +1685,17 @@ var hMailInsight = {
           return "[liên kết]";
         }
       }))
+      // The same link named three times in a row says no more than once.
+      .map(s => s.replace(
+        /(\[liên kết(?: tới [^\]]*)?\])(?:[\s,;·|–-]*\1)+/g, "$1"))
       .map(s => s.replace(/\s+/g, " ").trim())
-      .filter(s => s.length >= 30 && s.length <= 400);
+      .filter(s => s.length >= 30 && s.length <= 400)
+      // Mostly symbols and digits is navigation or tracking debris, not
+      // something the sender said. Letters must carry the sentence.
+      .filter(s => {
+        const letters = (s.match(/\p{L}/gu) || []).length;
+        return letters / s.length >= 0.4;
+      });
     if (!sentences.length) {
       return [];
     }

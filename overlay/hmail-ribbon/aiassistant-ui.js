@@ -79,6 +79,25 @@ Object.assign(hMailAI, {
     try {
       this.migrateConfig();
       this.watchMessageDisplay(win);
+      // The sidebar records whether it was open (hmail.sidebar.open, kept
+      // by show/showNode/hide), but nothing ever read it back — so the
+      // panel had to be reopened by hand after every restart.
+      let wasOpen = false;
+      try {
+        wasOpen = Services.prefs.getBoolPref("hmail.sidebar.open");
+      } catch (e) {}
+      if (wasOpen) {
+        // Late enough for the 3-pane to have finished laying itself out.
+        win.setTimeout(() => {
+          try {
+            if (!win.document.getElementById(this.PANEL_ID)) {
+              this.open(win);
+            }
+          } catch (e) {
+            Cu.reportError("hMail AI reopen failed: " + e);
+          }
+        }, 1200);
+      }
     } catch (e) {
       Cu.reportError("hMail AI init failed: " + e);
     }
@@ -141,7 +160,7 @@ Object.assign(hMailAI, {
     const input = el("textarea", "hmail-ai-input");
     input.id = "hmail-ai-input";
     input.rows = 1;
-    input.placeholder = "Hỏi thêm về thư này…";
+    input.placeholder = "Chọn câu lệnh từ dấu ＋ hoặc nhập để hỏi về thư này…";
 
     const grow = () => {
       input.style.height = "auto";
@@ -709,9 +728,11 @@ Object.assign(hMailAI, {
     for (const t of convo.turns) {
       this.addTurn(win, t.role, t.text, t.service || null);
     }
+    // No idle guidance here: the line above the composer belongs to live
+    // status ("Đang suy nghĩ…", usage) and the guidance lives in the input
+    // placeholder — two texts stacked there covered each other.
     this.notify(win, convo.turns.length
-      ? `${convo.turns.length} lượt trao đổi về thư này`
-      : "Bấm ＋ để chọn câu lệnh, hoặc hỏi ngay bên dưới.");
+      ? `${convo.turns.length} lượt trao đổi về thư này` : "");
   },
 
   /**
