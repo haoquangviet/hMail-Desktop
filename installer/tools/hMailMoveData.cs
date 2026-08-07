@@ -48,7 +48,8 @@ internal static class MoveData
             Height = 190,
             FormBorderStyle = FormBorderStyle.FixedDialog,
             MaximizeBox = false,
-            MinimizeBox = false,
+            // Chạy nền được: thu nhỏ xuống taskbar trong lúc copy dài.
+            MinimizeBox = true,
             StartPosition = FormStartPosition.CenterScreen,
         };
         headline = new Label { Left = 20, Top = 20, Width = 430, Font = new Font(SystemFonts.MessageBoxFont.FontFamily, 10f, FontStyle.Bold) };
@@ -98,6 +99,67 @@ internal static class MoveData
         Application.Run(form);
     }
 
+    private static string JournalPath()
+    {
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "Thunderbird", "hmail-move-journal.txt");
+    }
+
+    /// <summary>
+    /// Lần chuyển trước bị ngắt giữa chừng (mất điện, bị kill)? Nhật ký ba
+    /// dòng phase|nguồn|đích cho biết đứt ở đâu, và mọi trường hợp đều đưa
+    /// được về trạng thái lành: dữ liệu đã sang đích mà profiles.ini chưa
+    /// kịp trỏ theo thì trỏ nốt; copy dở dang thì xoá phần dở ở đích, nguồn
+    /// vẫn nguyên.
+    /// </summary>
+    private static void Recover()
+    {
+        string journal = JournalPath();
+        if (!File.Exists(journal)) return;
+        try
+        {
+            var parts = File.ReadAllText(journal, Encoding.UTF8).Split('|');
+            if (parts.Length == 3)
+            {
+                string phase = parts[0], src = parts[1], dst = parts[2];
+                bool dstReady = File.Exists(Path.Combine(dst, "prefs.js"));
+                bool srcAlive = File.Exists(Path.Combine(src, "prefs.js"));
+                if (dstReady && !srcAlive)
+                {
+                    // Dữ liệu đã nằm trọn ở đích: hoàn tất phần còn thiếu.
+                    RewriteProfilesIni(src, dst);
+                    MessageBox.Show(
+                        "Lần chuyển dữ liệu trước bị gián đoạn. hMail đã tự " +
+                        "hoàn tất nốt: dữ liệu nằm tại\n" + dst,
+                        "hMail — Di chuyển dữ liệu");
+                }
+                else if (srcAlive && Directory.Exists(dst) && phase == "copy")
+                {
+                    // Copy dở: dọn đích, nguồn còn nguyên.
+                    try { Directory.Delete(dst, true); } catch { }
+                }
+                else if (dstReady && srcAlive && phase == "ini-done")
+                {
+                    // Đã trỏ ini sang đích, chỉ còn xoá nguồn cũ.
+                    try { Directory.Delete(src, true); } catch { }
+                }
+            }
+        }
+        catch { }
+        try { File.Delete(journal); } catch { }
+    }
+
+    private static void Journal(string phase, string src, string dst)
+    {
+        try
+        {
+            File.WriteAllText(JournalPath(), phase + "|" + src + "|" + dst,
+                              Encoding.UTF8);
+        }
+        catch { }
+    }
+
     private static void Run(string profile, string target, string app)
     {
         Status("Đang chờ hMail đóng…", "");
@@ -110,6 +172,8 @@ internal static class MoveData
         {
             throw new Exception("hMail không thoát trong 180 giây.");
         }
+
+        Recover();
 
         string src = Path.GetFullPath(profile).TrimEnd('\\');
         string dst = Path.GetFullPath(target).TrimEnd('\\');
@@ -132,7 +196,10 @@ internal static class MoveData
             Status("Đang chuyển (cùng ổ đĩa — gần như tức thời)…", src + " → " + dst);
             var parent = Path.GetDirectoryName(dst);
             if (!Directory.Exists(parent)) Directory.CreateDirectory(parent);
+            Journal("move", src, dst);
             Directory.Move(src, dst);
+            Status("Đang cập nhật profiles.ini…", "");
+            RewriteProfilesIni(src, dst);
         }
         else
         {
@@ -142,16 +209,78 @@ internal static class MoveData
                 totalBytes += new FileInfo(f).Length;
             Ui(() => { bar.Style = ProgressBarStyle.Continuous; bar.Maximum = 1000; });
             doneBytes = 0;
+            Journal("copy", src, dst);
             CopyTree(src, dst);
+            // Trỏ ini TRƯỚC khi xoá nguồn: đứt ở giữa thì hai bản cùng tồn
+            // tại và ini đã đúng — Recover() lần sau chỉ việc dọn nguồn cũ.
+            Status("Đang cập nhật profiles.ini…", "");
+            RewriteProfilesIni(src, dst);
+            Journal("ini-done", src, dst);
             Status("Đang xoá dữ liệu ở chỗ cũ…", "");
             Directory.Delete(src, true);
         }
+        try { File.Delete(JournalPath()); } catch { }
 
-        Status("Đang cập nhật profiles.ini…", "");
-        RewriteProfilesIni(src, dst);
-
-        Status("Xong — đang mở lại hMail…", dst);
+        Status("Đang mở lại hMail…", dst);
         Process.Start(app);
+
+        // Theo dõi sau chuyển: hMail phải sống qua phút đầu tiên. Chết yểu
+        // (crash khi mở hồ sơ ở chỗ mới) thì đề nghị chuyển ngược — dữ liệu
+        // không mất, chỉ nằm sai chỗ với cấu hình hiện tại.
+        Status("Đang theo dõi hMail sau khi chuyển (60 giây)…", "");
+        Ui(() => bar.Style = ProgressBarStyle.Marquee);
+        bool sawIt = false;
+        for (int i = 0; i < 60; i++)
+        {
+            Thread.Sleep(1000);
+            bool alive = Process.GetProcessesByName("hmail").Length > 0;
+            if (alive) sawIt = true;
+            else if (sawIt)
+            {
+                break; // đã chạy rồi tắt trong vòng 60 giây — nghi crash
+            }
+        }
+        if (!sawIt || Process.GetProcessesByName("hmail").Length == 0)
+        {
+            var back = MessageBox.Show(
+                "hMail có vẻ không chạy ổn định sau khi chuyển.\n\n" +
+                "Chuyển dữ liệu NGƯỢC về chỗ cũ và mở lại hMail?",
+                "hMail — Di chuyển dữ liệu", MessageBoxButtons.YesNo);
+            if (back == DialogResult.Yes)
+            {
+                Status("Đang chuyển ngược về chỗ cũ…", dst + " → " + src);
+                MoveBack(dst, src);
+                RewriteProfilesIni(dst, src);
+                Process.Start(app);
+            }
+        }
+    }
+
+    /// <summary>Đảo chiều: đưa dữ liệu từ đích về lại nguồn cũ.</summary>
+    private static void MoveBack(string from, string to)
+    {
+        if (Directory.Exists(to))
+        {
+            if (Directory.GetFileSystemEntries(to).Length > 0)
+                throw new Exception("Chỗ cũ không còn trống: " + to);
+            Directory.Delete(to);
+        }
+        bool sameVolume = string.Equals(Path.GetPathRoot(from), Path.GetPathRoot(to),
+                                        StringComparison.OrdinalIgnoreCase);
+        if (sameVolume)
+        {
+            Directory.Move(from, to);
+        }
+        else
+        {
+            totalBytes = 0;
+            foreach (var f in Directory.GetFiles(from, "*", SearchOption.AllDirectories))
+                totalBytes += new FileInfo(f).Length;
+            doneBytes = 0;
+            Ui(() => { bar.Style = ProgressBarStyle.Continuous; });
+            CopyTree(from, to);
+            Directory.Delete(from, true);
+        }
     }
 
     private static void CopyTree(string src, string dst)
