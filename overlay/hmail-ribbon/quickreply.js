@@ -245,7 +245,17 @@ var hMailQuickReply = {
       menu.appendChild(b);
     };
 
-    item("↩", "Trả lời tất cả", () => this.send(win, input, true));
+    // A mode, not an action: clicking used to fire the reply-all send on
+    // the spot — with an empty box that meant "nothing happened", and with
+    // a draft it meant "sent before I was ready". Now it arms the mode,
+    // a chip above the input shows it, and the send button honours it.
+    item("↩", this._replyAll
+      ? "Trả lời tất cả — đang bật, bấm để tắt" : "Trả lời tất cả", () => {
+      this._replyAll = !this._replyAll;
+      this.say(win, this._replyAll ? "Sẽ gửi cho tất cả người nhận." : "");
+      this.renderChips(win, doc);
+    });
+    item("📎", "Đính kèm tệp…", () => this.pickAttachments(win, doc));
     item("✎", "Nhờ AI viết", () => this.openStudio(win, doc, box, input));
     item("⧉", "Mở soạn thảo đầy đủ", () => this.expand(win, input));
 
@@ -282,6 +292,96 @@ var hMailQuickReply = {
       ?.setAttribute("aria-expanded", "false");
     this._menuCleanup?.();
     this._menuCleanup = null;
+  },
+
+  // ------------------------------------------ reply-all mode + attachments
+
+  /** Pick files to ride along with the quick reply. */
+  pickAttachments(win, doc) {
+    try {
+      const fp = Cc["@mozilla.org/filepicker;1"]
+        .createInstance(Ci.nsIFilePicker);
+      fp.init(win.browsingContext, "Đính kèm tệp",
+              Ci.nsIFilePicker.modeOpenMultiple);
+      fp.appendFilters(Ci.nsIFilePicker.filterAll);
+      fp.open(rv => {
+        if (rv !== Ci.nsIFilePicker.returnOK) {
+          return;
+        }
+        this._attachments = this._attachments || [];
+        for (const f of fp.files) {
+          if (!this._attachments.some(a => a.path === f.path)) {
+            this._attachments.push({ path: f.path, name: f.leafName });
+          }
+        }
+        this.renderChips(win, doc);
+      });
+    } catch (e) {
+      this.say(win, "Không mở được hộp chọn tệp: " + (e.message || e));
+    }
+  },
+
+  /**
+   * The state the next send will carry, worn on the bar's sleeve: one chip
+   * for reply-all, one per attached file, each removable where it is shown.
+   */
+  renderChips(win, doc) {
+    const bar = doc.getElementById(this.ID)
+      ?.querySelector(".hmail-quickreply-bar");
+    if (!bar) {
+      return;
+    }
+    const el = (t, c, x) => this.el(doc, t, c, x);
+    let chips = doc.getElementById("hmail-quickreply-chips");
+    if (!chips) {
+      chips = el("div", "hmail-quickreply-chips");
+      chips.id = "hmail-quickreply-chips";
+      bar.insertBefore(chips, bar.firstChild);
+    }
+    chips.textContent = "";
+
+    const chip = (cls, label, remove) => {
+      const c = el("span", "hmail-quickreply-chip" + (cls ? ` ${cls}` : ""));
+      c.appendChild(el("span", null, label));
+      const x = el("button", null, "✕");
+      x.type = "button";
+      x.title = "Bỏ";
+      x.addEventListener("click", remove);
+      c.appendChild(x);
+      chips.appendChild(c);
+    };
+
+    if (this._replyAll) {
+      chip("mode", "Trả lời tất cả", () => {
+        this._replyAll = false;
+        this.renderChips(win, doc);
+      });
+    }
+    for (const a of this._attachments || []) {
+      chip(null, a.name, () => {
+        this._attachments = this._attachments.filter(x => x !== a);
+        this.renderChips(win, doc);
+      });
+    }
+    chips.hidden = !chips.children.length;
+  },
+
+  /** Put the picked files on the compose fields. */
+  addAttachments(fields) {
+    for (const a of this._attachments || []) {
+      try {
+        const file = Cc["@mozilla.org/file/local;1"]
+          .createInstance(Ci.nsIFile);
+        file.initWithPath(a.path);
+        const att = Cc["@mozilla.org/messengercompose/attachment;1"]
+          .createInstance(Ci.nsIMsgAttachment);
+        att.url = Services.io.newFileURI(file).spec;
+        att.name = a.name;
+        fields.addAttachment(att);
+      } catch (e) {
+        Cu.reportError("hMail quick reply attachment failed: " + e);
+      }
+    }
   },
 
   say(win, text) {
@@ -433,14 +533,20 @@ var hMailQuickReply = {
       const fields = Cc["@mozilla.org/messengercompose/composefields;1"]
         .createInstance(Ci.nsIMsgCompFields);
       fields.body = this.htmlBody(input.value);
-      await this.fillReply(hdr, fields, false, this.identityFor(hdr));
+      await this.fillReply(hdr, fields, this._replyAll, this.identityFor(hdr));
+      this.addAttachments(fields);
       params.composeFields = fields;
-      params.type = Ci.nsIMsgCompType.ReplyToSender;
+      params.type = this._replyAll ? Ci.nsIMsgCompType.ReplyAll
+                                   : Ci.nsIMsgCompType.ReplyToSender;
       params.format = Ci.nsIMsgCompFormat.HTML;
       params.originalMsgURI = hdr.folder.getUriForMsg(hdr);
       params.identity = this.identityFor(hdr);
       MailServices.compose.OpenComposeWindowWithParams(null, params);
       input.value = "";
+      // The full composer took the mode and the files with it.
+      this._replyAll = false;
+      this._attachments = [];
+      this.renderChips(win, input.ownerDocument);
     } catch (e) {
       this.say(win, "Không mở được cửa sổ soạn thảo: " + (e.message || e));
     }
@@ -524,8 +630,11 @@ var hMailQuickReply = {
    * the sent copy lands in the account's Sent folder.
    */
   async send(win, input, replyAll) {
+    // The armed mode counts as much as the caller's argument.
+    replyAll = replyAll || this._replyAll;
     const text = input.value.trim();
     if (!text) {
+      this.say(win, "Chưa có nội dung để gửi.");
       return;
     }
     const hdr = this.message(win);
@@ -550,6 +659,7 @@ var hMailQuickReply = {
         this.say(win, "Không xác định được người nhận của thư này.");
         return;
       }
+      this.addAttachments(fields);
       params.composeFields = fields;
       params.type = replyAll ? Ci.nsIMsgCompType.ReplyAll
                              : Ci.nsIMsgCompType.ReplyToSender;
@@ -569,6 +679,10 @@ var hMailQuickReply = {
 
       input.value = "";
       input.style.height = "auto";
+      // The armed mode and the picked files belonged to this send.
+      this._replyAll = false;
+      this._attachments = [];
+      this.renderChips(win, input.ownerDocument);
       this.say(win, "Đã gửi.");
       win.setTimeout(() => this.say(win, ""), 4000);
     } catch (e) {

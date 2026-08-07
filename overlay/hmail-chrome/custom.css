@@ -2408,6 +2408,45 @@ select.hmail-ai-field,
     padding: 0 !important;
 }
 
+/* What the next send will carry: reply-all mode and attached files. */
+.hmail-quickreply-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 4px;
+}
+
+.hmail-quickreply-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px 3px 10px;
+    border-radius: 999px;
+    background-color: color-mix(in srgb, CanvasText 8%, Canvas);
+    font-size: 0.82em;
+}
+
+.hmail-quickreply-chip.mode {
+    background-color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 16%, Canvas);
+}
+
+.hmail-quickreply-chip button {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    color: inherit !important;
+    font: inherit !important;
+    opacity: 0.6;
+    cursor: pointer;
+}
+
+.hmail-quickreply-chip button:hover {
+    opacity: 1;
+}
+
 /* --- "Nhờ AI viết": the floating draft studio above the bar --- */
 
 .hmail-quickreply-studio {
