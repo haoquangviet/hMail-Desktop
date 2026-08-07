@@ -160,7 +160,7 @@ Object.assign(hMailAI, {
     const input = el("textarea", "hmail-ai-input");
     input.id = "hmail-ai-input";
     input.rows = 1;
-    input.placeholder = "Chọn câu lệnh từ dấu ＋ hoặc nhập để hỏi về thư này…";
+    input.placeholder = "Nhấp ＋ để chọn hoặc nhập để hỏi…";
 
     const grow = () => {
       input.style.height = "auto";
