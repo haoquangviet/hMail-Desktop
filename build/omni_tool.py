@@ -526,6 +526,46 @@ def build_replacements(zf: zipfile.ZipFile, repo: Path):
                 repl[name] = zf.read(name) + b"\n" + text.encode("utf-8")
             continue
 
+        # The meeting-invitation panel renders in a shadow root, so page-level
+        # CSS (userChrome, custom.css) cannot reach it — its look can only be
+        # adjusted on the sheet the shadow imports. The stock layout is a
+        # two-column table whose columns collapse to one character each in a
+        # narrow message pane; stacked label-over-value rows survive any
+        # width the pane is given.
+        if name.endswith("shared/widgets/calendar-invitation-panel.css"):
+            extra = (
+                b"\n/* hMail: stacked rows instead of a two-column table -"
+                b" the table collapsed\n   to one-character columns in a"
+                b" narrow message pane. */\n"
+                b".calendar-invitation-panel-props,\n"
+                b".calendar-invitation-panel-props tbody,\n"
+                b".calendar-invitation-panel-props tr,\n"
+                b".calendar-invitation-panel-props th,\n"
+                b".calendar-invitation-panel-props td {\n"
+                b"  display: block;\n"
+                b"  text-align: start;\n"
+                b"}\n"
+                b".calendar-invitation-panel-props {\n"
+                b"  width: 100%;\n"
+                b"  margin: 0.75em 0;\n"
+                b"}\n"
+                b".calendar-invitation-panel-props th {\n"
+                b"  padding-inline-end: 0;\n"
+                b"  padding-block: 6px 0;\n"
+                b"  opacity: 0.7;\n"
+                b"  font-size: 0.9em;\n"
+                b"  font-weight: 600;\n"
+                b"}\n"
+                b".calendar-invitation-panel-props td.content {\n"
+                b"  max-width: none;\n"
+                b"}\n"
+                b".calendar-invitation-panel-wrapper {\n"
+                b"  flex-wrap: wrap;\n"
+                b"}\n"
+            )
+            repl[name] = zf.read(name) + extra
+            continue
+
         # Append hMail rules to the Account Central stylesheet.
         if name.endswith("messenger/shared/accountCentral.css"):
             extra = load_repo_patch(repo, "appended/accountCentral.append.css")
