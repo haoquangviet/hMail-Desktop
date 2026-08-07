@@ -2382,6 +2382,13 @@ select.hmail-ai-field,
     box-shadow: 0 -4px 16px color-mix(in srgb, CanvasText 10%, transparent);
 }
 
+/* Toolkit gives every <button> in a chrome document its own margins, which
+   read as random gaps between the round buttons — flatten them; the row's
+   gap is the only spacing. */
+.hmail-quickreply-row button {
+    margin: 0 !important;
+}
+
 .hmail-quickreply-fold {
     appearance: none !important;
     -moz-appearance: none !important;
@@ -2399,6 +2406,98 @@ select.hmail-ai-field,
     opacity: 0.6;
     cursor: pointer;
     padding: 0 !important;
+}
+
+/* --- "Nhờ AI viết": the floating draft studio above the bar --- */
+
+.hmail-quickreply-studio {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 100%;
+    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, CanvasText 14%, transparent);
+    background-color: Canvas;
+    box-shadow: 0 4px 14px color-mix(in srgb, CanvasText 14%, transparent),
+                0 16px 40px color-mix(in srgb, CanvasText 20%, transparent);
+    z-index: 7;
+}
+
+.hmail-quickreply-studio-out {
+    max-height: 40vh;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    font-size: 0.95em;
+    line-height: 1.5;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background-color: color-mix(in srgb, CanvasText 4%, Canvas);
+}
+
+.hmail-quickreply-studio-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.hmail-quickreply-studio-ask {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    resize: none !important;
+    border: 1px solid color-mix(in srgb, CanvasText 14%, transparent) !important;
+    border-radius: 10px !important;
+    background-color: Canvas !important;
+    color: inherit !important;
+    font: inherit !important;
+    padding: 8px 10px !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.hmail-quickreply-studio-ask:focus {
+    border-color: color-mix(in srgb, var(--hmail-accent) 55%, transparent) !important;
+}
+
+.hmail-quickreply-studio-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.hmail-quickreply-studio-go,
+.hmail-quickreply-studio-insert,
+.hmail-quickreply-studio-close {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    border: none !important;
+    margin: 0 !important;
+    border-radius: 999px !important;
+    padding: 7px 16px !important;
+    font: inherit !important;
+    cursor: pointer;
+}
+
+.hmail-quickreply-studio-go,
+.hmail-quickreply-studio-insert {
+    background-color: var(--hmail-accent, #0F6CBD) !important;
+    color: #ffffff !important;
+}
+
+.hmail-quickreply-studio-go[disabled],
+.hmail-quickreply-studio-insert[disabled] {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.hmail-quickreply-studio-close {
+    background-color: color-mix(in srgb, CanvasText 8%, Canvas) !important;
+    color: inherit !important;
 }
 
 .hmail-quickreply-fold:hover {

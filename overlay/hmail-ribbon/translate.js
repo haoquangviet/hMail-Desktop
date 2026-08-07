@@ -101,10 +101,98 @@ var hMailTranslate = {
   },
 
   /**
-   * Swap the body for the translation, keeping the original so it can come
-   * back. Paragraph breaks in the model's answer become paragraphs; nothing
-   * else of the original layout survives, and saying so is better than
-   * pretending a translated table is still a table.
+   * Every text node under the body that carries readable words, in document
+   * order. Translating these in place is what keeps a translated table a
+   * table: the markup never leaves the page, the model only ever sees text.
+   */
+  textNodes(doc) {
+    const out = [];
+    const walker = doc.createTreeWalker(doc.body, 4 /* SHOW_TEXT */, {
+      acceptNode(node) {
+        const tag = node.parentNode?.nodeName?.toLowerCase();
+        if (tag === "script" || tag === "style" || tag === "noscript") {
+          return 2; // reject
+        }
+        return /\p{L}/u.test(node.nodeValue) ? 1 : 3; // accept : skip
+      },
+    });
+    let n;
+    while ((n = walker.nextNode())) {
+      out.push(n);
+    }
+    return out;
+  },
+
+  /**
+   * The segments translated, same order, same count — or null when the
+   * model's answer cannot be trusted node-for-node, in which case the
+   * caller falls back to the whole-text translation.
+   */
+  async translateSegments(nodes, lang) {
+    let limit = 12000;
+    try {
+      limit = Services.prefs.getIntPref("hmail.ai.maxChars");
+    } catch (e) {}
+    const segs = nodes.map(n => n.nodeValue.trim());
+    let total = 0;
+    let count = segs.length;
+    for (let i = 0; i < segs.length; i++) {
+      total += segs[i].length;
+      if (total > limit) {
+        count = i;
+        break;
+      }
+    }
+    if (!count) {
+      return null;
+    }
+    const slice = segs.slice(0, count);
+    const reply = await hMailAI.ask([{
+      role: "user",
+      text: `Dịch các đoạn văn bản sau sang ${lang.label}. Đây là yêu cầu ` +
+            `dịch thuật: kết quả phải bằng ${lang.label}, kể cả khi quy ` +
+            "tắc chung yêu cầu trả lời bằng tiếng Việt. Trả về đúng MỘT " +
+            `mảng JSON gồm ${slice.length} chuỗi, đúng thứ tự, mỗi phần ` +
+            "tử là bản dịch của phần tử tương ứng. Giữ nguyên số liệu, " +
+            "tên riêng, địa chỉ email và mã đơn hàng. Không thêm gì " +
+            "ngoài JSON.\n" + JSON.stringify(slice),
+    }]);
+    const parsed = this.parseArray(reply);
+    if (!parsed || parsed.length !== slice.length) {
+      return null;
+    }
+    // Anything past the size cap keeps its original text.
+    return parsed.map(String).concat(segs.slice(count));
+  },
+
+  /** The JSON array in the model's answer, fences and prose tolerated. */
+  parseArray(reply) {
+    try {
+      const text = String(reply);
+      const start = text.indexOf("[");
+      const end = text.lastIndexOf("]");
+      if (start === -1 || end <= start) {
+        return null;
+      }
+      const parsed = JSON.parse(text.slice(start, end + 1));
+      return Array.isArray(parsed) ? parsed : null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  /** Write translations back into the very nodes they came from. */
+  applySegments(nodes, segs) {
+    nodes.forEach((node, i) => {
+      const m = /^(\s*)[\s\S]*?(\s*)$/.exec(node.nodeValue);
+      node.nodeValue = (m?.[1] || "") + segs[i] + (m?.[2] || "");
+    });
+  },
+
+  /**
+   * Whole-text fallback: swap the body for the translation as plain text.
+   * Only used when the page has no usable text nodes or the per-node answer
+   * came back malformed — the in-place path above is the normal one.
    */
   show(win, text) {
     const doc = this.bodyDocument(win);
@@ -186,27 +274,54 @@ var hMailTranslate = {
       return;
     }
 
-    let text = again ? "" : this.cache[key]?.text;
-    const cached = !!text;
+    const doc = this.bodyDocument(win);
+    if (!doc?.body) {
+      this.status(win, "Không thay được nội dung thư.");
+      return;
+    }
+    const nodes = this.textNodes(doc);
 
-    if (!text) {
+    let stored = again ? null : this.cache[key]?.text;
+    const cached = !!stored;
+    // A per-node translation only fits the rendering it was made from; if
+    // the node count changed (images now loaded, different sanitizing),
+    // translate afresh rather than write text into the wrong places.
+    if (Array.isArray(stored) && stored.length !== nodes.length) {
+      stored = null;
+    }
+
+    if (!stored) {
       try {
-        const source = await hMailAI.messageText(hdr);
-        text = await hMailAI.ask([{
-          role: "user",
-          text: `Dịch toàn bộ email sau sang ${lang.label}. Giữ nguyên bố ` +
-                "cục dòng và đoạn, giữ nguyên số liệu, tên riêng, địa chỉ " +
-                "email và mã đơn hàng. Chỉ trả về bản dịch, không thêm lời " +
-                "dẫn.\n\n---\n" + source,
-        }]);
-        this.remember(key, text);
+        if (nodes.length) {
+          stored = await this.translateSegments(nodes, lang);
+        }
+        if (!stored) {
+          // No text nodes worth translating, or the model would not hold
+          // the node-for-node contract: whole-text fallback.
+          const source = await hMailAI.messageText(hdr);
+          stored = await hMailAI.ask([{
+            role: "user",
+            text: `Dịch toàn bộ email sau sang ${lang.label}. Đây là yêu ` +
+                  `cầu dịch thuật: kết quả phải bằng ${lang.label}, kể cả ` +
+                  "khi quy tắc chung yêu cầu trả lời bằng tiếng Việt. Giữ " +
+                  "nguyên bố cục dòng và đoạn, giữ nguyên số liệu, tên " +
+                  "riêng, địa chỉ email và mã đơn hàng. Chỉ trả về bản " +
+                  "dịch, không thêm lời dẫn.\n\n---\n" + source,
+          }]);
+        }
+        this.remember(key, stored);
       } catch (e) {
         this.status(win, "Không dịch được: " + hMailAI.explain(e));
         return;
       }
     }
 
-    if (!this.show(win, text)) {
+    if (Array.isArray(stored)) {
+      if (!this.originals.has(doc)) {
+        this.originals.set(doc, doc.body.innerHTML);
+      }
+      this.applySegments(nodes, stored);
+    } else if (!this.show(win, stored)) {
       this.status(win, "Không thay được nội dung thư.");
       return;
     }

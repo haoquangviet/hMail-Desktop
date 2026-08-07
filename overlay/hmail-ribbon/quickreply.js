@@ -246,7 +246,7 @@ var hMailQuickReply = {
     };
 
     item("↩", "Trả lời tất cả", () => this.send(win, input, true));
-    item("✎", "Nhờ AI viết", () => this.draft(win, input, anchor));
+    item("✎", "Nhờ AI viết", () => this.openStudio(win, doc, box, input));
     item("⧉", "Mở soạn thảo đầy đủ", () => this.expand(win, input));
 
     box.appendChild(menu);
@@ -302,37 +302,123 @@ var hMailQuickReply = {
     }
   },
 
-  /** Let the assistant write it; the user still reads it before sending. */
-  async draft(win, input, button) {
-    const hdr = this.message(win);
-    if (!hdr) {
+  /**
+   * "Nhờ AI viết" — a floating studio above the bar. The one-shot version
+   * dropped its draft straight into the reply box, and that was the end of
+   * the conversation: no way to ask for a rewrite, a different tone, or
+   * another language. Here the draft stays in the studio, every further
+   * instruction refines it in context ("trả lời bằng tiếng Anh: đồng ý…"),
+   * and only "Chèn vào trả lời" moves the settled version into the box.
+   */
+  openStudio(win, doc, box, input) {
+    if (doc.getElementById("hmail-quickreply-studio")) {
       return;
     }
-    // A model can take ten seconds or more. Without this the button looked
-    // dead, and a second click started a second request.
-    if (button?.hasAttribute("disabled")) {
-      return;
-    }
-    button?.setAttribute("disabled", "true");
-    button?.classList.add("busy");
-    this.say(win, "Đang soạn…");
-    try {
-      const text = await hMailAI.messageText(hdr);
-      const reply = await hMailAI.ask([{
-        role: "user",
-        text: "Soạn một thư trả lời ngắn gọn, lịch sự bằng tiếng Việt cho " +
-              "email sau. Chỉ trả về nội dung thư, không thêm lời dẫn, " +
-              "không thêm dòng chào ký tên.\n\n---\n" + text,
-      }]);
-      input.value = reply.trim();
+    const el = (t, c, x) => this.el(doc, t, c, x);
+    const studio = el("div", "hmail-quickreply-studio");
+    studio.id = "hmail-quickreply-studio";
+
+    const out = el("div", "hmail-quickreply-studio-out",
+      "Mô tả thư trả lời bạn muốn — ví dụ: “trả lời bằng tiếng Anh: đồng " +
+      "ý, hẹn gặp tuần sau”. Để trống và bấm Viết để AI tự soạn một bản.");
+
+    const row = el("div", "hmail-quickreply-studio-row");
+    const ask = el("textarea", "hmail-quickreply-studio-ask");
+    ask.rows = 1;
+    ask.placeholder = "Yêu cầu cho AI… (Enter để gửi)";
+    const go = el("button", "hmail-quickreply-studio-go", "Viết");
+
+    const actions = el("div", "hmail-quickreply-studio-actions");
+    const insert = el("button", "hmail-quickreply-studio-insert",
+                      "Chèn vào trả lời");
+    insert.disabled = true;
+    const close = el("button", "hmail-quickreply-studio-close", "Đóng");
+
+    const turns = [];
+    let draftText = "";
+
+    const run = async () => {
+      if (go.disabled) {
+        return;
+      }
+      const hdr = this.message(win);
+      if (!hdr) {
+        out.textContent = "Hãy chọn một thư trước.";
+        return;
+      }
+      go.disabled = true;
+      out.textContent = "Đang soạn…";
+      try {
+        const wish = ask.value.trim();
+        if (!turns.length) {
+          const text = await hMailAI.messageText(hdr);
+          turns.push({
+            role: "user",
+            text: "Đây là email cần trả lời:\n---\n" + text + "\n---\n" +
+                  "Soạn nội dung thư trả lời ngắn gọn, lịch sự. Chỉ trả về " +
+                  "nội dung thư, không lời dẫn, không chào ký tên." +
+                  (wish ? "\nYêu cầu của tôi: " + wish : ""),
+          });
+        } else if (wish) {
+          turns.push({ role: "user", text:
+            wish + "\n(Viết lại bản trả lời theo yêu cầu trên — vẫn chỉ " +
+            "trả về nội dung thư.)" });
+        } else {
+          turns.push({ role: "user",
+                       text: "Viết lại một phương án khác tốt hơn." });
+        }
+        const reply = await hMailAI.ask(turns);
+        turns.push({ role: "assistant", text: reply });
+        draftText = String(reply).trim();
+        out.textContent = draftText;
+        insert.disabled = false;
+        ask.value = "";
+        go.textContent = "Viết lại";
+        this.say(win, hMailAI.usageLine());
+      } catch (e) {
+        out.textContent = "Lỗi: " + hMailAI.explain(e);
+      } finally {
+        go.disabled = false;
+        ask.focus();
+      }
+    };
+
+    const dismiss = () => {
+      doc.removeEventListener("keydown", onKeyDown, true);
+      studio.remove();
+    };
+    const onKeyDown = e => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        dismiss();
+      }
+    };
+
+    go.addEventListener("click", run);
+    ask.addEventListener("keydown", e => {
+      if (e.isComposing || e.keyCode === 229) {
+        return;
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        run();
+      }
+    });
+    insert.addEventListener("click", () => {
+      input.value = draftText;
       input.dispatchEvent(new win.Event("input", { bubbles: true }));
-      this.say(win, hMailAI.usageLine());
-    } catch (e) {
-      this.say(win, "Lỗi: " + hMailAI.explain(e));
-    } finally {
-      button?.removeAttribute("disabled");
-      button?.classList.remove("busy");
-    }
+      dismiss();
+      input.focus();
+    });
+    close.addEventListener("click", dismiss);
+    doc.addEventListener("keydown", onKeyDown, true);
+
+    row.append(ask, go);
+    actions.append(insert, close);
+    studio.append(out, row, actions);
+    box.appendChild(studio);
+    ask.focus();
   },
 
   /** Hand what has been typed to the full composer, unsent. */
