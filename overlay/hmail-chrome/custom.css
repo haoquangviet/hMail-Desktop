@@ -4149,6 +4149,38 @@ unified-toolbar-customization {
 
 /* Beside the address book picker the save button is one of two controls on
    a row, so it keeps its own width there. */
+/* The contact card reads as a two-column table: a quiet fixed-width label
+   column, values that wrap on their own. Without this the label and value
+   spans sat flush against each other — "TênTenten.vn". */
+.hmail-ai-contact {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.hmail-ai-contact-head {
+    font-weight: 600;
+    margin-block-end: 2px;
+}
+
+.hmail-ai-contact-line {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.hmail-ai-contact-label {
+    flex: 0 0 82px;
+    opacity: 0.65;
+    font-size: 0.88em;
+}
+
+.hmail-ai-contact-value {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
 .hmail-ai-contact-actions .hmail-ai-action {
     display: inline-block;
     width: auto !important;
