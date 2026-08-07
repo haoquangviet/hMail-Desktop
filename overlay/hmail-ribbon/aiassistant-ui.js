@@ -87,7 +87,10 @@ Object.assign(hMailAI, {
         wasOpen = Services.prefs.getBoolPref("hmail.sidebar.open");
       } catch (e) {}
       if (wasOpen) {
-        // Late enough for the 3-pane to have finished laying itself out.
+        // Startup grace: the first seconds after launch belong to
+        // Thunderbird itself — folder summaries may be rebuilding over tens
+        // of thousands of messages, and opening the panel then (with its
+        // message analysis) makes a busy start feel like a hang.
         win.setTimeout(() => {
           try {
             if (!win.document.getElementById(this.PANEL_ID)) {
@@ -96,7 +99,7 @@ Object.assign(hMailAI, {
           } catch (e) {
             Cu.reportError("hMail AI reopen failed: " + e);
           }
-        }, 1200);
+        }, 8000);
       }
     } catch (e) {
       Cu.reportError("hMail AI init failed: " + e);

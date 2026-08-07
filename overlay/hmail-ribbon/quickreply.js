@@ -18,8 +18,14 @@ var hMailQuickReply = {
   init(win) {
     try {
       // The message pane is rebuilt for every message, so the box is put
-      // back on the same tick that watches the selection.
-      win.setInterval(() => this.ensure(win), 900);
+      // back on the same tick that watches the selection. The first seconds
+      // after launch are left to Thunderbird (startup grace).
+      win.setInterval(() => {
+        if (win.performance.now() < 8000) {
+          return;
+        }
+        this.ensure(win);
+      }, 900);
     } catch (e) {
       Cu.reportError("hMail quick reply init failed: " + e);
     }

@@ -57,6 +57,7 @@ var hMailSenderId = {
       if (!this.pref("hmail.senderid.enabled", true)) {
         return;
       }
+      this.win = win;
       this.load();
       this.hookCards(win);
     } catch (e) {
@@ -303,6 +304,11 @@ var hMailSenderId = {
   noteDmarc(hdr, domain) {
     try {
       if (typeof hMailInsight === "undefined" || this.pending.has("@" + domain)) {
+        return;
+      }
+      // Startup grace: streaming whole messages per new domain can wait
+      // until Thunderbird has finished its own opening work.
+      if (this.win?.performance?.now() < 8000) {
         return;
       }
       this.pending.add("@" + domain);

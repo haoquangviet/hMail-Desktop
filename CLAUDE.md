@@ -24,6 +24,14 @@
 - Test nhanh trên máy dev: chép file overlay đè vào `C:\Program Files\hMail Desktop\`
   (cần UAC) rồi khởi động lại app — profile tự sync. `node --check` mọi file JS
   trước khi deploy.
+- **Đóng app để deploy: dùng `hmail.exe -osint -hmail-url "hmail://quit"` (thoát
+  tử tế), KHÔNG `Stop-Process -Force`** — force-kill làm hỏng cache tóm tắt thư
+  mục (.msf); với hộp thư ~70k thư, lần khởi động sau phải đọc lại toàn bộ để
+  dựng index, người dùng thấy app "treo". Nếu quit nhẹ không xong (app đang bận
+  dựng index), chờ nó xong rồi thử lại thay vì giết.
+- Các tính năng overlay có "startup grace" 8 giây (`win.performance.now() < 8000`):
+  việc nặng (stream thư để phân tích, mở panel AI, gắn bar trả lời nhanh) nhường
+  Thunderbird khởi động xong đã — giữ nguyên quy ước này khi thêm watcher mới.
 
 ## Bẫy DOM/Gecko đã trả giá để biết
 

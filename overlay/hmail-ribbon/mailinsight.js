@@ -193,6 +193,11 @@ var hMailInsight = {
       // loads, which throws our bar away, so the tick both analyses new
       // messages and puts the bar back whenever it has gone missing.
       win.setInterval(() => {
+        // Startup grace: while Thunderbird may still be rebuilding folder
+        // summaries, streaming messages for analysis piles onto the jam.
+        if (win.performance.now() < 8000) {
+          return;
+        }
         const hdr = this.selected(win);
         const key = hdr ? `${hdr.folder?.URI}#${hdr.messageKey}` : null;
         if (key !== last) {
