@@ -33,7 +33,12 @@ if ($live) {
 }
 
 Write-Output "Chép overlay vào $dest…"
-Copy-Item -Recurse -Force "$repo\overlay\*" $dest
+# robocopy thay cho Copy-Item: lần chép wildcard từng bỏ sót hmail.cfg mà
+# không kêu một tiếng; robocopy báo lỗi ra mặt và tự thử lại.
+robocopy "$repo\overlay" $dest /E /R:2 /W:1 /NFL /NDL /NJH /NJS | Out-Null
+if ($LASTEXITCODE -ge 8) {
+  throw "robocopy lỗi (mã $LASTEXITCODE) — soát lại quyền ghi vào $dest."
+}
 
 # Mở lại qua explorer để app chạy KHÔNG elevated (app elevated phá bộ gõ
 # tiếng Việt và kéo-thả từ Explorer thường).

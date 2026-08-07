@@ -241,6 +241,23 @@ if (Test-Path $Csc) {
     Log "WARNING: csc.exe not found - shipping without the tray helper"
 }
 
+# ------------------------------------------- data-move helper (Windows)
+# The "Di chuyển dữ liệu" tab hands the actual move to this small WinForms
+# window: hMail cannot relocate its own live profile, so it quits and this
+# waits, moves with a progress bar, rewrites profiles.ini, starts hMail.
+if (Test-Path $Csc) {
+    Log "Building the data-move helper"
+    $MoveExe = Join-Path $App "hmailmovedata.exe"
+    & $Csc /nologo /target:winexe /optimize+ /out:"$MoveExe" `
+        /reference:System.dll /reference:System.Drawing.dll `
+        /reference:System.Windows.Forms.dll `
+        (Join-Path $RepoRoot "installer\tools\hMailMoveData.cs")
+    if ($LASTEXITCODE -ne 0) { throw "data-move helper build failed" }
+    if ($Sign) { Invoke-CodeSign $MoveExe }
+} else {
+    Log "WARNING: csc.exe not found - shipping without the data-move helper"
+}
+
 # version pref consumed by the hMail update channel in hmail.cfg
 Set-Content -Encoding ASCII -Path (Join-Path $App "defaults\pref\hmail.js") `
     -Value "pref(""hmail.version"", ""$Version"");"

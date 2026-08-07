@@ -459,6 +459,17 @@ def build_replacements(zf: zipfile.ZipFile, repo: Path):
                 zf.read(name).decode("utf-8")).encode("utf-8")
             continue
 
+        # The debugger's "this runtime" pages ship their own blue logo set —
+        # outside the branding directory, so the branding sweep misses them.
+        if name.startswith("chrome/devtools/skin/images/aboutdebugging-") and \
+                name.endswith(".svg") and \
+                ("firefox" in name or "fenix" in name):
+            repl[name] = hmail_svg
+            continue
+        if name.endswith("messenger/icons/aboutdebugging-logo.svg"):
+            repl[name] = hmail_svg
+            continue
+
         # Troubleshooting page: the version cell says 140.13.0esr; lead with
         # hMail's own version there too. The page fills itself in async, so
         # the rewrite retries briefly until the cell has content.

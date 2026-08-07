@@ -337,8 +337,7 @@ var hMailUpdate = {
         const dataRow = el("div", "hmail-update-actions");
         const move = el("button", "hmail-update-button",
                         "Di chuyển dữ liệu…");
-        move.addEventListener("click", () =>
-          this.moveData(doc.defaultView, dataStatus));
+        move.addEventListener("click", () => this.openMoveTab());
         dataRow.appendChild(move);
         dataWrap.append(dataRow, dataStatus);
 
@@ -355,66 +354,148 @@ var hMailUpdate = {
     }
   },
 
+  // ------------------------------------------------ tab Di chuyển dữ liệu
+
+  MOVE_TAB: "hmailMoveData",
+
   /**
-   * Move the profile to a folder of the user's choosing. The move itself is
-   * done by hmail-move-data.ps1 shipped beside the program: a live profile
-   * cannot relocate itself, so the app quits, the helper waits for that,
-   * moves the folder, points profiles.ini at the new absolute path — the
-   * same mechanism the installer's "Nơi lưu dữ liệu" page uses on a fresh
-   * machine — and starts hMail again.
+   * A move deserves a full page, not a bare folder picker: what will happen,
+   * what must be true of the destination, how long it can take, and an
+   * explicit agreement — then hMail quits and hmailmovedata.exe (a small
+   * window with a progress bar) does the move and starts hMail again.
    */
-  moveData(win, status) {
-    try {
+  openMoveTab() {
+    const win = Services.wm.getMostRecentWindow("mail:3pane");
+    const tabmail = win?.document.getElementById("tabmail");
+    if (!tabmail) {
+      return;
+    }
+    if (!tabmail.tabModes?.[this.MOVE_TAB]) {
+      const self = this;
+      tabmail.registerTabType({
+        name: self.MOVE_TAB,
+        perTabPanel: "vbox",
+        modes: { [self.MOVE_TAB]: { type: self.MOVE_TAB, maxTabs: 1 } },
+        openTab(tab) {
+          tab.title = "Di chuyển dữ liệu";
+          tab.panel.classList.add("hmail-import-tab");
+          tab.panel.appendChild(self.buildMovePanel(win));
+        },
+        closeTab() {},
+        saveTabState() {},
+        showTab(tab) {
+          tab.title = "Di chuyển dữ liệu";
+        },
+        persistTab() {
+          return null;
+        },
+      });
+    }
+    tabmail.openTab(this.MOVE_TAB, {});
+  },
+
+  buildMovePanel(win) {
+    const doc = win.document;
+    const NS = "http://www.w3.org/1999/xhtml";
+    const el = (t, c, x) => {
+      const n = doc.createElementNS(NS, t);
+      if (c) {
+        n.className = c;
+      }
+      if (x !== undefined) {
+        n.textContent = x;
+      }
+      return n;
+    };
+
+    const root = el("div", "hmail-import hmail-ai");
+    root.appendChild(el("div", "hmail-import-title",
+                        "Di chuyển thư mục dữ liệu"));
+
+    const current = Services.dirsvc.get("ProfD", Ci.nsIFile).path;
+    root.appendChild(el("div", "hmail-import-note",
+      "Toàn bộ thư, lịch, danh bạ, tài khoản và cấu hình của bạn đang nằm tại:"));
+    root.appendChild(el("div", "hmail-move-path", current));
+
+    const warn = el("ul", "hmail-move-warnings");
+    for (const w of [
+      "hMail sẽ TỰ THOÁT khi bắt đầu và tự mở lại khi chuyển xong.",
+      "Thư mục đích phải trống hoặc chưa tồn tại.",
+      "Chuyển trong cùng ổ đĩa gần như tức thời. Chuyển sang ổ khác sẽ " +
+        "copy toàn bộ — hộp thư nhiều gigabyte có thể mất nhiều phút; cửa " +
+        "sổ tiến trình sẽ hiển thị đến đâu.",
+      "Đừng tắt máy trong lúc chuyển. Nếu lỗi giữa chừng, dữ liệu gốc vẫn " +
+        "còn nguyên ở chỗ cũ và bạn có thể thử lại.",
+      "Bản cài đặt và cập nhật sau này tự nhận nơi mới — không phải cấu " +
+        "hình lại gì.",
+    ]) {
+      warn.appendChild(el("li", null, w));
+    }
+    root.appendChild(warn);
+
+    const picked = { path: "" };
+    const start = el("button", "hmail-ai-btn primary", "Lưu và bắt đầu");
+    start.disabled = true;
+
+    const pickRow = el("div", "hmail-move-row");
+    const pickBtn = el("button", "hmail-ai-btn", "Chọn thư mục đích…");
+    const pickLabel = el("span", "hmail-move-picked", "(chưa chọn)");
+    const agree = el("input");
+    agree.type = "checkbox";
+    const refresh = () => {
+      start.disabled = !(agree.checked && picked.path);
+    };
+    pickBtn.addEventListener("click", () => {
       const fp = Cc["@mozilla.org/filepicker;1"]
         .createInstance(Ci.nsIFilePicker);
       fp.init(win.browsingContext, "Chọn nơi lưu dữ liệu mới",
               Ci.nsIFilePicker.modeGetFolder);
       fp.open(rv => {
-        if (rv !== Ci.nsIFilePicker.returnOK) {
-          return;
+        if (rv === Ci.nsIFilePicker.returnOK) {
+          picked.path = fp.file.path;
+          pickLabel.textContent = picked.path;
+          refresh();
         }
-        const target = fp.file.path;
-        const current = Services.dirsvc.get("ProfD", Ci.nsIFile).path;
-        if (target === current) {
-          return;
-        }
-        const flags =
-          Services.prompt.BUTTON_POS_0 *
-            Services.prompt.BUTTON_TITLE_IS_STRING +
-          Services.prompt.BUTTON_POS_1 *
-            Services.prompt.BUTTON_TITLE_IS_STRING;
-        const go = Services.prompt.confirmEx(
-          win, "Di chuyển dữ liệu hMail",
-          "Toàn bộ thư, lịch, danh bạ và cấu hình sẽ chuyển sang:\n" +
-          target + "\n\nhMail sẽ thoát trong lúc chuyển và tự mở lại " +
-          "khi xong. Với hộp thư lớn chuyển sang ổ khác, việc này có " +
-          "thể mất vài phút.\n\nTiếp tục?",
-          flags, "Chuyển và thoát", "Hủy", null, null, {});
-        if (go !== 0) {
-          return;
-        }
-
-        const psExe = Cc["@mozilla.org/file/local;1"]
-          .createInstance(Ci.nsIFile);
-        psExe.initWithPath(
-          "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
-        const helper = Services.dirsvc.get("GreD", Ci.nsIFile);
-        helper.append("hmail-move-data.ps1");
-        const app = Services.dirsvc.get("XREExeF", Ci.nsIFile);
-        const proc = Cc["@mozilla.org/process/util;1"]
-          .createInstance(Ci.nsIProcess);
-        proc.init(psExe);
-        proc.run(false, [
-          "-NoProfile", "-ExecutionPolicy", "Bypass",
-          "-WindowStyle", "Hidden", "-File", helper.path,
-          "-ProfilePath", current, "-Target", target, "-AppExe", app.path,
-        ], 13);
-        Services.startup.quit(Services.startup.eAttemptQuit);
       });
-    } catch (e) {
-      if (status) {
-        status.textContent = "Không di chuyển được: " + (e.message || e);
+    });
+    pickRow.append(pickBtn, pickLabel);
+    root.appendChild(pickRow);
+
+    const agreeRow = el("label", "hmail-move-agree");
+    agree.addEventListener("change", refresh);
+    agreeRow.append(agree, el("span", null,
+      " Tôi đã đọc kỹ các lưu ý trên và muốn di chuyển dữ liệu."));
+    root.appendChild(agreeRow);
+
+    const status = el("div", "hmail-import-note", "");
+    start.addEventListener("click", () =>
+      this.startMove(current, picked.path, status));
+    root.append(start, status);
+    return root;
+  },
+
+  startMove(profile, target, status) {
+    try {
+      if (!target || target === profile) {
+        status.textContent = "Nơi mới trùng nơi cũ.";
+        return;
       }
+      const exe = Services.dirsvc.get("GreD", Ci.nsIFile);
+      exe.append("hmailmovedata.exe");
+      if (!exe.exists()) {
+        status.textContent =
+          "Thiếu hmailmovedata.exe trong thư mục cài đặt.";
+        return;
+      }
+      const app = Services.dirsvc.get("XREExeF", Ci.nsIFile);
+      const proc = Cc["@mozilla.org/process/util;1"]
+        .createInstance(Ci.nsIProcess);
+      proc.init(exe);
+      proc.run(false,
+        ["-profile", profile, "-target", target, "-app", app.path], 6);
+      Services.startup.quit(Services.startup.eAttemptQuit);
+    } catch (e) {
+      status.textContent = "Không khởi động được: " + (e.message || e);
     }
   },
 
