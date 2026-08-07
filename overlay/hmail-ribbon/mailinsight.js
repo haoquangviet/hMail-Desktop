@@ -220,12 +220,20 @@ var hMailInsight = {
       if (standalone && !win.document.getElementById("tabmail")) {
         return standalone.contentWindow?.gMessage || null;
       }
+      // A message opened in its own TAB has no row selected in the 3-pane's
+      // gDBView — that view belongs to the 3-pane tab behind it. about:message
+      // knows what it is showing in either tab mode, so ask it first (same
+      // reasoning as hMailAI.selectedMessage).
+      const tabmail = win.document.getElementById("tabmail");
+      const aboutMessage = tabmail?.currentAboutMessage;
+      if (aboutMessage?.gMessage) {
+        return aboutMessage.gMessage;
+      }
       // hdrForFirstSelectedMessage asks the tree for range 0 and throws when
       // there is no selection — "Try a real range index next time." Called
       // from three polling loops, that filled the console with an exception
       // several times a second and buried every real error under it.
-      const view = win.document.getElementById("tabmail")
-        ?.currentAbout3Pane?.gDBView;
+      const view = tabmail?.currentAbout3Pane?.gDBView;
       if (!view || !view.numSelected) {
         return null;
       }
@@ -242,7 +250,12 @@ var hMailInsight = {
         return win.document.getElementById("messageBrowser")
           ?.contentDocument || null;
       }
-      return tabmail.currentAbout3Pane?.messageBrowser?.contentDocument || null;
+      // Must stay in step with selected(): when that returns the message of a
+      // message TAB, the banner has to land in that tab's about:message
+      // document, not the 3-pane reading pane hidden behind it.
+      return tabmail.currentAboutMessage?.document
+        || tabmail.currentAbout3Pane?.messageBrowser?.contentDocument
+        || null;
     } catch (e) {
       return null;
     }

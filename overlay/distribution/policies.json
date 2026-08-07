@@ -8,10 +8,6 @@
       "DisableAllNotifications": true
     },
     "ExtensionSettings": {
-      "*": {
-        "installation_mode": "blocked",
-        "blocked_install_message": "hMail Desktop chỉ cho phép các tiện ích do HQV Software phân phối. / hMail Desktop only allows extensions distributed by HQV Software."
-      },
       "hmail-ai@hqvsoftware.com": {
         "installation_mode": "allowed"
       }

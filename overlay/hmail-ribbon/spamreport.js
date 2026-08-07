@@ -238,8 +238,16 @@ var hMailSpam = {
 
   selectedMessage(win) {
     try {
-      const about3Pane = win.document.getElementById("tabmail")?.currentAbout3Pane;
-      return about3Pane?.gDBView?.hdrForFirstSelectedMessage || null;
+      const tabmail = win.document.getElementById("tabmail");
+      // A message opened in its own TAB has no row selected in the 3-pane's
+      // gDBView — about:message knows what it is showing in either tab mode
+      // (same reasoning as hMailAI.selectedMessage).
+      const aboutMessage = tabmail?.currentAboutMessage;
+      if (aboutMessage?.gMessage) {
+        return aboutMessage.gMessage;
+      }
+      return tabmail?.currentAbout3Pane?.gDBView?.hdrForFirstSelectedMessage
+        || null;
     } catch (e) {
       return null;
     }

@@ -109,38 +109,34 @@ Object.assign(hMailAI, {
     const root = el("div", "hmail-ai");
     root.id = this.PANEL_ID;
 
-    // Prompt bar ---------------------------------------------------------
-    const bar = el("div", "hmail-ai-bar");
-    const select = el("select", "hmail-ai-prompt");
-    select.id = "hmail-ai-prompt";
-    for (const p of this.prompts()) {
-      const opt = el("option", null, p.label);
-      opt.value = p.id;
-      select.appendChild(opt);
-    }
-    const run = el("button", "hmail-ai-btn primary", "Chạy");
-    run.addEventListener("click", () => this.runPrompt(win, select.value));
-
-    const settings = el("button", "hmail-ai-btn", "⚙");
-    settings.title = "Cài đặt trợ lý";
-    settings.addEventListener("click", () => this.showSettings(win));
-
-    bar.append(select, run, settings);
-    root.appendChild(bar);
-
-    const status = el("div", "hmail-ai-status", "");
-    status.id = "hmail-ai-status";
-    root.appendChild(status);
-
     const log = el("div", "hmail-ai-log");
     log.id = "hmail-ai-log";
     root.appendChild(log);
+
+    // The old top bar (sample-command dropdown + Chạy + ⚙) sat above a log
+    // that could be empty, reading as a dead header. Both now live behind
+    // the "+" button next to the composer, Gemini-style, and this line is
+    // the only thing left above the ask box.
+    const status = el("div", "hmail-ai-status", "");
+    status.id = "hmail-ai-status";
+    root.appendChild(status);
 
     // Ask box ------------------------------------------------------------
     // Text area and send button share one rounded surface, and the box grows
     // with what is typed up to a few lines before it starts scrolling.
     const ask = el("div", "hmail-ai-ask");
     const composer = el("div", "hmail-ai-composer");
+
+    const plusBtn = el("button", "hmail-ai-plus");
+    plusBtn.type = "button";
+    plusBtn.title = "Câu lệnh mẫu và cài đặt";
+    plusBtn.setAttribute("aria-haspopup", "true");
+    plusBtn.setAttribute("aria-expanded", "false");
+    plusBtn.appendChild(this.plusIcon(doc));
+    plusBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      this.togglePromptMenu(win, plusBtn);
+    });
 
     const input = el("textarea", "hmail-ai-input");
     input.id = "hmail-ai-input";
@@ -156,7 +152,14 @@ Object.assign(hMailAI, {
       win.setTimeout(grow, 0);
     };
 
-    input.addEventListener("input", grow);
+    input.addEventListener("input", () => {
+      grow();
+      // The composer being empty is one of the two conditions that lets a
+      // deferred panel refresh through — see watchMessageDisplay.
+      if (!input.value.trim()) {
+        this.flushPendingRestore(win);
+      }
+    });
     input.addEventListener("keydown", e => {
       // A Vietnamese input method uses Enter to commit the syllable it is
       // still composing ("thuwr" -> "thử"). Taking that Enter away sends the
@@ -179,7 +182,7 @@ Object.assign(hMailAI, {
     sendBtn.appendChild(this.arrowIcon(doc));
     sendBtn.addEventListener("click", submit);
 
-    composer.append(input, sendBtn);
+    composer.append(plusBtn, input, sendBtn);
     ask.append(composer,
       el("div", "hmail-ai-tip", "Enter để gửi · Shift+Enter xuống dòng"));
     root.appendChild(ask);
@@ -204,6 +207,107 @@ Object.assign(hMailAI, {
     path.setAttribute("stroke-linejoin", "round");
     svg.appendChild(path);
     return svg;
+  },
+
+  /** The "+" on the composer's sample-commands / settings menu button. */
+  plusIcon(doc) {
+    const SVG = "http://www.w3.org/2000/svg";
+    const svg = doc.createElementNS(SVG, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("width", "17");
+    svg.setAttribute("height", "17");
+    const path = doc.createElementNS(SVG, "path");
+    path.setAttribute("d", "M12 5.5v13M5.5 12h13");
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "currentColor");
+    path.setAttribute("stroke-width", "2.2");
+    path.setAttribute("stroke-linecap", "round");
+    svg.appendChild(path);
+    return svg;
+  },
+
+  /**
+   * The Gemini-style popup that used to be a permanent bar above the log:
+   * one row per sample prompt, then a separator, then settings. It opens
+   * above the "+" button so it never fights the composer for space, and
+   * closes itself on outside click, Escape, or a picked action.
+   */
+  togglePromptMenu(win, anchor) {
+    const doc = win.document;
+    if (doc.getElementById("hmail-ai-menu")) {
+      this.closePromptMenu(win);
+      return;
+    }
+    this.openPromptMenu(win, anchor);
+  },
+
+  openPromptMenu(win, anchor) {
+    const doc = win.document;
+    const el = (t, c, x) => this.el(doc, t, c, x);
+    const container = anchor.closest(".hmail-ai-ask");
+    if (!container) {
+      return;
+    }
+
+    const menu = el("div", "hmail-ai-menu");
+    menu.id = "hmail-ai-menu";
+    menu.setAttribute("role", "menu");
+
+    const item = (icon, label, run) => {
+      const b = el("button", "hmail-ai-menu-item");
+      b.type = "button";
+      b.setAttribute("role", "menuitem");
+      b.append(el("span", "hmail-ai-menu-icon", icon),
+               el("span", "hmail-ai-menu-label", label));
+      b.addEventListener("click", () => {
+        this.closePromptMenu(win);
+        run();
+      });
+      menu.appendChild(b);
+      return b;
+    };
+
+    for (const p of this.prompts()) {
+      item("✦", p.label, () => this.runPrompt(win, p.id));
+    }
+    menu.appendChild(el("div", "hmail-ai-menu-sep"));
+    item("⚙", "Cài đặt trợ lý…", () => this.showSettings(win));
+
+    container.appendChild(menu);
+    anchor.setAttribute("aria-expanded", "true");
+
+    const onKeyDown = e => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        this.closePromptMenu(win);
+        anchor.focus();
+      }
+    };
+    const onPointerDown = e => {
+      // anchor.contains, not e.target !== anchor: the button's label is an
+      // SVG, so a click on the button lands on the SVG node — comparing
+      // against the button itself would close the menu here and let the
+      // button's own click handler reopen it, and "+" would never toggle off.
+      if (!menu.contains(e.target) && !anchor.contains(e.target)) {
+        this.closePromptMenu(win);
+      }
+    };
+    doc.addEventListener("keydown", onKeyDown, true);
+    doc.addEventListener("mousedown", onPointerDown, true);
+    this._menuCleanup = () => {
+      doc.removeEventListener("keydown", onKeyDown, true);
+      doc.removeEventListener("mousedown", onPointerDown, true);
+    };
+
+    menu.querySelector(".hmail-ai-menu-item")?.focus();
+  },
+
+  closePromptMenu(win) {
+    const doc = win.document;
+    doc.getElementById("hmail-ai-menu")?.remove();
+    doc.querySelector(".hmail-ai-plus")?.setAttribute("aria-expanded", "false");
+    this._menuCleanup?.();
+    this._menuCleanup = null;
   },
 
   /**
@@ -583,6 +687,11 @@ Object.assign(hMailAI, {
       return;
     }
     this._settingsOpen = false;
+    // A refresh only ever reaches here once watchMessageDisplay has decided
+    // the composer is not busy (see flushPendingRestore), but the "+" menu
+    // is not part of what gets rebuilt below, so close it explicitly rather
+    // than leave it floating over a log that just changed under it.
+    this.closePromptMenu(win);
     log.textContent = "";
 
     const hdr = this.selectedMessage(win);
@@ -1180,6 +1289,38 @@ Object.assign(hMailAI, {
     this._settingsOpen = true;
   },
 
+  /**
+   * Whether rebuilding the panel right now would land on top of the user:
+   * either they are mid-keystroke in the composer, or they have a draft
+   * sitting there unsent. Either way a rebuild replaces the textarea under
+   * them, which loses the draft and — worse — breaks IME composition (a
+   * Vietnamese "thuwr" mid-commit lands as raw "thuwr" in a fresh element
+   * instead of becoming "thử").
+   */
+  composerBusy(win) {
+    const input = win.document.getElementById("hmail-ai-input");
+    if (!input) {
+      return false;
+    }
+    return win.document.activeElement === input || input.value.trim() !== "";
+  },
+
+  /**
+   * Runs the refresh that watchMessageDisplay deferred because the composer
+   * was busy, once it no longer is. Called on blur and whenever the input
+   * empties out.
+   */
+  flushPendingRestore(win) {
+    if (!this._pendingRestore || this.composerBusy(win)) {
+      return;
+    }
+    this._pendingRestore = false;
+    if (win.document.getElementById(this.PANEL_ID) && !this._settingsOpen) {
+      this.restore(win);
+    }
+    this._runCheck?.();
+  },
+
   // ------------------------------------------------------------ automation
 
   /**
@@ -1192,6 +1333,15 @@ Object.assign(hMailAI, {
     }
     this._watching = true;
     this._autoDone = new Set();
+    this._pendingRestore = false;
+    // Delegated so it keeps working across restore()'s rebuilds — the input
+    // element itself is replaced each time, a listener bound to it directly
+    // would not survive that.
+    win.document.addEventListener("blur", e => {
+      if (e.target?.id === "hmail-ai-input") {
+        win.setTimeout(() => this.flushPendingRestore(win), 0);
+      }
+    }, true);
     // Whether a message was unread *when it was picked*. By the time the
     // poll below notices the selection changed, Thunderbird has usually
     // marked it read already, so asking hdr.isRead then always says "read"
@@ -1254,8 +1404,16 @@ Object.assign(hMailAI, {
         Cu.reportError("hMail AI auto-run failed: " + e);
       }
     };
+    // flushPendingRestore needs to re-run this once the composer frees up.
+    this._runCheck = check;
 
-    win.addEventListener("MsgLoaded", check);
+    win.addEventListener("MsgLoaded", () => {
+      if (this.composerBusy(win)) {
+        this._pendingRestore = true;
+        return;
+      }
+      check();
+    });
     // MsgLoaded does not fire for every selection change in the 3-pane, so
     // also poll the selection cheaply.
     let lastKey = null;
@@ -1266,6 +1424,12 @@ Object.assign(hMailAI, {
       const key = hdr ? this.messageKey(hdr) : null;
       if (key !== lastKey) {
         lastKey = key;
+        if (this.composerBusy(win)) {
+          // The user is typing (or has a draft sitting in the box): leave
+          // the panel alone and catch up once they blur or clear it.
+          this._pendingRestore = true;
+          return;
+        }
         // Refresh an open panel to this message's conversation — but never
         // while settings are on screen, or a half-filled form would vanish
         // under the user.

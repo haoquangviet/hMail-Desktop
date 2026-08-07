@@ -365,10 +365,30 @@ var hMailAI = {
       if (standalone && !win.document.getElementById("tabmail")) {
         return standalone.contentWindow?.gMessage || null;
       }
-      // Asking for the first selected message with nothing selected throws;
-      // see the note in mailinsight.selected().
-      const view = win.document.getElementById("tabmail")
-        ?.currentAbout3Pane?.gDBView;
+
+      const tabmail = win.document.getElementById("tabmail");
+      if (!tabmail) {
+        return null;
+      }
+
+      // A message opened in its own TAB (mode "mailMessageTab") has no row
+      // selected in the 3-pane's gDBView — that view belongs to whichever
+      // 3-pane tab is behind it, not to this tab. currentAboutMessage is the
+      // one accessor Thunderbird exposes for the about:message window in
+      // both tab modes: the reading pane embedded in a 3-pane tab, or the
+      // standalone message tab's own browser. Reading gMessage off it covers
+      // both without caring which mode the current tab is in.
+      const aboutMessage = tabmail.currentAboutMessage;
+      if (aboutMessage?.gMessage) {
+        return aboutMessage.gMessage;
+      }
+
+      // Fall back to the 3-pane's selected row — covers a 3-pane tab whose
+      // reading pane is collapsed, where currentAboutMessage has no message
+      // loaded even though a row is highlighted. Asking for the first
+      // selected message with nothing selected throws; see the note in
+      // mailinsight.selected().
+      const view = tabmail.currentAbout3Pane?.gDBView;
       if (!view || !view.numSelected) {
         return null;
       }

@@ -913,6 +913,8 @@ tr[data-properties~="unread"] .subject {
     overflow: hidden !important;
 }
 
+/* Still used by the compose-window AI panel (compose-ai.js), which keeps
+   its top prompt bar. The sidebar panel below no longer uses these two. */
 .hmail-ai-bar {
     display: flex;
     gap: 6px;
@@ -1002,7 +1004,7 @@ tr[data-properties~="unread"] .subject {
     gap: 10px;
 }
 
-/* The ask box and the prompt bar must never be squeezed out by a long chat. */
+/* The ask box and prompt bar must never be squeezed out by a long chat. */
 .hmail-ai-bar,
 .hmail-ai-ask,
 .hmail-ai-status {
@@ -1311,6 +1313,9 @@ select.hmail-ai-field,
     gap: 4px !important;
     padding: 8px 12px 12px !important;
     border-top: none !important;
+    /* Anchors the "+" popup menu, which is positioned relative to this box
+       rather than the button itself so it can span the full composer width. */
+    position: relative !important;
 }
 
 .hmail-ai-composer {
@@ -1380,6 +1385,109 @@ select.hmail-ai-field,
 
 .hmail-ai-send:active {
     transform: translateY(1px);
+}
+
+/* --- "+" menu button, same visual language as the send button --- */
+
+.hmail-ai-plus {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    border: none !important;
+    flex: 0 0 auto;
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    border-radius: 50% !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    padding: 0 !important;
+    background-color: color-mix(in srgb, var(--hmail-ai-ink) 8%, var(--hmail-ai-surface)) !important;
+    color: var(--hmail-ai-ink) !important;
+    cursor: pointer;
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--hmail-ai-ink) 10%, transparent);
+    transition: background-color 0.12s ease, color 0.12s ease, transform 0.06s ease;
+}
+
+.hmail-ai-plus:hover {
+    background-color: color-mix(in srgb, var(--hmail-ai-ink) 14%, var(--hmail-ai-surface)) !important;
+}
+
+.hmail-ai-plus:active {
+    transform: translateY(1px);
+}
+
+.hmail-ai-plus[aria-expanded="true"] {
+    background-color: var(--hmail-ai-accent) !important;
+    color: #ffffff !important;
+}
+
+/* Gemini-style popup: rounded card, icon+label rows, opens upward from
+   the "+" button so it never competes with the composer for room. */
+.hmail-ai-menu {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 100%;
+    margin-bottom: 8px;
+    max-width: 320px;
+    max-height: 320px; /* ~8 rows before it scrolls */
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    border-radius: 14px;
+    border: 1px solid var(--hmail-ai-line);
+    background-color: var(--hmail-ai-surface);
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--hmail-ai-ink) 14%, transparent),
+                0 16px 40px color-mix(in srgb, var(--hmail-ai-ink) 20%, transparent);
+    z-index: 20;
+}
+
+.hmail-ai-menu-item {
+    display: flex !important;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    appearance: none !important;
+    -moz-appearance: none !important;
+    border: none !important;
+    background: transparent !important;
+    color: inherit !important;
+    text-align: start;
+    padding: 8px 10px !important;
+    border-radius: 8px !important;
+    font: inherit !important;
+    font-size: 0.9em !important;
+    cursor: pointer;
+}
+
+.hmail-ai-menu-item:hover,
+.hmail-ai-menu-item:focus-visible {
+    background-color: color-mix(in srgb, var(--hmail-ai-ink) 8%, var(--hmail-ai-surface)) !important;
+    outline: none !important;
+}
+
+.hmail-ai-menu-icon {
+    flex: 0 0 auto;
+    width: 1.4em;
+    text-align: center;
+    opacity: 0.75;
+}
+
+.hmail-ai-menu-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hmail-ai-menu-sep {
+    height: 1px;
+    margin: 4px 6px;
+    background-color: var(--hmail-ai-line);
 }
 
 .hmail-ai-tip {
@@ -3750,10 +3858,12 @@ unified-toolbar-customization {
     flex: 0 0 auto;
 }
 
-/* The add-on manager: extensions are blocked by policy, so the page can only
-   ever show an empty list — and a search box advertising addons.thunderbird.net
-   inside hMail is exactly the association the trademark policy asks us not to
-   imply. The menu entries go; about:addons still answers if typed. */
+/* The add-on manager: new installs go through the ordinary Thunderbird
+   AMO/file-install path, which we turn away (see xpinstall.enabled in
+   hmail.cfg) — but a search box advertising addons.thunderbird.net inside
+   hMail is exactly the association the trademark policy asks us not to
+   imply, so it goes regardless. The menu entries go too; about:addons still
+   answers if typed, and already-installed extensions still list normally. */
 #appmenu_addons,
 #menu_addons,
 #addonsManager .search-container,
