@@ -292,6 +292,36 @@ Object.assign(hMailAI, {
     for (const p of this.prompts()) {
       item("✦", p.label, () => this.runPrompt(win, p.id));
     }
+
+    // Vietnamese and English have their fixed rows above; every other
+    // target hides behind one picker. The last pick earns its own row, so
+    // a person who always translates to Japanese clicks once, not twice.
+    const languages = win.hMailTranslate?.LANGUAGES || [];
+    const remembered = this.pref("hmail.ai.translateLang", "");
+    if (remembered && !["vi", "en"].includes(remembered)) {
+      const known = languages.find(l => l.id === remembered);
+      if (known) {
+        item("🌐", `Dịch sang ${known.label}`,
+             () => win.hMailTranslate?.run(win, known.id));
+      }
+    }
+    if (languages.length) {
+      item("🌐", "Dịch sang ngôn ngữ khác…", () => {
+        const selected = {};
+        const ok = Services.prompt.select(
+          win, "Dịch thư", "Dịch thư này sang:",
+          languages.map(l => l.label), selected);
+        if (!ok) {
+          return;
+        }
+        const lang = languages[selected.value];
+        try {
+          Services.prefs.setCharPref("hmail.ai.translateLang", lang.id);
+        } catch (e) {}
+        win.hMailTranslate?.run(win, lang.id);
+      });
+    }
+
     menu.appendChild(el("div", "hmail-ai-menu-sep"));
     item("⚙", "Cài đặt trợ lý…", () => this.showSettings(win));
 
@@ -798,9 +828,9 @@ Object.assign(hMailAI, {
     // read in the panel, you read every sentence twice — once to find your
     // place in the original, once to read it. translate.js replaces the body
     // and keeps the result until the reader asks for it again.
-    if (promptId === "translate-vi" || promptId === "translate-en") {
-      const lang = promptId === "translate-en" ? "en" : "vi";
-      win.hMailTranslate?.run(win, lang);
+    const translated = /^translate-(.+)$/.exec(promptId);
+    if (translated) {
+      win.hMailTranslate?.run(win, translated[1]);
       return;
     }
     const prompt = this.promptById(promptId);

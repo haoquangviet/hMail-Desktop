@@ -1431,12 +1431,16 @@ select.hmail-ai-field,
 .hmail-ai-menu {
     position: absolute;
     left: 12px;
-    right: 12px;
+    /* No `right:` — anchored left and sized to content. Stretching to both
+       edges while also capping max-width produced a box wider than its
+       clip and a horizontal scrollbar with it. */
     bottom: 100%;
     margin-bottom: 8px;
-    max-width: 320px;
+    min-width: 220px;
+    max-width: calc(100% - 24px);
     max-height: 320px; /* ~8 rows before it scrolls */
     overflow-y: auto;
+    overflow-x: hidden;
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -4194,14 +4198,11 @@ unified-toolbar-customization {
     flex: 0 0 auto;
 }
 
-/* The add-on manager: new installs go through the ordinary Thunderbird
-   AMO/file-install path, which we turn away (see xpinstall.enabled in
-   hmail.cfg) — but a search box advertising addons.thunderbird.net inside
-   hMail is exactly the association the trademark policy asks us not to
-   imply, so it goes regardless. The menu entries go too; about:addons still
-   answers if typed, and already-installed extensions still list normally. */
-#appmenu_addons,
-#menu_addons,
+/* The add-on manager: the search box advertising addons.thunderbird.net is
+   exactly the association the trademark policy asks us not to imply, so it
+   goes. The MENU ENTRIES STAY — hiding them left users no way to reach
+   about:addons at all, which read as "cannot manage or remove extensions";
+   managing what is already installed is precisely what the page is for. */
 #addonsManager .search-container,
 #addonsManager search-addons,
 #addonsManager .header-name ~ button[action="page-options"] {

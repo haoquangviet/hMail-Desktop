@@ -459,6 +459,35 @@ def build_replacements(zf: zipfile.ZipFile, repo: Path):
                 zf.read(name).decode("utf-8")).encode("utf-8")
             continue
 
+        # Troubleshooting page: the version cell says 140.13.0esr; lead with
+        # hMail's own version there too. The page fills itself in async, so
+        # the rewrite retries briefly until the cell has content.
+        if name.endswith("content/global/aboutSupport.js"):
+            extra = (
+                b"\n// hMail: the version cell names the product the user"
+                b" installed.\n"
+                b'window.addEventListener("load", () => {\n'
+                b"  let tries = 0;\n"
+                b"  const fix = () => {\n"
+                b"    try {\n"
+                b'      const v = Services.prefs.getCharPref("hmail.version", "");\n'
+                b'      const box = document.getElementById("version-box");\n'
+                b"      if (v && box && box.textContent) {\n"
+                b"        box.textContent =\n"
+                b'          v + " (Thunderbird " + Services.appinfo.version + ")";\n'
+                b"        return;\n"
+                b"      }\n"
+                b"    } catch (e) {}\n"
+                b"    if (++tries < 20) {\n"
+                b"      setTimeout(fix, 250);\n"
+                b"    }\n"
+                b"  };\n"
+                b"  fix();\n"
+                b"});\n"
+            )
+            repl[name] = zf.read(name) + extra
+            continue
+
         # The dialog's headline version is Thunderbird's ("140.13.0esr").
         # The user installed hMail Desktop, so the line leads with hMail's
         # version; the platform stays visible as a parenthetical.
