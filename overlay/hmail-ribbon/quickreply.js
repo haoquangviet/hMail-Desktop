@@ -65,30 +65,32 @@ var hMailQuickReply = {
     try {
       const doc = this.doc(win);
       if (!this.enabled()) {
-        if (doc) {
-          doc.getElementById(this.ID + "-holder")?.remove();
-          this.releaseSpace(doc);
-        }
+        doc?.getElementById(this.ID + "-holder")?.remove();
         return;
       }
       if (!doc || doc.getElementById(this.ID)) {
-        this._applyReserve?.();
         return;
       }
-      const host = doc.getElementById("singleMessage") ||
-                   doc.getElementById("messagepane")?.parentNode;
+      // The bar goes at the END of #messagepanebox — the flex column that
+      // really holds the message browser. (Not #singleMessage: despite what
+      // aboutMessage.xhtml suggests, at runtime that box only contains the
+      // header, which is why an earlier version of this bar appeared to
+      // float over the message and had to reserve its space by hand. In
+      // the pane's own flex column the browser simply shrinks above the
+      // bar, and the end of the message is always scrollable into view.)
+      const pane = doc.getElementById("messagepane");
+      const host = pane?.parentNode || doc.getElementById("messagepanebox");
       if (!host || !this.message(win)) {
         return;
       }
-      // #singleMessage is a XUL vbox: an HTML child dropped straight into it
-      // lays out at zero size. A XUL vbox wrapper takes part in the box
-      // layout and gives the HTML inside it a real height.
+      // A XUL vbox wrapper takes part in the box layout and gives the HTML
+      // inside it a real height; an HTML child dropped straight into the
+      // XUL column lays out at zero size.
       const holder = doc.createXULElement("vbox");
       holder.id = this.ID + "-holder";
       const box = this.build(win, doc);
       holder.appendChild(box);
       host.appendChild(holder);
-      this.reserveSpace(win, doc, box);
       this.log("added, rect=" +
                JSON.stringify(box.getBoundingClientRect().toJSON()));
     } catch (e) {
@@ -96,116 +98,23 @@ var hMailQuickReply = {
     }
   },
 
-  /**
-   * The bar is pinned to the bottom of the message pane, so it covers
-   * whatever the message ends with. The space is given back inside the
-   * message document itself — padding on its body — rather than by pushing
-   * the browser element up. A margin on the browser left a strip of the
-   * window showing through below the message, which is not part of the page
-   * the user is reading. The space is taken from the element the browser
-   * sits in, so the message document keeps its own layout untouched.
-   */
-  reserveSpace(win, doc, box) {
-    const pane = doc.getElementById("messagepane");
-    const attachments = doc.getElementById("attachmentView");
-    // The space has to go under whatever is last in the column. Reserving it
-    // under the browser alone pushed the attachment bar down behind the fixed
-    // reply box, so a message with attachments looked like it had none.
-    const lastVisible = () =>
-      attachments && !attachments.hidden &&
-      attachments.getBoundingClientRect().height > 0 ? attachments : pane;
-
-    const apply = () => {
-      try {
-        const height = Math.round(box.getBoundingClientRect().height);
-        if (!height) {
-          return;
-        }
-        doc.documentElement.style.setProperty(
-          "--hmail-quickreply-height", `${height}px`);
-
-        // Reserve the space by shrinking the box the message is drawn in,
-        // not by padding the message itself. A message brings its own CSS
-        // and can override, ignore or out-scroll padding on its body — the
-        // last lines then sit behind the reply bar with no way to reach
-        // them. Margin on the element below the browser shrinks the
-        // viewport instead, so the document's own scrollbar accounts for
-        // the bar and the end of the message is always reachable.
-        const body = pane?.contentDocument?.body;
-        if (body) {
-          body.style.paddingBottom = "";
-        }
-        if (attachments) {
-          attachments.style.removeProperty("margin-block-end");
-        }
-        if (pane) {
-          pane.style.removeProperty("margin-block-end");
-        }
-        const target = lastVisible();
-        if (target) {
-          // "important", because an inline margin without it loses to any
-          // !important rule a theme or Thunderbird stylesheet may carry —
-          // and a lost margin here is the message's last lines hiding
-          // behind the reply bar with no way to scroll to them.
-          target.style.setProperty("margin-block-end", `${height}px`,
-                                   "important");
-        }
-        // Geometry snapshot for support: prefs survive a restart, so a
-        // "the bar covers the message" report can be read from prefs.js
-        // instead of reproduced.
-        try {
-          Services.prefs.setCharPref("hmail.quickreply.debug", JSON.stringify({
-            barHeight: height,
-            target: target?.id || null,
-            margin: doc.defaultView?.getComputedStyle(target)?.marginBlockEnd,
-            targetBottom: Math.round(target.getBoundingClientRect().bottom),
-            barTop: Math.round(box.getBoundingClientRect().top),
-          }));
-        } catch (e) {}
-      } catch (e) {}
-    };
-    apply();
-    // The message document is replaced for every message, so the reserve has
-    // to be written again each time it loads.
-    try {
-      pane?.addEventListener("load", apply, true);
-    } catch (e) {}
-    try {
-      const observer = new win.ResizeObserver(apply);
-      observer.observe(box);
-      this._spaceObserver?.disconnect();
-      this._spaceObserver = observer;
-    } catch (e) {
-      // No observer: the initial reservation still covers the common case.
-    }
-    this._applyReserve = apply;
-  },
-
-  /** Give the space back when the bar goes away. */
-  releaseSpace(doc) {
-    try {
-      this._spaceObserver?.disconnect();
-      this._spaceObserver = null;
-      this._applyReserve = null;
-      const pane = doc.getElementById("messagepane");
-      const body = pane?.contentDocument?.body;
-      if (body) {
-        body.style.paddingBottom = "";
-      }
-      for (const id of ["messagepane", "attachmentView"]) {
-        const node = doc.getElementById(id);
-        if (node) {
-          node.style.removeProperty("margin-block-end");
-        }
-      }
-      doc.documentElement.style.removeProperty("--hmail-quickreply-height");
-    } catch (e) {}
-  },
-
   build(win, doc) {
     const el = (t, c, x) => this.el(doc, t, c, x);
     const box = el("div", "hmail-quickreply");
     box.id = this.ID;
+
+    // Two faces. Folded (the default), all the message pane shows is a
+    // small translucent badge floating in the corner, solid on hover.
+    // Unfolded, the full composer sits in flow at the bottom of the pane,
+    // where it cannot cover anything.
+    const badge = el("button", "hmail-quickreply-badge");
+    badge.type = "button";
+    badge.title = "Trả lời nhanh";
+    badge.appendChild(hMailAI.arrowIcon(doc));
+    badge.appendChild(el("span", null, "Trả lời nhanh"));
+    badge.addEventListener("click", () => this.setOpen(win, doc, true));
+
+    const bar = el("div", "hmail-quickreply-bar");
 
     const row = el("div", "hmail-quickreply-row");
     const input = el("textarea", "hmail-quickreply-input");
@@ -223,6 +132,11 @@ var hMailQuickReply = {
       // composition always wins: isComposing covers the standard event, and
       // keyCode 229 the platforms that only report it there.
       if (e.isComposing || e.keyCode === 229) {
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        this.setOpen(win, doc, false);
         return;
       }
       if (e.key === "Enter" && !e.shiftKey) {
@@ -251,16 +165,60 @@ var hMailQuickReply = {
       this.toggleMenu(win, doc, box, plus, input);
     });
 
-    row.append(plus, input, send);
-    box.appendChild(row);
+    const fold = el("button", "hmail-quickreply-fold");
+    fold.type = "button";
+    fold.title = "Thu gọn (Esc)";
+    // A drawn chevron, not a text glyph: "⌄" leans on whatever font the
+    // message document picked and came out smeared and off-center there.
+    fold.appendChild(this.chevronIcon(doc));
+    fold.addEventListener("click", () => this.setOpen(win, doc, false));
+
+    row.append(plus, input, send, fold);
+    bar.appendChild(row);
 
     // Status keeps its own line but only when it has something to say —
     // .hmail-quickreply-status:empty collapses in CSS.
     const status = el("div", "hmail-quickreply-status", "");
     status.id = "hmail-quickreply-status";
-    box.appendChild(status);
+    bar.appendChild(status);
+
+    box.append(badge, bar);
+    box.classList.toggle("open", !!this._open);
     hMailAI.applyLook(win, box);
     return box;
+  },
+
+  /** Chevron-down for the fold button. */
+  chevronIcon(doc) {
+    const SVG = "http://www.w3.org/2000/svg";
+    const svg = doc.createElementNS(SVG, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("width", "16");
+    svg.setAttribute("height", "16");
+    const path = doc.createElementNS(SVG, "path");
+    path.setAttribute("d", "M6 10l6 5 6-5");
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "currentColor");
+    path.setAttribute("stroke-width", "2");
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("stroke-linejoin", "round");
+    svg.appendChild(path);
+    return svg;
+  },
+
+  /** Unfold the composer from the badge, or fold it back down. */
+  setOpen(win, doc, open) {
+    this._open = !!open;
+    const box = doc.getElementById(this.ID);
+    if (!box) {
+      return;
+    }
+    box.classList.toggle("open", this._open);
+    if (this._open) {
+      box.querySelector(".hmail-quickreply-input")?.focus();
+    } else {
+      this.closeMenu(doc);
+    }
   },
 
   /** The "+" popup: one row per secondary action, opened above the bar. */

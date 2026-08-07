@@ -711,7 +711,7 @@ Object.assign(hMailAI, {
     }
     this.notify(win, convo.turns.length
       ? `${convo.turns.length} lượt trao đổi về thư này`
-      : "Chọn một câu lệnh rồi bấm Chạy.");
+      : "Bấm ＋ để chọn câu lệnh, hoặc hỏi ngay bên dưới.");
   },
 
   /**
@@ -727,9 +727,10 @@ Object.assign(hMailAI, {
     const card = el("div", "hmail-ai-welcome");
     card.appendChild(el("div", "hmail-ai-welcome-head", "Trợ lý hMail"));
     card.appendChild(el("div", "hmail-ai-hint",
-      "Chọn một thư ở danh sách bên trái, rồi bấm Chạy để tóm tắt, phân " +
-      "loại, rút việc cần làm, dịch hoặc soạn thư trả lời. Phần \"Đọc nhanh " +
-      "tại chỗ\" chạy ngay trên máy, không tốn phí và không gửi thư đi đâu."));
+      "Chọn một thư ở danh sách bên trái, rồi bấm ＋ cạnh ô nhập để tóm " +
+      "tắt, phân loại, rút việc cần làm, dịch hoặc soạn thư trả lời. Phần " +
+      "\"Đọc nhanh tại chỗ\" chạy ngay trên máy, không tốn phí và không " +
+      "gửi thư đi đâu."));
 
     const list = el("div", "hmail-ai-welcome-list");
     const item = (label, note, run) => {
