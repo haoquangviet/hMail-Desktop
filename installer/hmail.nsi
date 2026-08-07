@@ -57,7 +57,7 @@ Function ${un}CloseRunningApp
     ${EndIf}
 
     ${If} $1 == 0
-      MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "hMail Desktop dang chay. Bam OK de dong lai va tiep tuc." IDOK +2
+      MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "hMail Desktop đang chạy. Bấm OK để đóng lại và tiếp tục." IDOK +2
       Goto hmail_abort
     ${EndIf}
 
