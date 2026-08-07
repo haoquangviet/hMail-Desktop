@@ -136,23 +136,85 @@ var hMailUpdate = {
 
     const flags =
       Services.prompt.BUTTON_POS_0 * Services.prompt.BUTTON_TITLE_IS_STRING +
-      Services.prompt.BUTTON_POS_1 * Services.prompt.BUTTON_TITLE_IS_STRING;
+      Services.prompt.BUTTON_POS_1 * Services.prompt.BUTTON_TITLE_IS_STRING +
+      Services.prompt.BUTTON_POS_2 * Services.prompt.BUTTON_TITLE_IS_STRING;
     const choice = Services.prompt.confirmEx(
       win, "hMail Desktop",
       `Đã có phiên bản ${latest}.\n` +
       `Bạn đang dùng ${current}.\n\n` +
       "Tải bản cài đặt mới ngay bây giờ?",
-      flags, "Tải bản mới", "Để sau", null, null, {});
+      flags, "Tải về ngay", "Để sau", "Mở trang tải", null, {});
 
-    if (choice === 0) {
-      const url = download || this.PAGE;
-      try {
-        win.openLinkExternally(url);
-      } catch (e) {
-        Cc["@mozilla.org/uriloader/external-protocol-service;1"]
-          .getService(Ci.nsIExternalProtocolService)
-          .loadURI(Services.io.newURI(url));
+    if (choice === 0 && download) {
+      this.downloadAndInstall(win, download, latest);
+    } else if (choice === 2 || (choice === 0 && !download)) {
+      this.openPage(win, download);
+    }
+  },
+
+  /**
+   * Pull the installer straight into the Downloads folder and offer to run
+   * it. Opening the release page in a browser was one more app, one more
+   * click, and one more chance to pick the other platform's file.
+   */
+  async downloadAndInstall(win, url, version) {
+    const busy = typeof hMailBusy !== "undefined" ? hMailBusy : win.hMailBusy;
+    try {
+      const { Downloads } = ChromeUtils.importESModule(
+        "resource://gre/modules/Downloads.sys.mjs");
+      const dir = await Downloads.getPreferredDownloadsDirectory();
+      const leaf = decodeURIComponent(
+        String(url).split("/").pop() || `hMailDesktop-${version}`);
+      const file = Cc["@mozilla.org/file/local;1"]
+        .createInstance(Ci.nsIFile);
+      file.initWithPath(PathUtils.join(dir, leaf));
+      if (file.exists()) {
+        // Keep whatever is already there; this picks "…(1).exe" instead.
+        file.createUnique(Ci.nsIFile.NORMAL_FILE_TYPE, 0o644);
       }
+
+      try {
+        busy?.start("hmail-update",
+          `Đang tải hMail Desktop ${version}`,
+          "Bộ cài đang tải sẽ bị hỏng dở.");
+      } catch (e) {}
+      const download = await Downloads.createDownload({
+        source: url,
+        target: file.path,
+      });
+      download.onchange = () => {
+        try {
+          if (download.hasProgress) {
+            busy?.update("hmail-update", `${download.progress}%`);
+          }
+        } catch (e) {}
+      };
+      await download.start();
+      try {
+        busy?.end("hmail-update");
+      } catch (e) {}
+
+      const mac = Services.appinfo.OS === "Darwin";
+      const flags =
+        Services.prompt.BUTTON_POS_0 * Services.prompt.BUTTON_TITLE_IS_STRING +
+        Services.prompt.BUTTON_POS_1 * Services.prompt.BUTTON_TITLE_IS_STRING;
+      const run = Services.prompt.confirmEx(
+        win, "hMail Desktop",
+        `Đã tải xong bản ${version} vào:\n${file.path}\n\n` +
+        (mac ? "Mở tệp cài đặt ngay?"
+             : "Chạy bộ cài ngay? hMail sẽ tự đóng để cập nhật."),
+        flags, mac ? "Mở tệp cài đặt" : "Cài ngay", "Để sau",
+        null, null, {});
+      if (run === 0) {
+        file.launch();
+      }
+    } catch (e) {
+      try {
+        busy?.end("hmail-update");
+      } catch (e2) {}
+      Services.prompt.alert(win, "hMail Desktop",
+        "Không tải được bộ cài: " + (e.message || e) +
+        "\n\nBạn có thể tải thủ công tại:\n" + this.PAGE);
     }
   },
   // ------------------------------------------------- trang Cài đặt
@@ -232,6 +294,7 @@ var hMailUpdate = {
               "bản cài đặt.";
             open.textContent = `Tải hMail Desktop ${info.version}`;
             open.dataset.hmailDownload = info.download;
+            open.dataset.hmailVersion = info.version;
           }
         }).finally(() => {
           check.disabled = false;
@@ -239,8 +302,16 @@ var hMailUpdate = {
       });
 
       const open = el("button", "hmail-update-button", "Mở trang tải");
-      open.addEventListener("click", () =>
-        this.openPage(doc.defaultView, open.dataset.hmailDownload));
+      open.addEventListener("click", () => {
+        // With a known installer URL the button downloads it directly;
+        // the release page is only for when the check has not run.
+        if (open.dataset.hmailDownload) {
+          this.downloadAndInstall(doc.defaultView,
+            open.dataset.hmailDownload, open.dataset.hmailVersion || "");
+        } else {
+          this.openPage(doc.defaultView);
+        }
+      });
 
       row.append(check, open);
       wrap.append(row, status);
