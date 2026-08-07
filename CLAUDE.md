@@ -24,11 +24,17 @@
 - Test nhanh trên máy dev: chép file overlay đè vào `C:\Program Files\hMail Desktop\`
   (cần UAC) rồi khởi động lại app — profile tự sync. `node --check` mọi file JS
   trước khi deploy.
-- **Đóng app để deploy: dùng `hmail.exe -osint -hmail-url "hmail://quit"` (thoát
-  tử tế), KHÔNG `Stop-Process -Force`** — force-kill làm hỏng cache tóm tắt thư
-  mục (.msf); với hộp thư ~70k thư, lần khởi động sau phải đọc lại toàn bộ để
-  dựng index, người dùng thấy app "treo". Nếu quit nhẹ không xong (app đang bận
-  dựng index), chờ nó xong rồi thử lại thay vì giết.
+- **Deploy dev = một lệnh: `powershell -File build\deploy-dev.ps1`** — tự đóng
+  app tử tế (CloseMainWindow, tương đương nút X), chép toàn bộ overlay, mở lại
+  app không elevated. **Deploy xong LUÔN phải restart app** thì thay đổi mới
+  hiện — file JS/CSS chép được khi app đang chạy nhưng chỉ nạp lúc khởi động.
+- KHÔNG BAO GIỜ `Stop-Process -Force` với hmail — force-kill hỏng cache .msf;
+  hộp thư ~70k thư sẽ phải đọc lại toàn bộ ở lần khởi động sau, người dùng thấy
+  app "treo". `hmail://quit` hiện không tin được (backlog #7); đường tin được là
+  CloseMainWindow (pref `hmail.background.enabled` mặc định false nên X = thoát).
+  App bận không chịu thoát → chờ, đừng ép.
+- Script `.ps1` tiếng Việt PHẢI lưu **UTF-8 có BOM** — không BOM thì PowerShell
+  5.1 đọc ANSI, em-dash trong chuỗi thành dấu nháy cong phá cú pháp.
 - Các tính năng overlay có "startup grace" 8 giây (`win.performance.now() < 8000`):
   việc nặng (stream thư để phân tích, mở panel AI, gắn bar trả lời nhanh) nhường
   Thunderbird khởi động xong đã — giữ nguyên quy ước này khi thêm watcher mới.
