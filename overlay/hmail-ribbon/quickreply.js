@@ -184,8 +184,74 @@ var hMailQuickReply = {
 
     box.append(badge, bar);
     box.classList.toggle("open", !!this._open);
+
+    // Files dragged in from the OS become attachments. The whole bar is the
+    // drop target, folded badge included — a drop there unfolds it.
+    box.addEventListener("dragover", e => {
+      if (this.dragHasFiles(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = "copy";
+        box.classList.add("dragging");
+      }
+    });
+    box.addEventListener("dragleave", () => {
+      box.classList.remove("dragging");
+    });
+    box.addEventListener("drop", e => {
+      box.classList.remove("dragging");
+      if (!this.dragHasFiles(e)) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      const files = this.droppedFiles(e);
+      if (!files.length) {
+        return;
+      }
+      this._attachments = this._attachments || [];
+      for (const f of files) {
+        if (!this._attachments.some(a => a.path === f.path)) {
+          this._attachments.push(f);
+        }
+      }
+      this.setOpen(win, doc, true);
+      this.renderChips(win, doc);
+    });
+
     hMailAI.applyLook(win, box);
     return box;
+  },
+
+  dragHasFiles(e) {
+    const types = e.dataTransfer?.types;
+    return !!types && (types.includes("application/x-moz-file") ||
+                       types.includes("Files"));
+  },
+
+  /** OS files out of a drop event, as {path, name}. */
+  droppedFiles(e) {
+    const out = [];
+    const dt = e.dataTransfer;
+    // Chrome documents get the dropped nsIFile directly.
+    try {
+      for (let i = 0; i < dt.mozItemCount; i++) {
+        const f = dt.mozGetDataAt("application/x-moz-file", i);
+        if (f instanceof Ci.nsIFile && f.isFile()) {
+          out.push({ path: f.path, name: f.leafName });
+        }
+      }
+    } catch (e2) {}
+    if (!out.length) {
+      try {
+        for (const f of dt.files || []) {
+          if (f.mozFullPath) {
+            out.push({ path: f.mozFullPath, name: f.name });
+          }
+        }
+      } catch (e2) {}
+    }
+    return out;
   },
 
   /** Chevron-down for the fold button. */
@@ -533,11 +599,15 @@ var hMailQuickReply = {
       const fields = Cc["@mozilla.org/messengercompose/composefields;1"]
         .createInstance(Ci.nsIMsgCompFields);
       fields.body = this.htmlBody(input.value);
-      await this.fillReply(hdr, fields, this._replyAll, this.identityFor(hdr));
+      // The full composer always opens as reply-all, every To and Cc of the
+      // original filled in: it is the place where dropping a recipient is
+      // one keystroke, while ADDING the ones the quick bar silently left
+      // out means digging through the original message. The quick send
+      // path stays mode-controlled.
+      await this.fillReply(hdr, fields, true, this.identityFor(hdr));
       this.addAttachments(fields);
       params.composeFields = fields;
-      params.type = this._replyAll ? Ci.nsIMsgCompType.ReplyAll
-                                   : Ci.nsIMsgCompType.ReplyToSender;
+      params.type = Ci.nsIMsgCompType.ReplyAll;
       params.format = Ci.nsIMsgCompFormat.HTML;
       params.originalMsgURI = hdr.folder.getUriForMsg(hdr);
       params.identity = this.identityFor(hdr);

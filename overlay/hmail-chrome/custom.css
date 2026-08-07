@@ -2408,6 +2408,13 @@ select.hmail-ai-field,
     padding: 0 !important;
 }
 
+/* A file hovering over the bar: show where it may land. */
+.hmail-quickreply.dragging .hmail-quickreply-row,
+.hmail-quickreply.dragging .hmail-quickreply-badge {
+    outline: 2px dashed var(--hmail-accent, #0F6CBD) !important;
+    outline-offset: 2px;
+}
+
 /* What the next send will carry: reply-all mode and attached files. */
 .hmail-quickreply-chips {
     display: flex;
