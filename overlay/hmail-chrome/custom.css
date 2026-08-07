@@ -2328,8 +2328,9 @@ select.hmail-ai-field,
     display: none;
 }
 
+/* !important, to outrank the badge's own display: inline-flex !important. */
 .hmail-quickreply.open .hmail-quickreply-badge {
-    display: none;
+    display: none !important;
 }
 
 /* Loud on purpose: accent-filled pill with the send arrow. A quiet gray
