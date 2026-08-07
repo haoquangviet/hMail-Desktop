@@ -459,6 +459,29 @@ def build_replacements(zf: zipfile.ZipFile, repo: Path):
                 zf.read(name).decode("utf-8")).encode("utf-8")
             continue
 
+        # The dialog's headline version is Thunderbird's ("140.13.0esr").
+        # The user installed hMail Desktop, so the line leads with hMail's
+        # version; the platform stays visible as a parenthetical.
+        if name.endswith("content/messenger/aboutDialog.js"):
+            extra = (
+                b"\n// hMail: the version line names the product the user"
+                b" installed.\n"
+                b'window.addEventListener("load", () => {\n'
+                b"  setTimeout(() => {\n"
+                b"    try {\n"
+                b'      const v = Services.prefs.getCharPref("hmail.version", "");\n'
+                b'      const label = document.getElementById("version");\n'
+                b"      if (v && label) {\n"
+                b"        label.textContent =\n"
+                b'          v + " (Thunderbird " + Services.appinfo.version + ")";\n'
+                b"      }\n"
+                b"    } catch (e) {}\n"
+                b"  }, 0);\n"
+                b"});\n"
+            )
+            repl[name] = zf.read(name) + extra
+            continue
+
         if name in SUPPORT_URL_FILES:
             repl[name] = patch_support_urls(
                 zf.read(name).decode("utf-8")).encode("utf-8")

@@ -161,6 +161,8 @@ fi
 log "Applying configuration overlay"
 mkdir -p "$RES/distribution/extensions" "$RES/defaults/pref"
 cp -R "$REPO/overlay/distribution/." "$RES/distribution/"
+# The About dialog prints distribution.ini's version line; stamp the real one.
+sed -i '' "s/^version=.*/version=$VERSION/" "$RES/distribution/distribution.ini"
 cp "$REPO/overlay/defaults/pref/autoconfig.js" "$RES/defaults/pref/"
 cp "$REPO/overlay/hmail.cfg" "$RES/"
 rm -rf "$RES/hmail-chrome" "$RES/hmail-ribbon"

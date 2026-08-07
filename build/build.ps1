@@ -196,6 +196,12 @@ if (Test-Path $IconDir) {
 Log "Applying overlay (distribution, autoconfig, hmail-chrome)"
 Copy-Item -Recurse -Force (Join-Path $RepoRoot "overlay\*") $App
 
+# The About dialog prints distribution.ini's version line to the user, and
+# the overlay's placeholder said 0.1 forever. Stamp the real one.
+$DistIni = Join-Path $App "distribution\distribution.ini"
+(Get-Content $DistIni -Raw -Encoding UTF8) -replace "(?m)^version=.*", "version=$Version" |
+    Set-Content -Encoding UTF8 -Path $DistIni
+
 # The start page ships inside the application so the message pane still has
 # something to show with no network. docs/ is the single source: the same
 # files serve the public site on GitHub Pages.
