@@ -1006,11 +1006,23 @@ Object.assign(hMailAI, {
     const model = el("input", "hmail-ai-field");
     form.appendChild(model);
 
-    form.appendChild(el("label", "hmail-ai-label", "API key"));
+    const keyLabel = el("label", "hmail-ai-label", "API key");
+    form.appendChild(keyLabel);
     const key = el("input", "hmail-ai-field");
     key.type = "password";
     key.placeholder = "Để trống nếu dịch vụ chạy trên máy này";
     form.appendChild(key);
+
+    // hMail AI services đăng nhập bằng chính hộp thư: chỗ của API key trở
+    // thành lựa chọn "tài khoản thư nào" — mật khẩu dùng lại của hộp thư,
+    // không nhập gì thêm.
+    const accountLabel = el("label", "hmail-ai-label",
+                            "Đăng nhập bằng tài khoản thư");
+    const account = el("select", "hmail-ai-field");
+    accountLabel.hidden = true;
+    account.hidden = true;
+    form.appendChild(accountLabel);
+    form.appendChild(account);
 
     const hint = el("div", "hmail-ai-hint", "");
     form.appendChild(hint);
@@ -1128,7 +1140,39 @@ Object.assign(hMailAI, {
       const p = this.price(id);
       priceIn.value = String(p.in);
       priceOut.value = String(p.out);
-      hint.textContent = def.key
+
+      const emailAuth = def.auth === "email";
+      keyLabel.hidden = emailAuth;
+      key.hidden = emailAuth;
+      accountLabel.hidden = !emailAuth;
+      account.hidden = !emailAuth;
+      if (emailAuth) {
+        account.textContent = "";
+        const seen = new Set();
+        for (const identity of MailServices.accounts.allIdentities) {
+          const email = (identity.email || "").trim().toLowerCase();
+          if (!email || seen.has(email)) {
+            continue;
+          }
+          seen.add(email);
+          const opt = el("option", null, email);
+          opt.value = email;
+          account.appendChild(opt);
+        }
+        const chosen = this.svcPref("account", "", id) ||
+          (MailServices.accounts.defaultAccount?.defaultIdentity?.email ||
+           "").trim().toLowerCase();
+        if (chosen && seen.has(chosen)) {
+          account.value = chosen;
+        }
+      }
+
+      hint.textContent = emailAuth
+        ? "Dịch vụ demo do HQV Software vận hành. Đăng nhập bằng chính tài " +
+          "khoản thư của bạn (mật khẩu đã lưu trong hMail) — không cần tạo " +
+          "API key. Có hạn mức dùng thử; muốn dùng lâu dài, liên hệ HQV để " +
+          "đặt mua."
+        : def.key
         ? "Dịch vụ này cần API key và tính phí theo lượng dùng. Với Gemini " +
           "hoặc OpenAI, nên chọn tên model có đuôi -latest hoặc -mini để " +
           "khỏi phải sửa lại khi nhà cung cấp ngừng một phiên bản."
@@ -1282,6 +1326,9 @@ Object.assign(hMailAI, {
       this.setSvcPref("priceOut", parseFloat(priceOut.value) || 0, id);
       if (key.value.trim()) {
         await this.setApiKey(key.value.trim(), id);
+      }
+      if (!account.hidden && account.value) {
+        this.setSvcPref("account", account.value, id);
       }
     };
 

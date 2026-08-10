@@ -88,6 +88,10 @@ FunctionEnd
 !insertmacro CloseHMail ""
 !insertmacro CloseHMail "un."
 
+Function LaunchUnelevated
+  Exec '"$WINDIR\explorer.exe" "$INSTDIR\hmail.exe"'
+FunctionEnd
+
 Function .onInit
   ; The usual place, so anyone who does not care can press Next twice.
   StrCpy $DataDir "$APPDATA\hMail Desktop"
@@ -127,7 +131,13 @@ FunctionEnd
 !insertmacro MUI_PAGE_DIRECTORY
 
 !insertmacro MUI_PAGE_INSTFILES
-!define MUI_FINISHPAGE_RUN "$INSTDIR\hmail.exe"
+; Trang hoàn tất KHÔNG được tự Exec hmail.exe: bộ cài đang chạy elevated,
+; app kế thừa elevation và UIPI chặn bộ gõ tiếng Việt (UniKey chạy thường
+; không bơm phím vào được tiến trình admin) — người dùng gõ ra chữ thô ở
+; mọi ô trong app cho tới lần mở lại sau. Mở qua explorer thì app chạy
+; trong phiên người dùng bình thường.
+!define MUI_FINISHPAGE_RUN
+!define MUI_FINISHPAGE_RUN_FUNCTION LaunchUnelevated
 !define MUI_FINISHPAGE_RUN_TEXT "Khởi động hMail Desktop"
 !insertmacro MUI_PAGE_FINISH
 

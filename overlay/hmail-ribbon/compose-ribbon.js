@@ -144,11 +144,25 @@ var hMailComposeRibbon = {
           }
           b.append(icon, label);
 
+          // Bấm nút không được cướp focus: lệnh cấp editor (chèn ảnh, liên
+          // kết, bảng…) đi qua commandDispatcher theo focus hiện tại — nút
+          // HTML giữ focus là dispatcher không tìm thấy controller của
+          // editor và lệnh chết im lặng.
+          b.addEventListener("mousedown", event => event.preventDefault());
           b.addEventListener("click", () => {
             try {
               if (button.fn) {
                 button.fn(win);
               } else if (button.cmd) {
+                // Các lệnh chèn chỉ có nghĩa trong thân thư: kéo focus về
+                // body trước, kể cả khi người dùng đang đứng ở ô Tiêu đề.
+                if (["cmd_image", "cmd_link", "cmd_table",
+                     "cmd_spelling", "cmd_findReplace"]
+                      .includes(button.cmd)) {
+                  try {
+                    win.focusMsgBody();
+                  } catch (e) {}
+                }
                 win.goDoCommand(button.cmd);
               }
             } catch (e) {

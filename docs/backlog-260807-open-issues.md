@@ -101,6 +101,14 @@ thư mục app + UseShellExecute=true, hoặc mở qua explorer.exe như deploy-
 báo lỗi rõ nếu app không xuất hiện sau 10s. Cũng nên sửa monitor grep profiles.ini trong
 quy trình vận hành (lần này grep bash báo âm tính giả do escaping, gây chẩn đoán nhầm).
 
+## 9. 🆕 (10/08) Quốc tế hoá overlay — đổi ngôn ngữ sang English nhưng UI hMail vẫn tiếng Việt
+
+Báo cáo từ máy si.lam: chuyển ngôn ngữ app sang English, phần Thunderbird đổi theo nhưng toàn bộ
+chuỗi của overlay hMail (ribbon "Trang đầu/Gửi-Nhận/Thư mục/Xem/Trợ giúp", quickreply, panel AI,
+hộp Cài đặt, "Thư mục cục bộ"…) vẫn tiếng Việt vì hard-code. Việc lớn: cần bảng chuỗi vi/en cho
+~vài trăm chuỗi + helper l10n đọc locale (`Services.locale.appLocaleAsBCP47`), sweep mọi file
+overlay. Đề xuất làm thành đợt riêng (1.1.0), mặc định vi, en dịch dần.
+
 ## Checklist hoàn tất
 
 1. ~~Review diff 5 file (nhất là 3 file "SỬA DỞ")~~ ✅

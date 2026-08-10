@@ -125,6 +125,15 @@ var hMailAI = {
    * to estimate spend. Vendors change them, so they are editable per service.
    */
   SERVICES: [
+    // Dịch vụ demo trên hạ tầng HQV: khách đăng nhập bằng chính hộp thư
+    // (auth: "email" — Basic auth bằng email + mật khẩu email, không API
+    // key). Đứng đầu mảng nên cũng là fallback của serviceDef() và là mặc
+    // định cho bản cài mới (hmail.cfg). HQV trả tiền hạ tầng — hạn mức do
+    // máy chủ quyết, client chỉ cần thuật lại lỗi 429 cho tử tế.
+    { id: "hqv", label: "hMail AI services (HQV)", provider: "openai",
+      endpoint: "https://aiservices.hqv.biz/v1", model: "hmail-default",
+      key: false, auth: "email", priceIn: 0, priceOut: 0, actions: true,
+      tested: true, where: "máy chủ HQV Software (Việt Nam)" },
     { id: "gemini", label: "Google Gemini", provider: "gemini",
       endpoint: "https://generativelanguage.googleapis.com/v1beta",
       model: "gemini-flash-latest", key: true, priceIn: 0.30, priceOut: 2.50,
@@ -308,6 +317,10 @@ var hMailAI = {
     if (this.provider() === "local") {
       return false;
     }
+    // Đăng nhập bằng chính hộp thư (hMail AI services): không có API key.
+    if (this.serviceDef().auth === "email") {
+      return false;
+    }
     return this.provider() !== "openai" ||
            !/^https?:\/\/(127\.0\.0\.1|localhost)/.test(this.endpoint());
   },
@@ -353,6 +366,43 @@ var hMailAI = {
     } else {
       await Services.logins.addLoginAsync(info);
     }
+  },
+
+  /**
+   * Đăng nhập hMail AI services bằng chính hộp thư: email lấy từ pref
+   * hmail.ai.svc.hqv.account (mặc định: identity của tài khoản mặc định),
+   * mật khẩu đọc thẳng từ incoming server đã lưu — không sao chép vào đâu
+   * cả, mỗi request đọc lại một lần.
+   */
+  mailCredentials() {
+    let email = this.svcPref("account", "", "hqv");
+    if (!email) {
+      email = (MailServices.accounts.defaultAccount
+        ?.defaultIdentity?.email || "").trim().toLowerCase();
+    }
+    if (!email) {
+      throw Object.assign(new Error("chưa có tài khoản thư"),
+                          { code: "no_mail_pass" });
+    }
+    for (const server of MailServices.accounts.allServers) {
+      if (!["imap", "pop3"].includes(server.type)) {
+        continue;
+      }
+      const user = String(server.username || "").trim().toLowerCase();
+      const account = MailServices.accounts.findAccountForServer(server);
+      const identity = (account?.defaultIdentity?.email || "")
+        .trim().toLowerCase();
+      if (user !== email && identity !== email) {
+        continue;
+      }
+      const password = server.password;
+      if (password) {
+        return { email, password };
+      }
+    }
+    throw Object.assign(
+      new Error("tài khoản " + email + " chưa lưu mật khẩu"),
+      { code: "no_mail_pass" });
   },
 
   // -------------------------------------------------------------- message
@@ -762,7 +812,13 @@ var hMailAI = {
     }
 
     const headers = { "Content-Type": "application/json" };
-    if (key) {
+    if (this.serviceDef().auth === "email") {
+      // hMail AI services: đăng nhập bằng chính hộp thư — Basic auth,
+      // đọc mật khẩu đã lưu ngay lúc gọi, không giữ lại ở đâu.
+      const cred = this.mailCredentials();
+      headers.Authorization = "Basic " + btoa(
+        unescape(encodeURIComponent(cred.email + ":" + cred.password)));
+    } else if (key) {
       headers.Authorization = `Bearer ${key}`;
     }
     const body = await this.fetchJSON(
@@ -856,6 +912,11 @@ var hMailAI = {
     switch (e?.code) {
       case "no_key":
         return "chưa nhập API key — mở phần cài đặt trong bảng trợ lý";
+      case "no_mail_pass":
+        return "hMail AI services đăng nhập bằng tài khoản thư của bạn, " +
+               "nhưng tài khoản chưa lưu mật khẩu trong hMail (" +
+               (e.message || "") + "). Hãy nhận thư một lần và chọn " +
+               "\"Ghi nhớ mật khẩu\", hoặc chọn dịch vụ khác trong cài đặt.";
       case "local_off":
         return "AI trên máy chưa được kích hoạt";
       case "network":
@@ -867,6 +928,11 @@ var hMailAI = {
       case "NOT_FOUND":
         return `mô hình "${this.model()}" không còn khả dụng`;
       default:
+        if (e?.status === 401 && this.serviceDef().auth === "email") {
+          return "máy chủ hMail AI không chấp nhận đăng nhập của địa chỉ " +
+                 "này — kiểm tra mật khẩu hộp thư, hoặc tài khoản chưa " +
+                 "được mở dịch vụ";
+        }
         return e?.message || "lỗi không xác định";
     }
   },
