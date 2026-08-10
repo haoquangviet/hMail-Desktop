@@ -374,34 +374,73 @@ var hMailAI = {
    * mật khẩu đọc thẳng từ incoming server đã lưu — không sao chép vào đâu
    * cả, mỗi request đọc lại một lần.
    */
+  /**
+   * Mật khẩu đã lưu của một incoming server. server.password chỉ là cache
+   * trong phiên — app mới mở thì rỗng dù người dùng đã "Ghi nhớ mật khẩu";
+   * bản lưu thật nằm trong login manager dưới origin imap://host (POP3:
+   * mailbox://host), đúng như Thunderbird cất khi nhận thư.
+   */
+  serverPassword(server) {
+    const cached = server.password;
+    if (cached) {
+      return cached;
+    }
+    try {
+      const scheme = server.type === "pop3" ? "mailbox" : server.type;
+      const origin = `${scheme}://${server.hostName}`;
+      const logins = Services.logins.findLogins(origin, null, origin);
+      const hit = logins.find(l => l.username === server.username) ||
+                  logins[0];
+      return hit?.password || "";
+    } catch (e) {
+      return "";
+    }
+  },
+
   mailCredentials() {
-    let email = this.svcPref("account", "", "hqv");
-    if (!email) {
-      email = (MailServices.accounts.defaultAccount
-        ?.defaultIdentity?.email || "").trim().toLowerCase();
-    }
-    if (!email) {
-      throw Object.assign(new Error("chưa có tài khoản thư"),
-                          { code: "no_mail_pass" });
-    }
+    const wanted = this.svcPref("account", "", "hqv");
+    const candidates = [];
     for (const server of MailServices.accounts.allServers) {
       if (!["imap", "pop3"].includes(server.type)) {
         continue;
       }
-      const user = String(server.username || "").trim().toLowerCase();
       const account = MailServices.accounts.findAccountForServer(server);
       const identity = (account?.defaultIdentity?.email || "")
         .trim().toLowerCase();
-      if (user !== email && identity !== email) {
-        continue;
-      }
-      const password = server.password;
+      const user = String(server.username || "").trim().toLowerCase();
+      candidates.push({
+        server,
+        email: identity || user,
+        matches: e => e && (e === identity || e === user),
+        isDefault: account === MailServices.accounts.defaultAccount,
+      });
+    }
+
+    // Người dùng chỉ định tài khoản nào thì đúng tài khoản đó, kể cả khi nó
+    // chưa lưu mật khẩu — báo lỗi rõ còn hơn lặng lẽ dùng hộp thư khác.
+    if (wanted) {
+      const picked = candidates.find(c => c.matches(wanted.toLowerCase()));
+      const password = picked ? this.serverPassword(picked.server) : "";
       if (password) {
-        return { email, password };
+        return { email: wanted.toLowerCase(), password };
       }
+      throw Object.assign(
+        new Error("tài khoản " + wanted + " chưa lưu mật khẩu"),
+        { code: "no_mail_pass" });
+    }
+
+    // Chưa chỉ định: tài khoản mặc định nếu nó có mật khẩu lưu, không thì
+    // tài khoản ĐẦU TIÊN có mật khẩu — hồ sơ hay có tài khoản kỹ thuật
+    // (spam-report…) đứng làm mặc định mà không lưu mật khẩu bao giờ.
+    const usable = c => c.email && this.serverPassword(c.server);
+    const chosen = candidates.find(c => c.isDefault && usable(c)) ||
+                   candidates.find(usable);
+    if (chosen) {
+      return { email: chosen.email,
+               password: this.serverPassword(chosen.server) };
     }
     throw Object.assign(
-      new Error("tài khoản " + email + " chưa lưu mật khẩu"),
+      new Error("chưa có tài khoản thư nào lưu mật khẩu"),
       { code: "no_mail_pass" });
   },
 

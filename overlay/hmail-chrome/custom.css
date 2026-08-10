@@ -770,6 +770,7 @@ tr[data-properties~="unread"] .subject {
 .hmail-ribbon-button[data-icon="forward"]   .hmail-ribbon-icon { background-image: url("Icons/forward.svg"); }
 .hmail-ribbon-button[data-icon="folder"]    .hmail-ribbon-icon { background-image: url("Icons/folder.svg"); }
 .hmail-ribbon-button[data-icon="inbox"]     .hmail-ribbon-icon { background-image: url("Icons/inbox-col.svg"); }
+.hmail-ribbon-button[data-icon="sent"]      .hmail-ribbon-icon { background-image: url("Icons/sent.svg"); }
 .hmail-ribbon-button[data-icon="outbox"]    .hmail-ribbon-icon { background-image: url("Icons/outbox.svg"); }
 .hmail-ribbon-button[data-icon="drafts"]    .hmail-ribbon-icon { background-image: url("Icons/drafts.svg"); }
 .hmail-ribbon-button[data-icon="templates"] .hmail-ribbon-icon { background-image: url("Icons/templates.svg"); }

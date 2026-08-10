@@ -101,6 +101,22 @@ Object.assign(hMailAI, {
           }
         }, 8000);
       }
+      // Tự kiểm tra một vòng gọi AI khi được yêu cầu (đặt pref
+      // hmail.ai.selftest = "run" rồi khởi động lại): kết quả ghi ngược
+      // vào chính pref đó. Dành cho chẩn đoán và deploy tự động — không
+      // bao giờ tự chạy nếu không được yêu cầu.
+      try {
+        if (Services.prefs.getCharPref("hmail.ai.selftest", "") === "run") {
+          Services.prefs.setCharPref("hmail.ai.selftest", "running");
+          win.setTimeout(() => {
+            this.ask([{ role: "user", text: "Trả lời đúng một từ: OK" }])
+              .then(reply => Services.prefs.setCharPref(
+                "hmail.ai.selftest", "ok: " + String(reply).slice(0, 80)))
+              .catch(e => Services.prefs.setCharPref(
+                "hmail.ai.selftest", "err: " + this.explain(e)));
+          }, 12000);
+        }
+      } catch (e) {}
     } catch (e) {
       Cu.reportError("hMail AI init failed: " + e);
     }
