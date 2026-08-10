@@ -2413,6 +2413,65 @@ select.hmail-ai-field,
     padding: 0 !important;
 }
 
+/* --- tab Chữ ký thư (trình soạn trực quan) --- */
+
+.hmail-sig-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 12px 0 8px;
+}
+
+.hmail-sig-tool {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    border: 1px solid color-mix(in srgb, CanvasText 15%, transparent) !important;
+    background-color: Canvas !important;
+    color: CanvasText !important;
+    border-radius: 8px !important;
+    min-width: 34px;
+    height: 30px;
+    padding: 0 10px !important;
+    margin: 0 !important;
+    font: inherit !important;
+    cursor: pointer;
+}
+
+.hmail-sig-tool:hover {
+    background-color: color-mix(in srgb, CanvasText 8%, Canvas) !important;
+}
+
+.hmail-sig-color {
+    width: 42px;
+    padding: 2px !important;
+}
+
+.hmail-sig-editor {
+    min-height: 220px;
+    max-width: 720px;
+    border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+    border-radius: 10px;
+    padding: 14px 16px;
+    background-color: Canvas;
+    color: CanvasText;
+    overflow: auto;
+    line-height: 1.5;
+    user-select: text !important;
+    -moz-user-select: text !important;
+}
+
+.hmail-sig-editor:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 55%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--hmail-accent, #0F6CBD) 14%, transparent);
+}
+
+.hmail-sig-editor img {
+    max-width: 320px;
+    height: auto;
+}
+
 /* --- tab Di chuyển dữ liệu --- */
 
 .hmail-move-path {
