@@ -460,8 +460,23 @@ var hMailSignature = {
       if (!currentImg) {
         return;
       }
-      currentImg.style.width = wIn.value ? wIn.value + "px" : "";
-      currentImg.style.height = hIn.value ? hIn.value + "px" : "";
+      // Kích thước ghi bằng THUỘC TÍNH width/height (một mối duy nhất —
+      // cùng định dạng lúc lưu và cùng thứ hộp thuộc tính ảnh của trình
+      // soạn thư sửa); style bị xoá để không đè lên thuộc tính, và không
+      // còn cảnh chỉnh một chiều bằng style trong khi chiều kia là thuộc
+      // tính cũ khiến ảnh méo.
+      if (wIn.value) {
+        currentImg.setAttribute("width", wIn.value);
+      } else {
+        currentImg.removeAttribute("width");
+      }
+      if (hIn.value) {
+        currentImg.setAttribute("height", hIn.value);
+      } else {
+        currentImg.removeAttribute("height");
+      }
+      currentImg.style.width = "";
+      currentImg.style.height = "";
       const bw = parseInt(bIn.value, 10) || 0;
       currentImg.style.border =
         bw > 0 ? `${bw}px solid ${bColor.value}` : "";
@@ -498,9 +513,11 @@ var hMailSignature = {
       if (!currentImg) {
         return;
       }
-      wIn.value = parseInt(currentImg.style.width, 10) ||
+      wIn.value = parseInt(currentImg.getAttribute("width"), 10) ||
+                  parseInt(currentImg.style.width, 10) ||
                   currentImg.width || "";
-      hIn.value = parseInt(currentImg.style.height, 10) || "";
+      hIn.value = parseInt(currentImg.getAttribute("height"), 10) ||
+                  parseInt(currentImg.style.height, 10) || "";
       bIn.value = parseInt(currentImg.style.borderWidth, 10) || "";
       alignSel.value =
         currentImg.style.cssFloat === "left" ? "left" :
@@ -511,6 +528,8 @@ var hMailSignature = {
 
     tool("Gốc", "Về kích thước gốc của ảnh", () => {
       if (currentImg) {
+        currentImg.removeAttribute("width");
+        currentImg.removeAttribute("height");
         currentImg.style.width = "";
         currentImg.style.height = "";
         syncImg();
