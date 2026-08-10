@@ -85,6 +85,37 @@ var hMailSignature = {
     }
   },
 
+  /**
+   * Thu nhỏ THẬT một ảnh dataURI (vẽ lại qua canvas, re-encode) về bề
+   * rộng tối đa cho trước. PNG/SVG giữ PNG (bảo toàn trong suốt của
+   * logo), còn lại nén JPEG. Lỗi thì trả nguyên bản — không bao giờ làm
+   * hỏng ảnh của người dùng.
+   */
+  shrinkImage(win, doc, uri, maxWidth) {
+    return new Promise(resolve => {
+      const img = new win.Image();
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, maxWidth / (img.naturalWidth || 1));
+          const w = Math.max(1, Math.round(img.naturalWidth * scale));
+          const h = Math.max(1, Math.round(img.naturalHeight * scale));
+          const canvas = doc.createElementNS(
+            "http://www.w3.org/1999/xhtml", "canvas");
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          const keepPng = /^data:image\/(png|svg)/i.test(uri);
+          resolve(canvas.toDataURL(
+            keepPng ? "image/png" : "image/jpeg", 0.85));
+        } catch (e) {
+          resolve(uri);
+        }
+      };
+      img.onerror = () => resolve(uri);
+      img.src = uri;
+    });
+  },
+
   identities() {
     const seen = new Map();
     for (const identity of MailServices.accounts.allIdentities) {
@@ -288,19 +319,44 @@ var hMailSignature = {
               binary += String.fromCharCode
                 .apply(null, data.subarray(i, i + 32768));
             }
-            const uri = `data:${mime};base64,${win.btoa(binary)}`;
-            editor.focus();
-            doc.execCommand("insertImage", false, uri);
-            // Logo nguyên khổ thường to đùng: mở màn ở cỡ vừa, chỉnh lại
-            // bằng thanh "Ảnh" khi bấm vào ảnh.
-            win.setTimeout(() => {
-              const imgs = editor.querySelectorAll(`img[src="${uri}"]`);
-              for (const img of imgs) {
-                if (!img.style.width) {
-                  img.style.width = "160px";
+            let uri = `data:${mime};base64,${win.btoa(binary)}`;
+
+            // Ảnh nặng làm mọi thư mang chữ ký này nặng theo. Hỏi một
+            // lần lúc chèn — thu nhỏ THẬT (re-encode) chứ không chỉ hiển
+            // thị nhỏ đi.
+            const shrinkReady = data.length > 300 * 1024
+              ? (() => {
+                  const flags = Services.prompt.BUTTON_POS_0 *
+                      Services.prompt.BUTTON_TITLE_IS_STRING +
+                    Services.prompt.BUTTON_POS_1 *
+                      Services.prompt.BUTTON_TITLE_IS_STRING;
+                  const pick = Services.prompt.confirmEx(
+                    win, "Ảnh khá nặng",
+                    "Ảnh này nặng " + Math.round(data.length / 1024) +
+                    " KB — mỗi thư mang chữ ký sẽ cộng thêm từng ấy.\n\n" +
+                    "Thu nhỏ thật về tối đa 800px cho nhẹ?",
+                    flags, "Thu nhỏ (khuyên dùng)", "Giữ nguyên",
+                    null, null, {});
+                  return pick === 0
+                    ? this.shrinkImage(win, doc, uri, 800)
+                    : Promise.resolve(uri);
+                })()
+              : Promise.resolve(uri);
+
+            shrinkReady.then(finalUri => {
+              uri = finalUri;
+              editor.focus();
+              doc.execCommand("insertImage", false, uri);
+              // Logo nguyên khổ thường to đùng: mở màn ở cỡ vừa, chỉnh
+              // lại bằng thanh "Ảnh" khi bấm vào ảnh.
+              win.setTimeout(() => {
+                for (const img of editor.querySelectorAll("img")) {
+                  if (img.src === uri && !img.style.width) {
+                    img.style.width = "160px";
+                  }
                 }
-              }
-            }, 50);
+              }, 50);
+            });
           });
         } catch (e) {
           Cu.reportError("hMail signature image failed: " + e);
@@ -454,6 +510,20 @@ var hMailSignature = {
         currentImg.style.height = "";
         syncImg();
       }
+    }, imgBar);
+    tool("Nén ảnh", "Thu nhỏ THẬT dữ liệu ảnh về đúng cỡ đang hiển thị " +
+                    "— chữ ký nhẹ đi, thư gửi nhanh hơn", () => {
+      const img = currentImg;
+      if (!img) {
+        return;
+      }
+      const target = parseInt(img.style.width, 10) || img.width || 160;
+      this.shrinkImage(win, doc, img.src, target).then(uri => {
+        img.src = uri;
+        img.style.width = "";
+        img.style.height = "";
+        syncImg();
+      });
     }, imgBar);
     tool("Xoá ảnh", "Bỏ ảnh này khỏi chữ ký", () => {
       currentImg?.remove();
