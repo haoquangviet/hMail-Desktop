@@ -927,6 +927,11 @@ var hMailSignature = {
         // tính, mà style thì đè thuộc tính — để nguyên style là người
         // dùng chỉnh ảnh trong thư kiểu gì cũng không ăn.
         for (const img of editor.querySelectorAll("img")) {
+          // Chỉ quy đổi kích thước px; width theo % giữ nguyên style —
+          // parseInt("100%") cũng ra 100 nhưng 100% không phải 100px.
+          if (/%/.test(img.style.width + img.style.height)) {
+            continue;
+          }
           const w = parseInt(img.style.width, 10);
           const h = parseInt(img.style.height, 10);
           if (w) {
