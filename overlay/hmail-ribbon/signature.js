@@ -68,6 +68,23 @@ var hMailSignature = {
     }
   },
 
+  /**
+   * Đổ HTML vào editor. KHÔNG dùng innerHTML: document 3-pane là XHTML,
+   * innerHTML ở đó parse theo luật XML — một chữ ký sẵn có chứa "<br>"
+   * (không tự đóng) là ném SyntaxError ngay. DOMParser text/html nhai được
+   * mọi HTML đời thực, xong import từng node sang.
+   */
+  setHtml(win, editor, html) {
+    editor.textContent = "";
+    if (!html) {
+      return;
+    }
+    const parsed = new win.DOMParser().parseFromString(html, "text/html");
+    for (const node of Array.from(parsed.body.childNodes)) {
+      editor.appendChild(editor.ownerDocument.importNode(node, true));
+    }
+  },
+
   identities() {
     const seen = new Map();
     for (const identity of MailServices.accounts.allIdentities) {
@@ -214,12 +231,12 @@ var hMailSignature = {
       const identity = this.identities().get(select.value);
       const name = identity?.fullName || "Họ và tên";
       const email = select.value;
-      editor.innerHTML =
+      this.setHtml(win, editor,
         '<div style="font-family: Arial, sans-serif; font-size: 13px; ' +
         'color: #333;">--<br><b style="font-size:14px; color:#0F6CBD;">' +
         name + "</b><br>Chức danh · Tên công ty<br>" +
         '📧 <a href="mailto:' + email + '">' + email + "</a> · 📞 09xx xxx " +
-        "xxx<br>🌐 <a href=\"https://example.com\">example.com</a></div>";
+        "xxx<br>🌐 <a href=\"https://example.com\">example.com</a></div>");
       editor.focus();
     });
 
@@ -233,15 +250,13 @@ var hMailSignature = {
       if (!identity) {
         return;
       }
-      if (identity.htmlSigText) {
-        editor.innerHTML = identity.htmlSigFormat
-          ? identity.htmlSigText
-          // Chữ ký cũ dạng chữ trơn: bê nguyên vào, giữ xuống dòng.
-          : identity.htmlSigText.replace(/&/g, "&amp;")
-              .replace(/</g, "&lt;").replace(/\r?\n/g, "<br>");
-      } else {
-        editor.innerHTML = "";
-      }
+      this.setHtml(win, editor, identity.htmlSigText
+        ? (identity.htmlSigFormat
+            ? identity.htmlSigText
+            // Chữ ký cũ dạng chữ trơn: bê nguyên vào, giữ xuống dòng.
+            : identity.htmlSigText.replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;").replace(/\r?\n/g, "<br>"))
+        : "");
       status.textContent = "";
     };
     select.addEventListener("change", load);
