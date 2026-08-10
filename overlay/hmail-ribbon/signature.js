@@ -574,19 +574,71 @@ var hMailSignature = {
         cell.style.backgroundColor = "#f0f4f8";
       }
     }, tableBar);
-    tool("Viền", "Bật / tắt viền bảng", () => {
+
+    // Thuộc tính bảng: sửa số là thấy ngay, đồng bộ ngược khi đặt con
+    // trỏ vào bảng khác.
+    const tProp = (label, width = 46) => {
+      tableBar.appendChild(el("span", "hmail-sig-prop-label", label));
+      const input = el("input", "hmail-sig-tool hmail-sig-prop");
+      input.type = "number";
+      input.min = "0";
+      input.style.width = width + "px";
+      tableBar.appendChild(input);
+      return input;
+    };
+    const tBorder = tProp("Viền");
+    const tBorderColor = el("input", "hmail-sig-tool hmail-sig-color");
+    tBorderColor.type = "color";
+    tBorderColor.value = "#cccccc";
+    tBorderColor.title = "Màu viền";
+    tableBar.appendChild(tBorderColor);
+    const tPad = tProp("Đệm");
+    const tWidth = tProp("Rộng", 56);
+    tableBar.appendChild(el("span", "hmail-sig-prop-label", "Nền ô"));
+    const tCellBg = el("input", "hmail-sig-tool hmail-sig-color");
+    tCellBg.type = "color";
+    tCellBg.value = "#f0f4f8";
+    tCellBg.title = "Màu nền các ô đang chọn";
+    tableBar.appendChild(tCellBg);
+
+    const applyTable = () => {
       const table = currentTable();
       if (!table) {
         return;
       }
-      const off = table.dataset.hmailNoborder === "1";
-      table.dataset.hmailNoborder = off ? "" : "1";
+      const bw = parseInt(tBorder.value, 10) || 0;
+      const pad = tPad.value === "" ? null : parseInt(tPad.value, 10) || 0;
       for (const row of table.rows) {
         for (const cell of row.cells) {
-          cell.style.border = off ? "1px solid #cccccc" : "none";
+          cell.style.border =
+            bw > 0 ? `${bw}px solid ${tBorderColor.value}` : "none";
+          if (pad !== null) {
+            cell.style.padding = `${pad}px ${pad + 6}px`;
+          }
         }
       }
-    }, tableBar);
+      table.style.width = tWidth.value ? tWidth.value + "px" : "";
+    };
+    for (const control of [tBorder, tBorderColor, tPad, tWidth]) {
+      control.addEventListener("input", applyTable);
+      control.addEventListener("change", applyTable);
+    }
+    tCellBg.addEventListener("change", () => {
+      const cells = selectedCells();
+      for (const cell of cells.length ? cells : []) {
+        cell.style.backgroundColor = tCellBg.value;
+      }
+    });
+    const syncTable = () => {
+      const table = currentTable();
+      if (!table) {
+        return;
+      }
+      const first = table.rows[0]?.cells[0];
+      tBorder.value = parseInt(first?.style.borderWidth, 10) || "";
+      tPad.value = parseInt(first?.style.paddingTop, 10) || "";
+      tWidth.value = parseInt(table.style.width, 10) || "";
+    };
     // Bản đồ lưới của bảng: grid[hàng][cột] -> ô chiếm chỗ đó, đã tính
     // cả colspan/rowspan — nền cho gộp/tách ô đúng đắn.
     const gridOf = table => {
@@ -728,7 +780,11 @@ var hMailSignature = {
 
     const refreshContext = () => {
       imgBar.hidden = !currentImg;
-      tableBar.hidden = !currentTable();
+      const table = currentTable();
+      if (tableBar.hidden && table) {
+        syncTable();
+      }
+      tableBar.hidden = !table;
     };
     editor.addEventListener("click", event => {
       currentImg = event.target?.localName === "img" ? event.target : null;
