@@ -20,6 +20,14 @@ if (-not $isAdmin) {
 
 $live = Get-Process hmail -ErrorAction SilentlyContinue
 if ($live) {
+  # Thoát tử tế qua deep link (KHÔNG -osint — cờ tự chế bị remoting vứt,
+  # backlog #7); không ăn thì bồi nút X.
+  Write-Output "Đóng hMail (hmail://quit)…"
+  & "$dest\hmail.exe" -hmail-url "hmail://quit" 2>$null
+  Start-Sleep -Seconds 5
+  $live = Get-Process hmail -ErrorAction SilentlyContinue
+}
+if ($live) {
   Write-Output "Đóng hMail (nút X)…"
   $live | Where-Object { $_.MainWindowHandle -ne 0 } |
     ForEach-Object { $null = $_.CloseMainWindow() }

@@ -79,7 +79,7 @@ File: `overlay/hmail-ribbon/meetings.js` (+ css tương ứng). Tham khảo các
 >   patch omni thêm bước tra `calendar.getItem(uid)` trước khi render nút, và render phần
 >   tĩnh (parse ics) ngay khi thư mở, đừng chờ itip processing.
 
-## 7. 🆕 (07/08 tối) `hmail://quit` không còn tác dụng với instance đang chạy
+## 7. ✅ (10/08, ĐÃ FIX) `hmail://quit` không tác dụng — thủ phạm là -osint
 
 Phát hiện khi deploy: `hmail.exe -osint -hmail-url "hmail://quit"` từng hoạt động (xác nhận 05/08),
 nay gửi tới instance đang chạy thì không có gì xảy ra (app idle, không dialog chặn, window vẫn mở,
@@ -89,6 +89,12 @@ command-line forwarding có gọi tới handler trong hmail.cfg không (thêm lo
 `Services.startup.quit(eAttemptQuit|eForceQuit)` — hai hằng này KHÔNG phải bitflag, OR ra 0x03
 (eForceQuit) vẫn đúng nhưng nên viết tường minh. Lưu ý file JS/CSS deploy được khi app đang chạy
 (không bị khoá) — chỉ cần restart tự nhiên để nhận.
+
+> **KẾT LUẬN 10/08:** lệnh KHÔNG tới handler khi đi kèm `-osint` — Gecko chỉ forward các cờ
+> trong allowlist (-url, -compose…) sang instance đang chạy, cờ tự chế `-hmail-url` bị vứt.
+> Fix: gọi nội bộ (tray, deploy-dev) bỏ -osint; registry protocol đổi sang `-osint -url "%1"`
+> và handler nhặt URL hmail: từ mọi dạng, gỡ luôn cờ hộ tống. Đã verify: quit không -osint
+> thoát app trong vài giây.
 
 ## 8. ✅ (07/08 đêm, ĐÃ FIX) hmailmovedata.exe không tự mở lại app sau move
 

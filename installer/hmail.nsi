@@ -207,7 +207,11 @@ Section "hMail Desktop" SecMain
   WriteRegStr HKLM "SOFTWARE\Classes\hmail" "" "hMail Desktop Link"
   WriteRegStr HKLM "SOFTWARE\Classes\hmail" "URL Protocol" ""
   WriteRegStr HKLM "SOFTWARE\Classes\hmail\DefaultIcon" "" "$INSTDIR\hmail.exe,0"
-  WriteRegStr HKLM "SOFTWARE\Classes\hmail\shell\open\command" "" '"$INSTDIR\hmail.exe" -osint -hmail-url "%1"'
+  ; -url chứ không phải -hmail-url: khi hMail đang chạy, lệnh được forward
+  ; sang instance cũ và Gecko chỉ cho qua các cờ trong allowlist (-url,
+  ; -compose…) — cờ tự chế bị vứt bỏ, hmail:// bấm lúc app mở sẽ câm lặng
+  ; (backlog #7). Handler trong hmail.cfg nhặt URL hmail: từ cả hai dạng.
+  WriteRegStr HKLM "SOFTWARE\Classes\hmail\shell\open\command" "" '"$INSTDIR\hmail.exe" -osint -url "%1"'
 
   ; --- Shortcuts ---
   CreateDirectory "$SMPROGRAMS\hMail Desktop"
