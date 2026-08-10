@@ -805,16 +805,31 @@ var hMailSignature = {
       currentImg = null;
       refreshContext();
     });
-    // Document chứa tab là XUL: phím mũi tên nổi bọt lên bị bộ điều hướng
-    // focus của XUL bắt mất — con trỏ đang gõ bỗng văng khỏi ô soạn. Caret
-    // vẫn di chuyển bình thường (không preventDefault), chỉ không cho XUL
-    // nhìn thấy phím nữa.
+    // Document chứa tab là XUL và bộ điều hướng focus của nó chạy trong
+    // SYSTEM EVENT GROUP — stopPropagation vô nghĩa ở đó, chỉ preventDefault
+    // mới chặn được; nhưng preventDefault thì caret cũng chết theo. Nên:
+    // chặn hết bằng preventDefault rồi TỰ di chuyển caret qua
+    // Selection.modify — mũi tên, Home/End, Shift bôi chọn, Ctrl nhảy từ
+    // đều đúng như một editor thực thụ.
     editor.addEventListener("keydown", event => {
-      const nav = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
-                   "Home", "End", "PageUp", "PageDown"];
-      if (nav.includes(event.key)) {
-        event.stopPropagation();
+      const routes = {
+        ArrowLeft: ["backward", event.ctrlKey ? "word" : "character"],
+        ArrowRight: ["forward", event.ctrlKey ? "word" : "character"],
+        ArrowUp: ["backward", "line"],
+        ArrowDown: ["forward", "line"],
+        Home: ["backward", "lineboundary"],
+        End: ["forward", "lineboundary"],
+      };
+      const route = routes[event.key];
+      if (!route) {
+        return;
       }
+      event.preventDefault();
+      event.stopPropagation();
+      try {
+        win.getSelection().modify(
+          event.shiftKey ? "extend" : "move", route[0], route[1]);
+      } catch (e) {}
     });
 
     root.appendChild(editor);
