@@ -582,6 +582,138 @@ var hMailSignature = {
         }
       }
     }, tableBar);
+    // Bản đồ lưới của bảng: grid[hàng][cột] -> ô chiếm chỗ đó, đã tính
+    // cả colspan/rowspan — nền cho gộp/tách ô đúng đắn.
+    const gridOf = table => {
+      const grid = [];
+      for (let r = 0; r < table.rows.length; r++) {
+        grid[r] = grid[r] || [];
+        let c = 0;
+        for (const cell of table.rows[r].cells) {
+          while (grid[r][c]) {
+            c++;
+          }
+          for (let dr = 0; dr < cell.rowSpan; dr++) {
+            for (let dc = 0; dc < cell.colSpan; dc++) {
+              grid[r + dr] = grid[r + dr] || [];
+              grid[r + dr][c + dc] = cell;
+            }
+          }
+          c += cell.colSpan;
+        }
+      }
+      return grid;
+    };
+    const selectedCells = () => {
+      const sel = win.getSelection();
+      const cells = [];
+      for (let i = 0; i < (sel?.rangeCount || 0); i++) {
+        const node = sel.getRangeAt(i).startContainer;
+        const cell = (node.nodeType === 1 ? node : node.parentElement)
+          ?.closest?.("td, th");
+        if (cell && editor.contains(cell) && !cells.includes(cell)) {
+          cells.push(cell);
+        }
+      }
+      return cells;
+    };
+
+    tool("Gộp ô", "Kéo chuột chọn qua các ô rồi bấm để gộp làm một", () => {
+      const cells = selectedCells();
+      const table = cells[0]?.closest("table");
+      if (cells.length < 2 || !table ||
+          cells.some(c => c.closest("table") !== table)) {
+        status.textContent =
+          "Gộp ô: kéo chuột bôi chọn qua từ 2 ô trở lên trong cùng bảng.";
+        return;
+      }
+      const grid = gridOf(table);
+      let minR = 1e9, maxR = -1, minC = 1e9, maxC = -1;
+      for (let r = 0; r < grid.length; r++) {
+        for (let c = 0; c < grid[r].length; c++) {
+          if (cells.includes(grid[r][c])) {
+            minR = Math.min(minR, r); maxR = Math.max(maxR, r);
+            minC = Math.min(minC, c); maxC = Math.max(maxC, c);
+          }
+        }
+      }
+      for (let r = minR; r <= maxR; r++) {
+        for (let c = minC; c <= maxC; c++) {
+          if (!cells.includes(grid[r][c])) {
+            status.textContent = "Gộp ô: vùng chọn phải là hình chữ nhật.";
+            return;
+          }
+        }
+      }
+      const target = grid[minR][minC];
+      for (const cell of cells) {
+        if (cell === target) {
+          continue;
+        }
+        if (cell.textContent.trim()) {
+          target.appendChild(doc.createTextNode(" "));
+          while (cell.firstChild) {
+            target.appendChild(cell.firstChild);
+          }
+        }
+        cell.remove();
+      }
+      target.colSpan = maxC - minC + 1;
+      target.rowSpan = maxR - minR + 1;
+      status.textContent = "";
+    }, tableBar);
+
+    tool("Tách ô", "Tách ô đã gộp về từng ô đơn", () => {
+      const cell = selectedCells()[0];
+      const table = cell?.closest("table");
+      if (!cell || !table || (cell.colSpan < 2 && cell.rowSpan < 2)) {
+        status.textContent = "Tách ô: đặt con trỏ vào một ô đã gộp trước.";
+        return;
+      }
+      const grid = gridOf(table);
+      let r0 = -1, c0 = -1;
+      outer:
+      for (let r = 0; r < grid.length; r++) {
+        for (let c = 0; c < grid[r].length; c++) {
+          if (grid[r][c] === cell) {
+            r0 = r; c0 = c;
+            break outer;
+          }
+        }
+      }
+      const spanR = cell.rowSpan, spanC = cell.colSpan;
+      cell.colSpan = 1;
+      cell.rowSpan = 1;
+      for (let r = r0; r < r0 + spanR; r++) {
+        for (let c = c0; c < c0 + spanC; c++) {
+          if (r === r0 && c === c0) {
+            continue;
+          }
+          const fresh = el("td");
+          fresh.style.cssText = "border:1px solid #cccccc; padding:4px 10px;";
+          fresh.textContent = " ";
+          const row = table.rows[r];
+          // Chèn đúng vị trí: trước ô đầu tiên trong hàng có cột lưới lớn hơn.
+          let before = null;
+          for (const sibling of row.cells) {
+            let sc = -1;
+            for (let cc = 0; cc < grid[r].length; cc++) {
+              if (grid[r][cc] === sibling) {
+                sc = cc;
+                break;
+              }
+            }
+            if (sc > c) {
+              before = sibling;
+              break;
+            }
+          }
+          row.insertBefore(fresh, before);
+        }
+      }
+      status.textContent = "";
+    }, tableBar);
+
     tool("Xoá bảng", "Bỏ cả bảng", () => {
       currentTable()?.remove();
       refreshContext();
