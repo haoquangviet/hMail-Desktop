@@ -2447,6 +2447,33 @@ select.hmail-ai-field,
     padding: 2px !important;
 }
 
+.hmail-sig-select {
+    min-width: 84px;
+    padding: 0 6px !important;
+}
+
+.hmail-sig-sep {
+    width: 1px;
+    height: 22px;
+    background-color: color-mix(in srgb, CanvasText 18%, transparent);
+    margin: 0 4px;
+}
+
+/* Thanh ngữ cảnh (Ảnh / Bảng) chỉ hiện khi đứng trong đối tượng đó. */
+.hmail-sig-context {
+    margin-top: -2px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    background-color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 7%, Canvas);
+    max-width: 720px;
+}
+
+.hmail-sig-context-label {
+    font-weight: 600;
+    font-size: 0.88em;
+    margin-inline-end: 4px;
+}
+
 .hmail-sig-editor {
     min-height: 220px;
     max-width: 720px;

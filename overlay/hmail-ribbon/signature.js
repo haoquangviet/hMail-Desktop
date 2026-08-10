@@ -134,6 +134,7 @@ var hMailSignature = {
     root.appendChild(idRow);
 
     // --- toolbar --------------------------------------------------------
+    // --- thanh công cụ ---------------------------------------------------
     const bar = el("div", "hmail-sig-toolbar");
     const editor = el("div", "hmail-sig-editor");
     editor.setAttribute("contenteditable", "true");
@@ -144,34 +145,93 @@ var hMailSignature = {
         doc.execCommand(cmd, false, value);
       } catch (e) {}
     };
-    const tool = (label, title, run) => {
-      const b = el("button", "hmail-sig-tool", label);
+
+    // Icon vẽ tay theo bộ dấu quốc tế (nét kiểu Feather) — không emoji,
+    // không phụ thuộc font của hệ.
+    const svgIcon = path => {
+      const SVG = "http://www.w3.org/2000/svg";
+      const svg = doc.createElementNS(SVG, "svg");
+      svg.setAttribute("viewBox", "0 0 24 24");
+      svg.setAttribute("width", "16");
+      svg.setAttribute("height", "16");
+      const p = doc.createElementNS(SVG, "path");
+      p.setAttribute("d", path);
+      p.setAttribute("fill", "none");
+      p.setAttribute("stroke", "currentColor");
+      p.setAttribute("stroke-width", "1.8");
+      p.setAttribute("stroke-linecap", "round");
+      p.setAttribute("stroke-linejoin", "round");
+      svg.appendChild(p);
+      return svg;
+    };
+    const ICONS = {
+      link: "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" +
+            "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71",
+      image: "M3 5h18v14H3z M8.5 11a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z" +
+             "M21 15l-5-5L5 21",
+      table: "M3 4h18v16H3z M3 10h18 M3 16h18 M9 4v16 M15 4v16",
+      alignLeft: "M4 6h16 M4 10h10 M4 14h16 M4 18h10",
+      alignCenter: "M4 6h16 M7 10h10 M4 14h16 M7 18h10",
+      alignRight: "M4 6h16 M10 10h10 M4 14h16 M10 18h10",
+      ul: "M8 6h13 M8 12h13 M8 18h13 M3.6 6h.01 M3.6 12h.01 M3.6 18h.01",
+      ol: "M10 6h11 M10 12h11 M10 18h11 M4 5.5h1.5 M4.75 4.5v3 " +
+          "M4 11h1.5l-1.5 2h1.5 M4 16.5h1.5v1l-1.5.5h1.5v1H4",
+      clear: "M20 20H8L3 15l9-9 8 8-5 6z M8 20h12",
+      undo: "M9 14 4 9l5-5 M4 9h10a6 6 0 0 1 0 12h-3",
+      redo: "m15 14 5-5-5-5 M20 9H10a6 6 0 0 0 0 12h-3",
+    };
+
+    const tool = (content, title, run, host = bar) => {
+      const b = el("button", "hmail-sig-tool");
       b.type = "button";
       b.title = title;
+      if (typeof content === "string") {
+        b.textContent = content;
+      } else {
+        b.appendChild(content);
+      }
       // Giữ focus + vùng chọn trong editor — nút cướp focus là mất selection.
       b.addEventListener("mousedown", e => e.preventDefault());
       b.addEventListener("click", run);
-      bar.appendChild(b);
+      host.appendChild(b);
       return b;
     };
+    const sep = (host = bar) => host.appendChild(el("span", "hmail-sig-sep"));
 
-    tool("Đ", "In đậm", () => exec("bold")).style.fontWeight = "700";
-    tool("N", "In nghiêng", () => exec("italic")).style.fontStyle = "italic";
-    tool("G", "Gạch chân",
-         () => exec("underline")).style.textDecoration = "underline";
+    // --- chữ -------------------------------------------------------------
+    const family = el("select", "hmail-sig-tool hmail-sig-select");
+    family.title = "Phông chữ";
+    for (const f of ["Arial", "Segoe UI", "Tahoma", "Times New Roman",
+                     "Courier New"]) {
+      const opt = el("option", null, f);
+      opt.value = f;
+      opt.style.fontFamily = f;
+      family.appendChild(opt);
+    }
+    family.addEventListener("change", () => exec("fontName", family.value));
+    bar.appendChild(family);
 
-    const size = el("select", "hmail-sig-tool");
-    for (const [v, label] of [["2", "Chữ nhỏ"], ["3", "Chữ thường"],
-                              ["5", "Chữ lớn"]]) {
-      const opt = el("option", null, label);
-      opt.value = v;
+    // execCommand chỉ hiểu cỡ 1–7; nhãn hiển thị là px cho người thường.
+    const size = el("select", "hmail-sig-tool hmail-sig-select");
+    size.title = "Cỡ chữ";
+    for (const [px, legacy] of [["10px", "1"], ["13px", "2"], ["16px", "3"],
+                                ["18px", "4"], ["24px", "5"], ["32px", "6"]]) {
+      const opt = el("option", null, px);
+      opt.value = legacy;
       size.appendChild(opt);
     }
     size.value = "3";
-    size.title = "Cỡ chữ";
-    size.addEventListener("mousedown", e => e.stopPropagation());
     size.addEventListener("change", () => exec("fontSize", size.value));
     bar.appendChild(size);
+
+    tool("B", "In đậm (Ctrl+B)", () => exec("bold"))
+      .style.fontWeight = "700";
+    tool("I", "In nghiêng (Ctrl+I)", () => exec("italic"))
+      .style.fontStyle = "italic";
+    tool("U", "Gạch chân (Ctrl+U)", () => exec("underline"))
+      .style.textDecoration = "underline";
+    tool("S", "Gạch ngang", () => exec("strikeThrough"))
+      .style.textDecoration = "line-through";
 
     const color = el("input", "hmail-sig-tool hmail-sig-color");
     color.type = "color";
@@ -180,7 +240,21 @@ var hMailSignature = {
     color.addEventListener("change", () => exec("foreColor", color.value));
     bar.appendChild(color);
 
-    tool("🔗", "Chèn liên kết (bôi đen chữ trước)", () => {
+    sep();
+
+    // --- đoạn ------------------------------------------------------------
+    tool(svgIcon(ICONS.alignLeft), "Căn trái", () => exec("justifyLeft"));
+    tool(svgIcon(ICONS.alignCenter), "Căn giữa", () => exec("justifyCenter"));
+    tool(svgIcon(ICONS.alignRight), "Căn phải", () => exec("justifyRight"));
+    tool(svgIcon(ICONS.ul), "Danh sách chấm đầu dòng",
+         () => exec("insertUnorderedList"));
+    tool(svgIcon(ICONS.ol), "Danh sách đánh số",
+         () => exec("insertOrderedList"));
+
+    sep();
+
+    // --- chèn ------------------------------------------------------------
+    tool(svgIcon(ICONS.link), "Chèn liên kết (bôi đen chữ trước)", () => {
       const url = { value: "https://" };
       if (Services.prompt.prompt(win, "Chèn liên kết",
             "Địa chỉ liên kết:", url, null, {})) {
@@ -191,7 +265,7 @@ var hMailSignature = {
       }
     });
 
-    tool("🖼", "Chèn ảnh từ máy (logo, danh thiếp…)", () => {
+    tool(svgIcon(ICONS.image), "Chèn ảnh từ máy (logo, danh thiếp…)", () => {
       const fp = Cc["@mozilla.org/filepicker;1"]
         .createInstance(Ci.nsIFilePicker);
       fp.init(win.browsingContext, "Chọn ảnh", Ci.nsIFilePicker.modeOpen);
@@ -204,8 +278,7 @@ var hMailSignature = {
           // Ảnh phải sống bên trong chữ ký, không tham chiếu đường dẫn
           // trên máy người gửi: data URI được Thunderbird đổi thành phần
           // đính kèm nội tuyến khi gửi.
-          const bytes = IOUtils.read(fp.file.path);
-          bytes.then(data => {
+          IOUtils.read(fp.file.path).then(data => {
             const ext = fp.file.leafName.split(".").pop().toLowerCase();
             const mime = { png: "image/png", gif: "image/gif",
                            webp: "image/webp", svg: "image/svg+xml" }[ext] ||
@@ -218,6 +291,16 @@ var hMailSignature = {
             const uri = `data:${mime};base64,${win.btoa(binary)}`;
             editor.focus();
             doc.execCommand("insertImage", false, uri);
+            // Logo nguyên khổ thường to đùng: mở màn ở cỡ vừa, chỉnh lại
+            // bằng thanh "Ảnh" khi bấm vào ảnh.
+            win.setTimeout(() => {
+              const imgs = editor.querySelectorAll(`img[src="${uri}"]`);
+              for (const img of imgs) {
+                if (!img.style.width) {
+                  img.style.width = "160px";
+                }
+              }
+            }, 50);
           });
         } catch (e) {
           Cu.reportError("hMail signature image failed: " + e);
@@ -225,7 +308,33 @@ var hMailSignature = {
       });
     });
 
-    tool("¶", "Xoá định dạng vùng bôi đen", () => exec("removeFormat"));
+    tool(svgIcon(ICONS.table), "Chèn bảng", () => {
+      const spec = { value: "2x3" };
+      if (!Services.prompt.prompt(win, "Chèn bảng",
+            "Số hàng x số cột (ví dụ 2x3):", spec, null, {})) {
+        return;
+      }
+      const m = /^\s*(\d{1,2})\s*[x×]\s*(\d{1,2})\s*$/i.exec(spec.value);
+      const rows = Math.min(20, parseInt(m?.[1], 10) || 2);
+      const cols = Math.min(10, parseInt(m?.[2], 10) || 3);
+      // XHTML: chuỗi chèn phải well-formed (mọi thẻ tự đóng đàng hoàng).
+      const td = '<td style="border:1px solid #cccccc; padding:4px 10px;">' +
+                 " </td>";
+      const table =
+        '<table style="border-collapse:collapse;">' +
+        Array.from({ length: rows },
+                   () => "<tr>" + td.repeat(cols) + "</tr>").join("") +
+        "</table><br/>";
+      editor.focus();
+      doc.execCommand("insertHTML", false, table);
+    });
+
+    sep();
+
+    tool(svgIcon(ICONS.undo), "Hoàn tác", () => exec("undo"));
+    tool(svgIcon(ICONS.redo), "Làm lại", () => exec("redo"));
+    tool(svgIcon(ICONS.clear), "Xoá định dạng vùng bôi đen",
+         () => exec("removeFormat"));
 
     tool("Mẫu", "Chèn mẫu danh thiếp", () => {
       const identity = this.identities().get(select.value);
@@ -241,6 +350,98 @@ var hMailSignature = {
     });
 
     root.appendChild(bar);
+
+    // --- thanh ngữ cảnh: ảnh đang chọn / bảng đang đứng trong ------------
+    const imgBar = el("div", "hmail-sig-toolbar hmail-sig-context");
+    imgBar.appendChild(el("span", "hmail-sig-context-label", "Ảnh:"));
+    let currentImg = null;
+    const imgSize = (label, width) => tool(label, "Cỡ ảnh " + label, () => {
+      if (currentImg) {
+        currentImg.style.width = width;
+        currentImg.style.height = "auto";
+      }
+    }, imgBar);
+    imgSize("Nhỏ", "100px");
+    imgSize("Vừa", "160px");
+    imgSize("Lớn", "280px");
+    imgSize("Gốc", "");
+    tool("Xoá ảnh", "Bỏ ảnh này khỏi chữ ký", () => {
+      currentImg?.remove();
+      currentImg = null;
+      refreshContext();
+    }, imgBar);
+    imgBar.hidden = true;
+    root.appendChild(imgBar);
+
+    const tableBar = el("div", "hmail-sig-toolbar hmail-sig-context");
+    tableBar.appendChild(el("span", "hmail-sig-context-label", "Bảng:"));
+    const currentTable = () => {
+      const node = win.getSelection()?.anchorNode;
+      const elem = node?.nodeType === 1 ? node : node?.parentElement;
+      const table = elem?.closest?.("table");
+      return table && editor.contains(table) ? table : null;
+    };
+    tool("+ Hàng", "Thêm hàng dưới cùng", () => {
+      const table = currentTable();
+      const last = table?.rows[table.rows.length - 1];
+      if (last) {
+        const row = last.cloneNode(true);
+        for (const cell of row.cells) {
+          cell.textContent = " ";
+        }
+        last.after(row);
+      }
+    }, tableBar);
+    tool("+ Cột", "Thêm cột bên phải", () => {
+      const table = currentTable();
+      if (table) {
+        for (const row of table.rows) {
+          const cell = row.cells[row.cells.length - 1].cloneNode(true);
+          cell.textContent = " ";
+          row.appendChild(cell);
+        }
+      }
+    }, tableBar);
+    tool("Hàng đầu đậm", "Tô đậm + nền nhạt cho hàng tiêu đề", () => {
+      const table = currentTable();
+      for (const cell of table?.rows[0]?.cells || []) {
+        cell.style.fontWeight = "700";
+        cell.style.backgroundColor = "#f0f4f8";
+      }
+    }, tableBar);
+    tool("Viền", "Bật / tắt viền bảng", () => {
+      const table = currentTable();
+      if (!table) {
+        return;
+      }
+      const off = table.dataset.hmailNoborder === "1";
+      table.dataset.hmailNoborder = off ? "" : "1";
+      for (const row of table.rows) {
+        for (const cell of row.cells) {
+          cell.style.border = off ? "1px solid #cccccc" : "none";
+        }
+      }
+    }, tableBar);
+    tool("Xoá bảng", "Bỏ cả bảng", () => {
+      currentTable()?.remove();
+      refreshContext();
+    }, tableBar);
+    tableBar.hidden = true;
+    root.appendChild(tableBar);
+
+    const refreshContext = () => {
+      imgBar.hidden = !currentImg;
+      tableBar.hidden = !currentTable();
+    };
+    editor.addEventListener("click", event => {
+      currentImg = event.target?.localName === "img" ? event.target : null;
+      refreshContext();
+    });
+    editor.addEventListener("keyup", () => {
+      currentImg = null;
+      refreshContext();
+    });
+
     root.appendChild(editor);
 
     // --- load / save ----------------------------------------------------
