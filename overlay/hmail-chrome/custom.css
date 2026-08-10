@@ -2415,31 +2415,47 @@ select.hmail-ai-field,
 
 /* --- tab Chữ ký thư (trình soạn trực quan) --- */
 
+/* Toolbar một khối liền kiểu TinyMCE: nút vuông phẳng nhỏ nằm trong một
+   dải có viền, hover mới nổi lên — không phải một hàng nút rời rạc. */
 .hmail-sig-toolbar {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 2px;
     flex-wrap: wrap;
-    margin: 12px 0 8px;
+    margin: 12px 0 0;
+    padding: 4px 6px;
+    max-width: 720px;
+    box-sizing: border-box;
+    border: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+    border-radius: 10px 10px 0 0;
+    background-color: color-mix(in srgb, CanvasText 3%, Canvas);
 }
 
 .hmail-sig-tool {
     appearance: none !important;
     -moz-appearance: none !important;
-    border: 1px solid color-mix(in srgb, CanvasText 15%, transparent) !important;
-    background-color: Canvas !important;
+    border: none !important;
+    background-color: transparent !important;
     color: CanvasText !important;
-    border-radius: 8px !important;
-    min-width: 34px;
-    height: 30px;
-    padding: 0 10px !important;
+    border-radius: 6px !important;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 7px !important;
     margin: 0 !important;
     font: inherit !important;
+    font-size: 0.92em !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
 }
 
 .hmail-sig-tool:hover {
-    background-color: color-mix(in srgb, CanvasText 8%, Canvas) !important;
+    background-color: color-mix(in srgb, CanvasText 9%, Canvas) !important;
+}
+
+.hmail-sig-tool:active {
+    background-color: color-mix(in srgb, CanvasText 14%, Canvas) !important;
 }
 
 .hmail-sig-color {
@@ -2459,26 +2475,42 @@ select.hmail-ai-field,
     margin: 0 4px;
 }
 
-/* Thanh ngữ cảnh (Ảnh / Bảng) chỉ hiện khi đứng trong đối tượng đó. */
+/* Thanh ngữ cảnh (Ảnh / Bảng) nối liền dưới toolbar, chỉ hiện khi đứng
+   trong đối tượng đó. */
 .hmail-sig-context {
-    margin-top: -2px;
-    padding: 6px 10px;
-    border-radius: 10px;
-    background-color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 7%, Canvas);
-    max-width: 720px;
+    margin-top: 0;
+    border-radius: 0;
+    border-top: none;
+    background-color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 6%, Canvas);
+    gap: 4px;
 }
 
 .hmail-sig-context-label {
-    font-weight: 600;
-    font-size: 0.88em;
-    margin-inline-end: 4px;
+    font-weight: 700;
+    font-size: 0.85em;
+    margin-inline-end: 6px;
+    color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 80%, CanvasText);
+}
+
+.hmail-sig-prop-label {
+    font-size: 0.85em;
+    opacity: 0.75;
+    margin-inline-start: 6px;
+}
+
+.hmail-sig-prop {
+    border: 1px solid color-mix(in srgb, CanvasText 18%, transparent) !important;
+    background-color: Canvas !important;
+    padding: 0 4px !important;
 }
 
 .hmail-sig-editor {
     min-height: 220px;
     max-width: 720px;
+    box-sizing: border-box;
     border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
-    border-radius: 10px;
+    border-top: none;
+    border-radius: 0 0 10px 10px;
     padding: 14px 16px;
     background-color: Canvas;
     color: CanvasText;

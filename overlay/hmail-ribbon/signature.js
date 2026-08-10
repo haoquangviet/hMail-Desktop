@@ -351,20 +351,110 @@ var hMailSignature = {
 
     root.appendChild(bar);
 
-    // --- thanh ngữ cảnh: ảnh đang chọn / bảng đang đứng trong ------------
+    // --- thanh ngữ cảnh: thuộc tính ảnh thật sự --------------------------
     const imgBar = el("div", "hmail-sig-toolbar hmail-sig-context");
-    imgBar.appendChild(el("span", "hmail-sig-context-label", "Ảnh:"));
+    imgBar.appendChild(el("span", "hmail-sig-context-label", "Ảnh"));
     let currentImg = null;
-    const imgSize = (label, width) => tool(label, "Cỡ ảnh " + label, () => {
+
+    const propInput = (label, width = 52) => {
+      imgBar.appendChild(el("span", "hmail-sig-prop-label", label));
+      const input = el("input", "hmail-sig-tool hmail-sig-prop");
+      input.type = "number";
+      input.min = "0";
+      input.style.width = width + "px";
+      imgBar.appendChild(input);
+      return input;
+    };
+    const wIn = propInput("Rộng");
+    const hIn = propInput("Cao");
+    const bIn = propInput("Viền", 42);
+    const bColor = el("input", "hmail-sig-tool hmail-sig-color");
+    bColor.type = "color";
+    bColor.value = "#cccccc";
+    bColor.title = "Màu viền";
+    imgBar.appendChild(bColor);
+
+    imgBar.appendChild(el("span", "hmail-sig-prop-label", "Canh"));
+    const alignSel = el("select", "hmail-sig-tool hmail-sig-select");
+    for (const [v, label] of [["inline", "Nội dòng"],
+                              ["left", "Trái — chữ bao quanh"],
+                              ["right", "Phải — chữ bao quanh"],
+                              ["center", "Giữa — một khối riêng"]]) {
+      const opt = el("option", null, label);
+      opt.value = v;
+      alignSel.appendChild(opt);
+    }
+    imgBar.appendChild(alignSel);
+
+    imgBar.appendChild(el("span", "hmail-sig-prop-label", "Dọc"));
+    const vSel = el("select", "hmail-sig-tool hmail-sig-select");
+    for (const v of ["baseline", "middle", "top", "bottom"]) {
+      const opt = el("option", null, v);
+      opt.value = v;
+      vSel.appendChild(opt);
+    }
+    imgBar.appendChild(vSel);
+
+    const applyImg = () => {
+      if (!currentImg) {
+        return;
+      }
+      currentImg.style.width = wIn.value ? wIn.value + "px" : "";
+      currentImg.style.height = hIn.value ? hIn.value + "px" : "";
+      const bw = parseInt(bIn.value, 10) || 0;
+      currentImg.style.border =
+        bw > 0 ? `${bw}px solid ${bColor.value}` : "";
+      switch (alignSel.value) {
+        case "left":
+          currentImg.style.cssFloat = "left";
+          currentImg.style.display = "";
+          currentImg.style.margin = "0 12px 6px 0";
+          break;
+        case "right":
+          currentImg.style.cssFloat = "right";
+          currentImg.style.display = "";
+          currentImg.style.margin = "0 0 6px 12px";
+          break;
+        case "center":
+          currentImg.style.cssFloat = "";
+          currentImg.style.display = "block";
+          currentImg.style.margin = "6px auto";
+          break;
+        default:
+          currentImg.style.cssFloat = "";
+          currentImg.style.display = "";
+          currentImg.style.margin = "";
+      }
+      currentImg.style.verticalAlign =
+        alignSel.value === "inline" ? vSel.value : "";
+    };
+    for (const control of [wIn, hIn, bIn, bColor, alignSel, vSel]) {
+      control.addEventListener("input", applyImg);
+      control.addEventListener("change", applyImg);
+    }
+    // Đổ thuộc tính hiện tại của ảnh vào form khi vừa chọn.
+    const syncImg = () => {
+      if (!currentImg) {
+        return;
+      }
+      wIn.value = parseInt(currentImg.style.width, 10) ||
+                  currentImg.width || "";
+      hIn.value = parseInt(currentImg.style.height, 10) || "";
+      bIn.value = parseInt(currentImg.style.borderWidth, 10) || "";
+      alignSel.value =
+        currentImg.style.cssFloat === "left" ? "left" :
+        currentImg.style.cssFloat === "right" ? "right" :
+        currentImg.style.display === "block" ? "center" : "inline";
+      vSel.value = currentImg.style.verticalAlign || "baseline";
+    };
+
+    tool("Gốc", "Về kích thước gốc của ảnh", () => {
       if (currentImg) {
-        currentImg.style.width = width;
-        currentImg.style.height = "auto";
+        currentImg.style.width = "";
+        currentImg.style.height = "";
+        syncImg();
       }
     }, imgBar);
-    imgSize("Nhỏ", "100px");
-    imgSize("Vừa", "160px");
-    imgSize("Lớn", "280px");
-    imgSize("Gốc", "");
     tool("Xoá ảnh", "Bỏ ảnh này khỏi chữ ký", () => {
       currentImg?.remove();
       currentImg = null;
@@ -435,11 +525,25 @@ var hMailSignature = {
     };
     editor.addEventListener("click", event => {
       currentImg = event.target?.localName === "img" ? event.target : null;
+      if (currentImg) {
+        syncImg();
+      }
       refreshContext();
     });
     editor.addEventListener("keyup", () => {
       currentImg = null;
       refreshContext();
+    });
+    // Document chứa tab là XUL: phím mũi tên nổi bọt lên bị bộ điều hướng
+    // focus của XUL bắt mất — con trỏ đang gõ bỗng văng khỏi ô soạn. Caret
+    // vẫn di chuyển bình thường (không preventDefault), chỉ không cho XUL
+    // nhìn thấy phím nữa.
+    editor.addEventListener("keydown", event => {
+      const nav = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
+                   "Home", "End", "PageUp", "PageDown"];
+      if (nav.includes(event.key)) {
+        event.stopPropagation();
+      }
     });
 
     root.appendChild(editor);
