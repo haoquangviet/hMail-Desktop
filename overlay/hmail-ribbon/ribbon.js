@@ -57,6 +57,35 @@ var hMailRibbon = {
               cmd: "cmd_archive" },
             { id: "junk", label: "Thư\nrác", icon: "junk", size: "large",
               cmd: "cmd_markAsJunk" },
+            // Lỡ tay có đường về: cmd_undo đảo lại thao tác vừa làm
+            // (xoá, lưu trữ, di chuyển) — Thunderbird có sẵn nhưng không
+            // bày nút nào ra.
+            { id: "undo", label: "Hoàn\ntác", icon: "reply", size: "large",
+              cmd: "cmd_undo" },
+            // Còn thư đã nằm trong Thùng rác / Lưu trữ / Thư rác từ trước
+            // thì "hoàn tác" không với tới — Khôi phục đưa các thư đang
+            // chọn về thẳng Hộp thư đến của tài khoản đó.
+            { id: "restore", label: "Khôi\nphục", icon: "inbox", size: "large",
+              fn: win => {
+                try {
+                  const view = win.document.getElementById("tabmail")
+                    ?.currentAbout3Pane?.gDBView;
+                  if (!view || !view.numSelected) {
+                    return;
+                  }
+                  const hdrs = view.getSelectedMsgHdrs();
+                  const source = hdrs[0]?.folder;
+                  const inbox = source?.server?.rootFolder
+                    ?.getFolderWithFlags(Ci.nsMsgFolderFlags.Inbox);
+                  if (!source || !inbox || source === inbox) {
+                    return;
+                  }
+                  MailServices.copy.copyMessages(
+                    source, hdrs, inbox, true, null, win.msgWindow, true);
+                } catch (e) {
+                  Cu.reportError("hMail restore failed: " + e);
+                }
+              } },
           ],
         },
         {

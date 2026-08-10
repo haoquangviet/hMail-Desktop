@@ -38,7 +38,9 @@ var hMailSignature = {
             Cu.reportError("hMail signature panel failed: " + e + "\n" +
                            (e.stack || ""));
             try {
-              Services.prefs.setCharPref("hmail.debug.sig", String(e));
+              Services.prefs.setCharPref("hmail.debug.sig",
+                String(e) + " @ " +
+                String(e.stack || "").split("\n").slice(0, 3).join(" | "));
             } catch (e2) {}
             const err = win.document.createElementNS(
               "http://www.w3.org/1999/xhtml", "div");
