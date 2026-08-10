@@ -418,8 +418,8 @@ var hMailSignature = {
 
     sep();
 
-    tool(svgIcon(ICONS.undo), "Hoàn tác", () => exec("undo"));
-    tool(svgIcon(ICONS.redo), "Làm lại", () => exec("redo"));
+    tool(svgIcon(ICONS.undo), "Hoàn tác (Ctrl+Z)", () => timeTravel(-1));
+    tool(svgIcon(ICONS.redo), "Làm lại (Ctrl+Y)", () => timeTravel(1));
     tool(svgIcon(ICONS.clear), "Xoá định dạng vùng bôi đen",
          () => exec("removeFormat"));
 
@@ -728,24 +728,61 @@ var hMailSignature = {
     const selectedCells = () => {
       const sel = win.getSelection();
       const cells = [];
-      for (let i = 0; i < (sel?.rangeCount || 0); i++) {
-        const node = sel.getRangeAt(i).startContainer;
-        const cell = (node.nodeType === 1 ? node : node.parentElement)
-          ?.closest?.("td, th");
+      const add = cell => {
         if (cell && editor.contains(cell) && !cells.includes(cell)) {
           cells.push(cell);
+        }
+      };
+      for (let i = 0; i < (sel?.rangeCount || 0); i++) {
+        const range = sel.getRangeAt(i);
+        const node = range.startContainer;
+        add((node.nodeType === 1 ? node : node.parentElement)
+          ?.closest?.("td, th"));
+        // Kéo chuột qua nhiều ô trong contenteditable cho MỘT range trải
+        // dài chứ không phải mỗi ô một range — gom mọi ô giao với range,
+        // không thì Gộp ô muôn đời chỉ thấy một ô.
+        if (!range.collapsed) {
+          const scope = range.commonAncestorContainer;
+          const root = scope.nodeType === 1 ? scope : scope.parentElement;
+          if (root && editor.contains(root) && root.querySelectorAll) {
+            for (const cell of root.querySelectorAll("td, th")) {
+              try {
+                if (range.intersectsNode(cell)) {
+                  add(cell);
+                }
+              } catch (e) {}
+            }
+          }
         }
       }
       return cells;
     };
 
-    tool("Gộp ô", "Kéo chuột chọn qua các ô rồi bấm để gộp làm một", () => {
+    tool("Gộp ô", "Bôi chọn qua các ô rồi bấm để gộp; đặt con trỏ vào " +
+                  "một ô rồi bấm là gộp với ô bên phải", () => {
       const cells = selectedCells();
+      // Một ô + bấm Gộp = gộp cột với ô kề bên phải cùng hàng — khỏi cần
+      // thao tác bôi chọn cho ca thường gặp nhất.
+      if (cells.length === 1) {
+        const cell = cells[0];
+        const grid0 = gridOf(cell.closest("table"));
+        for (let r = 0; r < grid0.length; r++) {
+          const c = grid0[r].indexOf(cell);
+          if (c >= 0) {
+            const right = grid0[r][c + cell.colSpan];
+            if (right && right.parentElement === cell.parentElement) {
+              cells.push(right);
+            }
+            break;
+          }
+        }
+      }
       const table = cells[0]?.closest("table");
       if (cells.length < 2 || !table ||
           cells.some(c => c.closest("table") !== table)) {
         status.textContent =
-          "Gộp ô: kéo chuột bôi chọn qua từ 2 ô trở lên trong cùng bảng.";
+          "Gộp ô: bôi chọn qua từ 2 ô trở lên trong cùng bảng, hoặc đặt " +
+          "con trỏ vào ô có ô kề bên phải.";
         return;
       }
       const grid = gridOf(table);
@@ -925,6 +962,45 @@ var hMailSignature = {
       }
       linkBar.hidden = !link;
     };
+
+    // --- hoàn tác / làm lại -----------------------------------------------
+    // Tự quản lịch sử: execCommand("undo") trong document chrome không có
+    // transaction manager, và các thanh Ảnh/Bảng/Liên kết đổi DOM bằng JS
+    // — thứ mà undo gốc có sống cũng không thấy. Chụp snapshot mỗi khi DOM
+    // đổi (debounce), đi lui/tới trên chuỗi đó là undo phủ được tất cả.
+    const history = { stack: [], pos: -1, timer: null };
+    const snapshot = () => {
+      const html = this.serializeHtml(doc, editor);
+      if (history.stack[history.pos] === html) {
+        return;
+      }
+      history.stack.splice(history.pos + 1);
+      history.stack.push(html);
+      if (history.stack.length > 100) {
+        history.stack.shift();
+      }
+      history.pos = history.stack.length - 1;
+    };
+    new win.MutationObserver(() => {
+      win.clearTimeout(history.timer);
+      history.timer = win.setTimeout(snapshot, 400);
+    }).observe(editor, { subtree: true, childList: true,
+                         attributes: true, characterData: true });
+    const timeTravel = dir => {
+      win.clearTimeout(history.timer);
+      // Chốt thay đổi đang dang dở trước khi di chuyển (snapshot tự bỏ
+      // qua nếu nội dung trùng bước hiện tại — không phá nhánh redo).
+      snapshot();
+      const target = history.pos + dir;
+      if (target < 0 || target >= history.stack.length) {
+        return;
+      }
+      history.pos = target;
+      this.setHtml(win, editor, history.stack[history.pos]);
+      currentImg = null;
+      refreshContext();
+      editor.focus();
+    };
     editor.addEventListener("click", event => {
       currentImg = event.target?.localName === "img" ? event.target : null;
       if (currentImg) {
@@ -1014,6 +1090,15 @@ var hMailSignature = {
     // Selection.modify — mũi tên, Home/End, Shift bôi chọn, Ctrl nhảy từ
     // đều đúng như một editor thực thụ.
     editor.addEventListener("keydown", event => {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+        const key = event.key.toLowerCase();
+        if (key === "z" || key === "y") {
+          event.preventDefault();
+          event.stopPropagation();
+          timeTravel(key === "y" || event.shiftKey ? 1 : -1);
+          return;
+        }
+      }
       const routes = {
         ArrowLeft: ["backward", event.ctrlKey ? "word" : "character"],
         ArrowRight: ["forward", event.ctrlKey ? "word" : "character"],
@@ -1055,6 +1140,60 @@ var hMailSignature = {
     select.addEventListener("change", load);
     load();
 
+    // Làm sạch nội dung editor và trả về chuỗi HTML sẵn sàng ghi vào
+    // identity — dùng chung cho Lưu và Lưu-cho-tài-khoản-khác.
+    const sigHtml = () => {
+      // Kích thước ảnh chuyển từ style sang THUỘC TÍNH width/height:
+      // hộp "Thuộc tính hình ảnh" của trình soạn thư chỉ sửa thuộc
+      // tính, mà style thì đè thuộc tính — để nguyên style là người
+      // dùng chỉnh ảnh trong thư kiểu gì cũng không ăn.
+      for (const img of editor.querySelectorAll("img")) {
+        // Chỉ quy đổi kích thước px; width theo % giữ nguyên style —
+        // parseInt("100%") cũng ra 100 nhưng 100% không phải 100px.
+        if (/%/.test(img.style.width + img.style.height)) {
+          continue;
+        }
+        const w = parseInt(img.style.width, 10);
+        const h = parseInt(img.style.height, 10);
+        if (w) {
+          img.setAttribute("width", w);
+          img.style.width = "";
+          if (h) {
+            img.setAttribute("height", h);
+          } else {
+            img.removeAttribute("height");
+          }
+          img.style.height = "";
+        }
+      }
+      // Dọn rác trước khi lưu: chú thích từ clipboard, bảng lỡ bị ép
+      // về 0px (một cú bấm mũi tên xuống ở ô "Rộng" là đủ gây ra).
+      this.stripComments(editor);
+      for (const table of editor.querySelectorAll("table")) {
+        if (parseInt(table.style.width, 10) === 0) {
+          table.style.width = "";
+        }
+      }
+      return this.serializeHtml(doc, editor).trim();
+    };
+    // Ghi chữ ký đang soạn cho một identity bất kỳ; tên và email trong
+    // nội dung tự thay theo tài khoản đích (kể cả trong href mailto:).
+    const applyTo = (identity, html) => {
+      const from = this.identities().get(select.value);
+      const toEmail = (identity.email || "").trim().toLowerCase();
+      if (select.value && toEmail && select.value !== toEmail) {
+        html = html.split(select.value).join(toEmail);
+      }
+      const fromName = (from?.fullName || "").trim();
+      const toName = (identity.fullName || "").trim();
+      if (fromName && toName && fromName !== toName) {
+        html = html.split(fromName).join(toName);
+      }
+      identity.htmlSigText = html;
+      identity.htmlSigFormat = true;
+      identity.attachSignature = false;
+    };
+
     const actions = el("div", "hmail-move-row");
     const save = el("button", "hmail-ai-btn primary", "Lưu chữ ký");
     save.addEventListener("click", () => {
@@ -1063,38 +1202,7 @@ var hMailSignature = {
         if (!identity) {
           return;
         }
-        // Kích thước ảnh chuyển từ style sang THUỘC TÍNH width/height:
-        // hộp "Thuộc tính hình ảnh" của trình soạn thư chỉ sửa thuộc
-        // tính, mà style thì đè thuộc tính — để nguyên style là người
-        // dùng chỉnh ảnh trong thư kiểu gì cũng không ăn.
-        for (const img of editor.querySelectorAll("img")) {
-          // Chỉ quy đổi kích thước px; width theo % giữ nguyên style —
-          // parseInt("100%") cũng ra 100 nhưng 100% không phải 100px.
-          if (/%/.test(img.style.width + img.style.height)) {
-            continue;
-          }
-          const w = parseInt(img.style.width, 10);
-          const h = parseInt(img.style.height, 10);
-          if (w) {
-            img.setAttribute("width", w);
-            img.style.width = "";
-            if (h) {
-              img.setAttribute("height", h);
-            } else {
-              img.removeAttribute("height");
-            }
-            img.style.height = "";
-          }
-        }
-        // Dọn rác trước khi lưu: chú thích từ clipboard, bảng lỡ bị ép
-        // về 0px (một cú bấm mũi tên xuống ở ô "Rộng" là đủ gây ra).
-        this.stripComments(editor);
-        for (const table of editor.querySelectorAll("table")) {
-          if (parseInt(table.style.width, 10) === 0) {
-            table.style.width = "";
-          }
-        }
-        identity.htmlSigText = this.serializeHtml(doc, editor).trim();
+        identity.htmlSigText = sigHtml();
         identity.htmlSigFormat = true;
         // Chữ ký lấy từ đây, không phải từ tập tin đính kèm nữa.
         identity.attachSignature = false;
@@ -1112,6 +1220,49 @@ var hMailSignature = {
         status.textContent = "Không lưu được: " + (e.message || e);
       }
     });
+    // Một chữ ký đẹp thường dùng cho cả công ty: lưu thẳng cho các tài
+    // khoản khác, tên và email trong nội dung tự thay theo từng người.
+    const copyBtn = el("button", "hmail-ai-btn", "Lưu cho tài khoản khác…");
+    copyBtn.addEventListener("click", () => {
+      try {
+        const ids = this.identities();
+        const others = [...ids.keys()].filter(e => e !== select.value);
+        if (!others.length) {
+          status.textContent = "Chỉ có một tài khoản thư trong hMail.";
+          return;
+        }
+        const html = sigHtml();
+        const flags = Services.prompt.BUTTON_POS_0 *
+            Services.prompt.BUTTON_TITLE_IS_STRING +
+          Services.prompt.BUTTON_POS_1 *
+            Services.prompt.BUTTON_TITLE_IS_STRING +
+          Services.prompt.BUTTON_POS_2 *
+            Services.prompt.BUTTON_TITLE_CANCEL;
+        const pick = Services.prompt.confirmEx(win,
+          "Lưu chữ ký cho tài khoản khác",
+          "Chữ ký đang soạn sẽ được lưu cho tài khoản khác; tên và email " +
+          "trong chữ ký tự thay theo từng tài khoản.",
+          flags, "Tất cả tài khoản khác (" + others.length + ")",
+          "Chọn một tài khoản…", null, null, {});
+        if (pick === 0) {
+          for (const email of others) {
+            applyTo(ids.get(email), html);
+          }
+          status.textContent = "Đã lưu chữ ký cho " + others.length +
+            " tài khoản khác (tên/email tự thay theo từng tài khoản).";
+        } else if (pick === 1) {
+          const sel = { value: 0 };
+          if (Services.prompt.select(win, "Chọn tài khoản",
+                "Lưu chữ ký này cho:", others, sel)) {
+            applyTo(ids.get(others[sel.value]), html);
+            status.textContent = "Đã lưu chữ ký cho " + others[sel.value] +
+              " (tên/email đã thay theo tài khoản đó).";
+          }
+        }
+      } catch (e) {
+        status.textContent = "Không lưu được: " + (e.message || e);
+      }
+    });
     const clear = el("button", "hmail-ai-btn", "Xoá chữ ký");
     clear.addEventListener("click", () => {
       const identity = this.identities().get(select.value);
@@ -1122,7 +1273,7 @@ var hMailSignature = {
       editor.innerHTML = "";
       status.textContent = "Đã xoá chữ ký của " + select.value + ".";
     });
-    actions.append(save, clear);
+    actions.append(save, copyBtn, clear);
     root.appendChild(actions);
     root.appendChild(status);
     return root;
