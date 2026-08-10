@@ -12,13 +12,17 @@
  * anything else the sender chose.
  */
 
+/* KHÔNG có about:blank trong danh sách này: vùng soạn thư của composer chạy
+   trên about:blank — để nó lọt vào đây là height:auto !important giết sạch
+   thuộc tính height của ảnh NGAY TRONG LÚC SOẠN (hộp "Thuộc tính hình ảnh"
+   đổi số mà ảnh trơ trơ), còn người nhận không có CSS này nên thấy khác hẳn
+   người soạn. Đọc thư vẫn responsive đủ qua imap:/mailbox:/file:. */
 @-moz-document url-prefix("mailbox:"),
                url-prefix("imap:"),
                url-prefix("news:"),
                url-prefix("nntp:"),
                url-prefix("snews:"),
-               url-prefix("file:///"),
-               url-prefix("about:blank") {
+               url-prefix("file:///") {
 
   /* A long word — a URL, a reference number, an ID — must break rather than
      push the whole document wide. */

@@ -86,6 +86,37 @@ var hMailSignature = {
   },
 
   /**
+   * Gỡ mọi node chú thích — Windows nhét <!--StartFragment--> vào HTML
+   * trong clipboard, dán một lần là rác đó sống mãi trong chữ ký.
+   */
+  stripComments(node) {
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === 8) {
+        child.remove();
+      } else if (child.nodeType === 1) {
+        this.stripComments(child);
+      }
+    }
+  },
+
+  /**
+   * Serialize nội dung editor ra chuỗi HTML THẬT. Tuyệt đối không dùng
+   * editor.innerHTML: document 3-pane là XHTML nên innerHTML serialize
+   * theo luật XML — đẻ ra xmlns="…" và ô rỗng thành <td/>. Trình soạn
+   * thư đọc <td/> theo luật HTML là thẻ mở không bao giờ đóng: các ô
+   * lồng hết vào nhau, chữ ký sập thành cột dọc một ký tự. Bê nội dung
+   * sang một document HTML rồi lấy innerHTML ở đó — serializer HTML
+   * chuẩn, compose đọc gì hiểu nấy.
+   */
+  serializeHtml(doc, container) {
+    const hdoc = doc.implementation.createHTMLDocument("");
+    for (const child of container.childNodes) {
+      hdoc.body.appendChild(hdoc.importNode(child, true));
+    }
+    return hdoc.body.innerHTML;
+  },
+
+  /**
    * Thu nhỏ THẬT một ảnh dataURI (vẽ lại qua canvas, re-encode) về bề
    * rộng tối đa cho trước. PNG/SVG giữ PNG (bảo toàn trong suốt của
    * logo), còn lại nén JPEG. Lỗi thì trả nguyên bản — không bao giờ làm
@@ -630,18 +661,25 @@ var hMailSignature = {
       if (!table) {
         return;
       }
-      const bw = parseInt(tBorder.value, 10) || 0;
+      // Ô trống = ĐỪNG ĐỤNG — mẫu có viền/đệm riêng từng ô, chạm một ô
+      // khác trong thanh này mà quét "none" lên tất cả là nát thiết kế.
+      const bw = tBorder.value === "" ? null : parseInt(tBorder.value, 10) || 0;
       const pad = tPad.value === "" ? null : parseInt(tPad.value, 10) || 0;
       for (const row of table.rows) {
         for (const cell of row.cells) {
-          cell.style.border =
-            bw > 0 ? `${bw}px solid ${tBorderColor.value}` : "none";
+          if (bw !== null) {
+            cell.style.border =
+              bw > 0 ? `${bw}px solid ${tBorderColor.value}` : "none";
+          }
           if (pad !== null) {
             cell.style.padding = `${pad}px ${pad + 6}px`;
           }
         }
       }
-      table.style.width = tWidth.value ? tWidth.value + "px" : "";
+      // 0 hay trống đều là "bỏ ép rộng" — width: 0px từng bóp cả chữ ký
+      // thành cột dọc một ký tự trong thư.
+      const tw = parseInt(tWidth.value, 10) || 0;
+      table.style.width = tw > 0 ? tw + "px" : "";
     };
     for (const control of [tBorder, tBorderColor, tPad, tWidth]) {
       control.addEventListener("input", applyTable);
@@ -804,6 +842,76 @@ var hMailSignature = {
     tableBar.hidden = true;
     root.appendChild(tableBar);
 
+    // --- thanh ngữ cảnh: liên kết (địa chỉ, gạch chân, màu) --------------
+    const linkBar = el("div", "hmail-sig-toolbar hmail-sig-context");
+    linkBar.appendChild(el("span", "hmail-sig-context-label", "Liên kết"));
+    const currentLink = () => {
+      const node = win.getSelection()?.anchorNode;
+      const elem = node?.nodeType === 1 ? node : node?.parentElement;
+      const a = elem?.closest?.("a");
+      return a && editor.contains(a) ? a : null;
+    };
+    linkBar.appendChild(el("span", "hmail-sig-prop-label", "Địa chỉ"));
+    const urlIn = el("input", "hmail-sig-tool hmail-sig-prop");
+    urlIn.type = "text";
+    urlIn.style.width = "230px";
+    linkBar.appendChild(urlIn);
+    urlIn.addEventListener("input", () => {
+      const a = currentLink();
+      if (a && urlIn.value.trim()) {
+        a.setAttribute("href", urlIn.value.trim());
+      }
+    });
+    linkBar.appendChild(el("span", "hmail-sig-prop-label", "Gạch chân"));
+    const uSel = el("select", "hmail-sig-tool hmail-sig-select");
+    for (const [v, label] of [["", "Mặc định"], ["underline", "Có"],
+                              ["none", "Không"]]) {
+      const opt = el("option", null, label);
+      opt.value = v;
+      uSel.appendChild(opt);
+    }
+    linkBar.appendChild(uSel);
+    uSel.addEventListener("change", () => {
+      const a = currentLink();
+      if (a) {
+        // Ghi hẳn vào style của <a>: hộp thư người nhận nào cũng hiểu.
+        a.style.textDecoration = uSel.value;
+      }
+    });
+    const linkColor = el("input", "hmail-sig-tool hmail-sig-color");
+    linkColor.type = "color";
+    linkColor.value = "#0F6CBD";
+    linkColor.title = "Màu liên kết";
+    linkBar.appendChild(linkColor);
+    linkColor.addEventListener("change", () => {
+      const a = currentLink();
+      if (a) {
+        a.style.color = linkColor.value;
+      }
+    });
+    tool("Bỏ liên kết", "Giữ chữ, bỏ liên kết", () => {
+      const a = currentLink();
+      if (a) {
+        while (a.firstChild) {
+          a.parentNode.insertBefore(a.firstChild, a);
+        }
+        a.remove();
+        refreshContext();
+      }
+    }, linkBar);
+    const syncLink = () => {
+      const a = currentLink();
+      if (!a) {
+        return;
+      }
+      urlIn.value = a.getAttribute("href") || "";
+      const deco = a.style.textDecoration || "";
+      uSel.value = deco.includes("none") ? "none"
+        : deco.includes("underline") ? "underline" : "";
+    };
+    linkBar.hidden = true;
+    root.appendChild(linkBar);
+
     const refreshContext = () => {
       imgBar.hidden = !currentImg;
       const table = currentTable();
@@ -811,6 +919,11 @@ var hMailSignature = {
         syncTable();
       }
       tableBar.hidden = !table;
+      const link = currentLink();
+      if (link) {
+        syncLink();
+      }
+      linkBar.hidden = !link;
     };
     editor.addEventListener("click", event => {
       currentImg = event.target?.localName === "img" ? event.target : null;
@@ -833,7 +946,8 @@ var hMailSignature = {
     const serializeNodes = nodes => {
       const xs = new win.XMLSerializer();
       return Array.from(nodes)
-        .filter(n => !["script", "style"].includes(n.localName))
+        .filter(n => n.nodeType !== 8 &&
+                     !["script", "style"].includes(n.localName))
         .map(n => xs.serializeToString(n))
         .join("");
     };
@@ -882,6 +996,7 @@ var hMailSignature = {
           // DOMParser (nuốt được HTML đời thực) rồi serialize lại.
           const parsed = new win.DOMParser()
             .parseFromString(html, "text/html");
+          this.stripComments(parsed.body);
           doc.execCommand("insertHTML", false,
                           serializeNodes(parsed.body.childNodes));
         }
@@ -971,7 +1086,15 @@ var hMailSignature = {
             img.style.height = "";
           }
         }
-        identity.htmlSigText = editor.innerHTML.trim();
+        // Dọn rác trước khi lưu: chú thích từ clipboard, bảng lỡ bị ép
+        // về 0px (một cú bấm mũi tên xuống ở ô "Rộng" là đủ gây ra).
+        this.stripComments(editor);
+        for (const table of editor.querySelectorAll("table")) {
+          if (parseInt(table.style.width, 10) === 0) {
+            table.style.width = "";
+          }
+        }
+        identity.htmlSigText = this.serializeHtml(doc, editor).trim();
         identity.htmlSigFormat = true;
         // Chữ ký lấy từ đây, không phải từ tập tin đính kèm nữa.
         identity.attachSignature = false;
@@ -1005,3 +1128,127 @@ var hMailSignature = {
     return root;
   },
 };
+
+// ---------------------------------------------------------------------------
+// Tự kiểm đường LƯU chữ ký, chạy khi pref hmail.debug.sigtest = "run": mở
+// tab thật, bơm nội dung bẩn đúng kiểu đời thực (chú thích clipboard, bảng
+// width:0px, ô rỗng, ảnh có width/height), bấm nút Lưu thật rồi soi chuỗi
+// HTML đã ghi vào identity. Kết quả ghi ngược vào chính pref đó — đọc ở
+// prefs.js là biết đậu hay rớt, không cần console. Chữ ký gốc được trả lại
+// nguyên vẹn sau bài kiểm.
+// Đầu dò render (pref hmail.debug.sigprobe = "run"): chờ một cửa sổ soạn
+// thư mở ra rồi đo ảnh đầu tiên trong vùng soạn — thuộc tính nói gì và
+// máy VẼ ra bao nhiêu px. Chứng cứ trực tiếp cho các lỗi kiểu "đổi height
+// mà ảnh trơ trơ" (CSS đè thuộc tính), không cần chụp màn hình.
+(function hMailSigProbe() {
+  let mode = "";
+  try {
+    mode = Services.prefs.getCharPref("hmail.debug.sigprobe", "");
+  } catch (e) {}
+  if (mode !== "run") {
+    return;
+  }
+  const report = text => {
+    try {
+      Services.prefs.setCharPref("hmail.debug.sigprobe", text.slice(0, 500));
+      Services.prefs.savePrefFile(null);
+    } catch (e) {}
+  };
+  let tries = 0;
+  const tick = () => {
+    try {
+      const cw = Services.wm.getMostRecentWindow("msgcompose");
+      const cdoc = cw?.GetCurrentEditorElement?.().contentDocument;
+      const img = cdoc?.querySelector("img");
+      if (img && img.complete) {
+        const cs = cw.getComputedStyle(img);
+        report("attr=" + img.getAttribute("width") + "x" +
+               img.getAttribute("height") + " render=" + cs.width + " x " +
+               cs.height + " natural=" + img.naturalWidth + "x" +
+               img.naturalHeight);
+        return;
+      }
+    } catch (e) {}
+    if (++tries > 60) {
+      report("err: khong thay cua so soan thu co anh");
+      return;
+    }
+    setTimeout(tick, 3000);
+  };
+  setTimeout(tick, 5000);
+})();
+
+(function hMailSigSelfTest() {
+  let mode = "";
+  try {
+    mode = Services.prefs.getCharPref("hmail.debug.sigtest", "");
+  } catch (e) {}
+  if (mode !== "run") {
+    return;
+  }
+  Services.prefs.setCharPref("hmail.debug.sigtest", "running");
+  const report = text => {
+    try {
+      Services.prefs.setCharPref("hmail.debug.sigtest", text.slice(0, 900));
+      Services.prefs.savePrefFile(null);
+    } catch (e) {}
+  };
+  setTimeout(() => {
+    try {
+      const win = Services.wm.getMostRecentWindow("mail:3pane");
+      hMailSignature.openTab("");
+      win.setTimeout(() => {
+        try {
+          const doc = win.document;
+          const editor = doc.querySelector(".hmail-sig-editor");
+          const select = doc.getElementById("hmail-sig-identity");
+          const save = [...doc.querySelectorAll("button")]
+            .find(b => b.textContent === "Lưu chữ ký");
+          if (!editor || !select || !save) {
+            report("err: khong thay editor/nut luu");
+            return;
+          }
+          const identity = hMailSignature.identities().get(select.value);
+          const orig = identity.htmlSigText;
+          const origFmt = identity.htmlSigFormat;
+          hMailSignature.setHtml(win, editor,
+            '<!--StartFragment--><table style="width: 0px; ' +
+            'border-collapse: collapse;"><tbody><tr><td></td>' +
+            '<td><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" ' +
+            'width="440" height="80"><br>x</td></tr></tbody></table>' +
+            "<!--EndFragment-->");
+          save.click();
+          const out = identity.htmlSigText;
+          identity.htmlSigText = orig;
+          identity.htmlSigFormat = origFmt;
+          // Trả giao diện về chữ ký thật, không bỏ lại bãi test.
+          select.dispatchEvent(new win.Event("change"));
+          const bad = [];
+          if (/xmlns/.test(out)) {
+            bad.push("xmlns");
+          }
+          if (/<!--/.test(out)) {
+            bad.push("comment");
+          }
+          if (/width:\s*0px/.test(out)) {
+            bad.push("width-0px");
+          }
+          if (/<td\s*\/>/.test(out)) {
+            bad.push("td-tu-dong");
+          }
+          if (!/width="440"/.test(out) || !/height="80"/.test(out)) {
+            bad.push("mat-thuoc-tinh-anh");
+          }
+          report(bad.length
+            ? "err: " + bad.join(",") + " :: " + out.slice(0, 400)
+            : "ok: " + out.slice(0, 300));
+        } catch (e) {
+          report("err: " + e + " @ " +
+                 String(e.stack || "").split("\n")[0]);
+        }
+      }, 3000);
+    } catch (e) {
+      report("err: " + e);
+    }
+  }, 12000);
+})();

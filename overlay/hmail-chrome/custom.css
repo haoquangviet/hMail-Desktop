@@ -2526,10 +2526,9 @@ select.hmail-ai-field,
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--hmail-accent, #0F6CBD) 14%, transparent);
 }
 
-.hmail-sig-editor img {
-    max-width: 320px;
-    height: auto;
-}
+/* KHÔNG ép kích thước ảnh trong editor (từng có max-width + height:auto):
+   editor phải hiện Y HỆT thứ sẽ lưu và hiện trong thư — ép ở đây là editor
+   "nói dối", ảnh méo trong thư mà nhìn trong editor vẫn đẹp. */
 
 /* --- tab Di chuyển dữ liệu --- */
 
