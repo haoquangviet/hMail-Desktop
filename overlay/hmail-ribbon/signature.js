@@ -541,9 +541,14 @@ var hMailSignature = {
       if (!img) {
         return;
       }
-      const target = parseInt(img.style.width, 10) || img.width || 160;
+      const target = parseInt(img.getAttribute("width"), 10) ||
+                     parseInt(img.style.width, 10) || img.width || 160;
       this.shrinkImage(win, doc, img.src, target).then(uri => {
         img.src = uri;
+        // Dữ liệu mới đã đúng cỡ: gỡ mọi ép kích thước cũ để ảnh hiện
+        // theo kích thước thật, tỷ lệ tự nhiên.
+        img.removeAttribute("width");
+        img.removeAttribute("height");
         img.style.width = "";
         img.style.height = "";
         syncImg();
@@ -970,8 +975,16 @@ var hMailSignature = {
         identity.htmlSigFormat = true;
         // Chữ ký lấy từ đây, không phải từ tập tin đính kèm nữa.
         identity.attachSignature = false;
+        // Nạp lại từ chính bản vừa ghi: những gì đang thấy CHÍNH LÀ những
+        // gì đã lưu — có gì rơi rớt là lộ ra ngay tại đây chứ không phải
+        // lúc soạn thư.
+        load();
+        const dims = [...editor.querySelectorAll("img")].map(img =>
+          (img.getAttribute("width") || "auto") + "×" +
+          (img.getAttribute("height") || "auto")).join(", ");
         status.textContent =
-          "Đã lưu. Thư mới soạn từ " + select.value + " sẽ mang chữ ký này.";
+          "Đã lưu. Thư mới soạn từ " + select.value + " sẽ mang chữ ký này." +
+          (dims ? " (ảnh: " + dims + ")" : "");
       } catch (e) {
         status.textContent = "Không lưu được: " + (e.message || e);
       }
