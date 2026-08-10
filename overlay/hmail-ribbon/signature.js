@@ -635,9 +635,11 @@ var hMailSignature = {
         return;
       }
       const first = table.rows[0]?.cells[0];
-      tBorder.value = parseInt(first?.style.borderWidth, 10) || "";
-      tPad.value = parseInt(first?.style.paddingTop, 10) || "";
-      tWidth.value = parseInt(table.style.width, 10) || "";
+      const px = value => /%/.test(value || "")
+        ? "" : (parseInt(value, 10) || "");
+      tBorder.value = px(first?.style.borderWidth);
+      tPad.value = px(first?.style.paddingTop);
+      tWidth.value = px(table.style.width);
     };
     // Bản đồ lưới của bảng: grid[hàng][cột] -> ô chiếm chỗ đó, đã tính
     // cả colspan/rowspan — nền cho gộp/tách ô đúng đắn.
