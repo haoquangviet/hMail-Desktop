@@ -597,8 +597,77 @@ var hMailSignature = {
       currentImg = event.target?.localName === "img" ? event.target : null;
       if (currentImg) {
         syncImg();
+        // Chọn hẳn node ảnh để Ctrl+C/X/Delete thao tác đúng vào nó.
+        try {
+          const range = doc.createRange();
+          range.selectNode(currentImg);
+          const sel = win.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        } catch (e) {}
       }
       refreshContext();
+    });
+
+    // Clipboard trong document XHTML chrome mặc định chỉ chơi text trơn:
+    // paste mất định dạng, ảnh không dán được. Tự lo cả hai chiều.
+    const serializeNodes = nodes => {
+      const xs = new win.XMLSerializer();
+      return Array.from(nodes)
+        .filter(n => !["script", "style"].includes(n.localName))
+        .map(n => xs.serializeToString(n))
+        .join("");
+    };
+    const onCopyCut = event => {
+      const sel = win.getSelection();
+      if (!sel || sel.isCollapsed) {
+        return;
+      }
+      try {
+        const holder = el("div");
+        for (let i = 0; i < sel.rangeCount; i++) {
+          holder.appendChild(sel.getRangeAt(i).cloneContents());
+        }
+        event.clipboardData.setData("text/html",
+                                    serializeNodes(holder.childNodes));
+        event.clipboardData.setData("text/plain", holder.textContent);
+        event.preventDefault();
+        if (event.type === "cut") {
+          doc.execCommand("delete");
+          currentImg = null;
+          refreshContext();
+        }
+      } catch (e) {}
+    };
+    editor.addEventListener("copy", onCopyCut);
+    editor.addEventListener("cut", onCopyCut);
+    editor.addEventListener("paste", event => {
+      try {
+        const dt = event.clipboardData;
+        for (const item of dt.items) {
+          if (item.kind === "file" && item.type.startsWith("image/")) {
+            event.preventDefault();
+            const reader = new win.FileReader();
+            reader.onload = () => {
+              editor.focus();
+              doc.execCommand("insertImage", false, reader.result);
+            };
+            reader.readAsDataURL(item.getAsFile());
+            return;
+          }
+        }
+        const html = dt.getData("text/html");
+        if (html) {
+          event.preventDefault();
+          // insertHTML trong XHTML đòi chuỗi well-formed: parse bằng
+          // DOMParser (nuốt được HTML đời thực) rồi serialize lại.
+          const parsed = new win.DOMParser()
+            .parseFromString(html, "text/html");
+          doc.execCommand("insertHTML", false,
+                          serializeNodes(parsed.body.childNodes));
+        }
+        // Không có HTML: để mặc định dán chữ trơn như cũ.
+      } catch (e) {}
     });
     editor.addEventListener("keyup", () => {
       currentImg = null;
