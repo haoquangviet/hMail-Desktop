@@ -922,6 +922,24 @@ var hMailSignature = {
         if (!identity) {
           return;
         }
+        // Kích thước ảnh chuyển từ style sang THUỘC TÍNH width/height:
+        // hộp "Thuộc tính hình ảnh" của trình soạn thư chỉ sửa thuộc
+        // tính, mà style thì đè thuộc tính — để nguyên style là người
+        // dùng chỉnh ảnh trong thư kiểu gì cũng không ăn.
+        for (const img of editor.querySelectorAll("img")) {
+          const w = parseInt(img.style.width, 10);
+          const h = parseInt(img.style.height, 10);
+          if (w) {
+            img.setAttribute("width", w);
+            img.style.width = "";
+            if (h) {
+              img.setAttribute("height", h);
+            } else {
+              img.removeAttribute("height");
+            }
+            img.style.height = "";
+          }
+        }
         identity.htmlSigText = editor.innerHTML.trim();
         identity.htmlSigFormat = true;
         // Chữ ký lấy từ đây, không phải từ tập tin đính kèm nữa.
