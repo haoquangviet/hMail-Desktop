@@ -392,17 +392,22 @@ var hMailSignature = {
     tool(svgIcon(ICONS.clear), "Xoá định dạng vùng bôi đen",
          () => exec("removeFormat"));
 
-    tool("Mẫu", "Chèn mẫu danh thiếp", () => {
-      const identity = this.identities().get(select.value);
-      const name = identity?.fullName || "Họ và tên";
-      const email = select.value;
-      this.setHtml(win, editor,
-        '<div style="font-family: Arial, sans-serif; font-size: 13px; ' +
-        'color: #333;">--<br><b style="font-size:14px; color:#0F6CBD;">' +
-        name + "</b><br>Chức danh · Tên công ty<br>" +
-        '📧 <a href="mailto:' + email + '">' + email + "</a> · 📞 09xx xxx " +
-        "xxx<br>🌐 <a href=\"https://example.com\">example.com</a></div>");
-      editor.focus();
+    tool("Mẫu", "Chèn chữ ký mẫu chuẩn của HQV", () => {
+      // Mẫu chính thức (banner + logo HQV, bảng bố cục) sống trong file
+      // riêng cạnh script — đổi mẫu công ty không phải đụng vào code.
+      const file = Services.dirsvc.get("GreD", Ci.nsIFile);
+      file.append("hmail-ribbon");
+      file.append("signature-template.html");
+      IOUtils.readUTF8(file.path).then(html => {
+        const identity = this.identities().get(select.value);
+        const name = identity?.fullName || "Đội hỗ trợ";
+        this.setHtml(win, editor, html
+          .replace(/{{TEN}}/g, name)
+          .replace(/{{EMAIL}}/g, select.value));
+        editor.focus();
+      }).catch(e => {
+        status.textContent = "Không đọc được mẫu chữ ký: " + (e.message || e);
+      });
     });
 
     root.appendChild(bar);
