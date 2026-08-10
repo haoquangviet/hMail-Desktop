@@ -459,6 +459,21 @@ def build_replacements(zf: zipfile.ZipFile, repo: Path):
                 zf.read(name).decode("utf-8")).encode("utf-8")
             continue
 
+        # The stale-process dialog ("X đang chạy, nhưng không phản hồi…") is
+        # formatted by nsAppRunner with the COMPILED-IN application name —
+        # "Thunderbird", the one name no branding file can reach. The
+        # restart* strings drop their %S and name hMail Desktop directly;
+        # every %S in those particular lines refers to the app, nothing else.
+        if name.endswith("mozapps/profile/profileSelection.properties"):
+            text = zf.read(name).decode("utf-8")
+            fixed = []
+            for line in text.splitlines(True):
+                if line.startswith("restart"):
+                    line = line.replace("%S", "hMail Desktop")
+                fixed.append(line)
+            repl[name] = "".join(fixed).encode("utf-8")
+            continue
+
         # The debugger's "this runtime" pages ship their own blue logo set —
         # outside the branding directory, so the branding sweep misses them.
         if name.startswith("chrome/devtools/skin/images/aboutdebugging-") and \
