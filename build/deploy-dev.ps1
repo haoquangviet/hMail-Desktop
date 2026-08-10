@@ -6,6 +6,8 @@
 # không tin được — xem backlog #7). App đang bận (dựng index…) mà không chịu
 # thoát thì script bỏ cuộc thay vì ép.
 $ErrorActionPreference = "Stop"
+# Cửa sổ elevated đóng ngay khi lỗi — transcript giữ lại hiện trường.
+Start-Transcript -Path (Join-Path $env:TEMP "hmail-deploy-dev.log") -Append | Out-Null
 $repo = Split-Path $PSScriptRoot -Parent
 $dest = "C:\Program Files\hMail Desktop"
 
