@@ -30,7 +30,22 @@ var hMailSignature = {
         openTab(tab) {
           tab.title = "Chữ ký thư";
           tab.panel.classList.add("hmail-import-tab");
-          tab.panel.appendChild(self.buildPanel(win));
+          try {
+            tab.panel.appendChild(self.buildPanel(win));
+          } catch (e) {
+            // Lỗi dựng panel không được phép để lại một tab trắng câm:
+            // ghi rõ tại chỗ và vào pref cho người gỡ lỗi.
+            Cu.reportError("hMail signature panel failed: " + e + "\n" +
+                           (e.stack || ""));
+            try {
+              Services.prefs.setCharPref("hmail.debug.sig", String(e));
+            } catch (e2) {}
+            const err = win.document.createElementNS(
+              "http://www.w3.org/1999/xhtml", "div");
+            err.style.cssText = "padding: 24px; font-size: 14px;";
+            err.textContent = "Không dựng được trình soạn chữ ký: " + e;
+            tab.panel.appendChild(err);
+          }
         },
         closeTab() {},
         saveTabState() {},
