@@ -3404,6 +3404,29 @@ select.hmail-ai-field,
     color: color-mix(in srgb, #D93025 70%, CanvasText);
 }
 
+/* Khối "Vì sao thư bị giữ" — kết luận của bộ lọc dịch ra tiếng người. */
+.hmail-spam-why {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px;
+    font-size: 0.86rem;
+    background-color: color-mix(in srgb, CanvasText 4%, Canvas);
+}
+
+.hmail-spam-why-title {
+    font-weight: 600;
+    font-size: 0.82rem;
+    opacity: 0.75;
+}
+
+.hmail-spam-why-row {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    flex-wrap: wrap;
+}
+
 .hmail-spam-headers {
     margin: 0;
     padding: 8px 10px;

@@ -1339,6 +1339,53 @@ var hMailSpam = {
     })) {
       idBox.appendChild(el("div", "hmail-spam-warn", "⚠ Cảnh giác: " + sign));
     }
+    // "Vì sao thư bị giữ": dịch các header chẩn đoán của bộ lọc (đời cũ
+    // lẫn N-able mới) thành tiếng người — dùng chung bộ phân tích với
+    // banner cảnh báo lúc mở thư.
+    if (data.headers && typeof hMailInsight !== "undefined") {
+      try {
+        const hs = hMailInsight.headers(data.headers + "\n\n");
+        const verdict = hMailInsight.serverVerdict(hs);
+        const auth = hMailInsight.authResults(hs);
+        const why = el("div", "hmail-spam-why");
+        why.appendChild(el("div", "hmail-spam-why-title",
+          "Vì sao thư bị giữ — bộ lọc máy chủ ghi lại:"));
+        const row = (label, text) => {
+          const line = el("div", "hmail-spam-why-row");
+          line.append(el("span", "hmail-spam-idlabel", label),
+                      el("span", null, text));
+          why.appendChild(line);
+        };
+        if (verdict.virus) {
+          row("Kết luận:", "chứa mã độc / lừa đảo");
+        } else if (verdict.spam) {
+          row("Kết luận:", "thư rác");
+        }
+        if (verdict.class) {
+          row("Phân loại:", verdict.class +
+            (verdict.label && verdict.label !== verdict.class
+              ? ` · nhãn: ${verdict.label}` : ""));
+        } else if (verdict.label) {
+          row("Nhãn:", verdict.label);
+        }
+        if (verdict.evidence) {
+          row("Bằng chứng:", hMailInsight.explainEvidence(verdict.evidence));
+        }
+        if (verdict.action) {
+          row("Bộ lọc đề nghị:", verdict.action === "reject"
+            ? "reject — từ chối thẳng" : verdict.action);
+        }
+        const auths = ["spf", "dkim", "dmarc"]
+          .map(k => auth[k] ? `${k.toUpperCase()} ${auth[k]}` : "")
+          .filter(Boolean).join(" · ");
+        if (auths) {
+          row("Xác thực:", auths);
+        }
+        if (why.childElementCount > 1) {
+          idBox.appendChild(why);
+        }
+      } catch (e) {}
+    }
     if (data.headers) {
       const toggle = el("button", "hmail-spam-btn",
         "Xem phần đầu thư (headers)");
@@ -1901,7 +1948,13 @@ var hMailSpam = {
           // phải hiện ít nhất 2 cảnh báo và nút xem headers.
           doc.querySelectorAll(".hmail-spam-warn").length >= 2 &&
           [...doc.querySelectorAll("button")]
-            .some(b => b.textContent.includes("headers"));
+            .some(b => b.textContent.includes("headers")) &&
+          // Header N-able mới phải được dịch ra khối "Vì sao thư bị giữ":
+          // kết luận thư rác + bằng chứng danh sách đen + đề nghị reject.
+          /danh sách đen sh-zen\.rbl\.spamrl\.com/.test(
+            doc.querySelector(".hmail-spam-why")?.textContent || "") &&
+          /reject/.test(
+            doc.querySelector(".hmail-spam-why")?.textContent || "");
       });
       steps.push("quay-lai");
       button("← Quay lại").click();

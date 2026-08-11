@@ -863,7 +863,14 @@ var hMailInsight = {
         (verdict.evidence ? ` (${verdict.evidence})` : "") +
         ". Đừng mở tệp đính kèm hay bấm liên kết trong thư.");
     } else if (verdict.spam) {
-      note("warn", "Máy chủ đã đánh dấu thư này là thư rác.");
+      note("warn", "Máy chủ đã đánh dấu thư này là thư rác" +
+        (verdict.evidence
+          ? ` — bằng chứng: ${this.explainEvidence(verdict.evidence)}`
+          : "") + ".");
+    } else if (verdict.label &&
+               /newsletter|bulk|promo|marketing/.test(verdict.label)) {
+      note("info",
+        `Bộ lọc máy chủ dán nhãn thư: "${verdict.label}" (thư quảng bá).`);
     }
     if (verdict.action && verdict.action !== "accept") {
       note(verdict.virus ? "danger" : "warn",
@@ -1023,6 +1030,23 @@ var hMailInsight = {
   },
 
   /**
+   * Diễn giải chuỗi "bằng chứng" của bộ lọc thành tiếng người:
+   * "dnsbl/sh-zen.rbl.spamrl.com" nghĩa là máy chủ gửi nằm trong danh sách
+   * đen — người dùng không cần biết dnsbl là gì để hiểu tại sao.
+   */
+  explainEvidence(evidence) {
+    const value = String(evidence || "");
+    const dnsbl = /^dnsbl\/(.+)$/i.exec(value);
+    if (dnsbl) {
+      return `máy chủ gửi nằm trong danh sách đen ${dnsbl[1]} (DNSBL)`;
+    }
+    if (/^combined/i.test(value)) {
+      return `nhiều dấu hiệu cộng dồn (${value})`;
+    }
+    return value;
+  },
+
+  /**
    * SPF, DKIM and DMARC as the receiving server reported them. Split out so
    * anything else that needs the verdict — the sender avatars, for one — can
    * read it without repeating the parsing.
@@ -1054,7 +1078,12 @@ var hMailInsight = {
    */
   serverVerdict(headers) {
     const value = name => this.first(headers, name).trim();
-    const cls = (value("x-spampanel-class") || value("x-spam-class") ||
+    // Bộ lọc SpamExperts đã đổi tên header khi về tay N-able:
+    // X-Spampanel-* (đời đầu) → X-SpamExperts-* → X-N-ableSpamExperts-*.
+    // Thư cũ trong hộp vẫn mang tên cũ nên nhận cả ba thế hệ.
+    const cls = (value("x-n-ablespamexperts-class") ||
+                 value("x-spamexperts-class") ||
+                 value("x-spampanel-class") || value("x-spam-class") ||
                  value("x-cm-analysis") || "").toLowerCase();
     const flag = value("x-spam-flag").toLowerCase();
     const status = value("x-spam-status");
@@ -1075,7 +1104,10 @@ var hMailInsight = {
       score: Number.isFinite(score) ? score : null,
       action: (value("x-recommended-action") ||
                value("x-spam-action")).toLowerCase(),
-      evidence: value("x-spampanel-evidence") || value("x-virus-name"),
+      evidence: value("x-n-ablespamexperts-evidence") ||
+                value("x-spamexperts-evidence") ||
+                value("x-spampanel-evidence") || value("x-virus-name"),
+      label: value("x-filter-label").toLowerCase(),
       iprev: /iprev=(\w+)/.exec(auth.raw)?.[1] || "",
       senderWarning: value("x-sender-warning"),
     };
