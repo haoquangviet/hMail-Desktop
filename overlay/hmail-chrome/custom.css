@@ -3321,6 +3321,17 @@ select.hmail-ai-field,
     border: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
     border-radius: 4px;
 }
+
+/* Hàng thêm người gửi tin cậy: ô nhập chiếm chỗ, nút Thêm đứng cạnh. */
+.hmail-spam-wl-add {
+    display: flex;
+    gap: 8px;
+    margin: 10px 0;
+}
+
+.hmail-spam-wl-add input {
+    flex: 1 1 auto;
+}
 .hmail-ribbon-button[data-icon="calendar"]  .hmail-ribbon-icon { background-image: url("Icons/calendar-col.svg"); }
 
 /* "Email Mới" is the primary action — filled accent, like Outlook. */

@@ -187,6 +187,15 @@ var hMailSpam = {
       hMailSpam.request(email, "GET", "/api/v1/quarantine/preview", { query: { id } }),
     release: (email, id) =>
       hMailSpam.request(email, "POST", "/api/v1/quarantine/release", { json: { id } }),
+    whitelist: (email) =>
+      hMailSpam.request(email, "GET", "/api/v1/whitelist"),
+    // type ("email"|"domain") là tuỳ chọn — máy chủ tự đoán qua dấu @.
+    whitelistAdd: (email, value, type) =>
+      hMailSpam.request(email, "POST", "/api/v1/whitelist",
+                        { json: type ? { value, type } : { value } }),
+    whitelistRemove: (email, id) =>
+      hMailSpam.request(email, "DELETE",
+                        "/api/v1/whitelist/" + encodeURIComponent(id)),
     report: (email, base64) =>
       hMailSpam.request(email, "POST", "/api/v1/spam/report", {
         raw: base64,
@@ -349,6 +358,16 @@ var hMailSpam = {
         return "máy chủ lọc thư tạm thời không phản hồi";
       case "not_your_message":
         return "thư này không thuộc địa chỉ của bạn";
+      case "invalid_email":
+        return "địa chỉ email không hợp lệ";
+      case "invalid_domain":
+        return "tên miền không hợp lệ";
+      case "invalid_type":
+        return "loại mục tin cậy không hợp lệ";
+      case "cannot_whitelist_self":
+        return "không thể đưa chính địa chỉ của mình vào danh sách tin cậy";
+      case "whitelist_full":
+        return "danh sách tin cậy đã đầy (tối đa 500 mục)";
       default:
         return e?.message || "lỗi không xác định";
     }
@@ -720,7 +739,11 @@ var hMailSpam = {
       timer = win.setTimeout(() => this.refresh(win), 500);
     });
 
-    tools.append(refreshBtn, range, search);
+    const wlBtn = el("button", "hmail-spam-btn", "Người gửi tin cậy");
+    wlBtn.title = "Danh sách địa chỉ / tên miền không bao giờ bị giữ thư";
+    wlBtn.addEventListener("click", () => this.showWhitelist(win));
+
+    tools.append(refreshBtn, range, search, wlBtn);
     root.appendChild(tools);
 
     const progress = el("div", "hmail-spam-progress");
@@ -935,6 +958,17 @@ var hMailSpam = {
         actions.appendChild(release);
       }
 
+      // Người gửi hợp pháp bị giữ oan: một nút đưa thẳng vào danh sách
+      // tin cậy để lần sau không bị giữ nữa.
+      if (this.senderAddress(item)) {
+        const trust = el("button", "hmail-spam-btn", "Tin cậy");
+        trust.title = "Đưa người gửi vào danh sách tin cậy — thư sau " +
+                      "không bị giữ nữa";
+        trust.addEventListener("click", () =>
+          this.trustSender(win, email, item, row));
+        actions.appendChild(trust);
+      }
+
       row.append(head, subject, meta, actions);
       list.appendChild(row);
     }
@@ -1056,4 +1090,347 @@ var hMailSpam = {
       this.notify(win, "Không nhận được thư: " + this.explain(e));
     }
   },
+
+  // ------------------------------------------------- người gửi tin cậy
+  // Backend giữ danh sách whitelist theo từng người dùng: mục "email" được
+  // đẩy xuống máy chủ lọc (hết bị giữ), mục "domain" thi hành phía dịch vụ.
+  // Thêm mục tin cậy cũng tự gỡ các mục blacklist xung đột — whitelist thắng.
+
+  /** Rút địa chỉ người gửi trần từ một dòng thư bị giữ ("Tên <a@b>" → a@b). */
+  senderAddress(item) {
+    const raw = String(item?.from || item?.envelope_sender || "");
+    const angled = /<([^<>\s]+@[^<>\s]+)>/.exec(raw);
+    const bare = angled ? angled[1] : raw.trim();
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bare) ? bare.toLowerCase() : "";
+  },
+
+  async trustSender(win, email, item, row) {
+    const sender = this.senderAddress(item);
+    if (!sender) {
+      return;
+    }
+    const canRelease = item.status === "quarantined" &&
+      !!row.querySelector(".hmail-spam-actions .primary");
+    const check = { value: canRelease };
+    let ok;
+    if (canRelease) {
+      ok = Services.prompt.confirmCheck(win, "Người gửi tin cậy",
+        `Đưa ${sender} vào danh sách tin cậy?\n\n` +
+        "Thư từ địa chỉ này gửi tới bạn sẽ không bị giữ lại nữa.",
+        "Đồng thời nhận thư này về hộp thư", check);
+    } else {
+      ok = Services.prompt.confirm(win, "Người gửi tin cậy",
+        `Đưa ${sender} vào danh sách tin cậy?\n\n` +
+        "Thư từ địa chỉ này gửi tới bạn sẽ không bị giữ lại nữa.");
+    }
+    if (!ok) {
+      return;
+    }
+    this.notify(win, "Đang thêm vào danh sách tin cậy…");
+    this.setBusy(win, true);
+    try {
+      const res = await this.Api.whitelistAdd(email, sender);
+      this.setBusy(win, false);
+      let text = `Đã tin cậy ${sender}.`;
+      if (res?.removed_blacklist?.length) {
+        text += ` Đã gỡ ${res.removed_blacklist.length} mục chặn xung đột.`;
+      }
+      if (res?.pmg_status === "failed") {
+        text += " (Chưa đồng bộ được máy chủ lọc — thêm lại để thử lại.)";
+      }
+      this.notify(win, text);
+    } catch (e) {
+      this.setBusy(win, false);
+      if (e.code === "email_not_verified" || e.code === "step_up_required") {
+        try {
+          await this.Api.verifyRequest(email);
+        } catch (e2) {}
+        this.showAuth(win, email, "verify");
+        this.notify(win, "Cần xác thực — đã gửi mã.");
+        return;
+      }
+      this.notify(win, "Không thêm được: " + this.explain(e));
+      return;
+    }
+    if (canRelease && check.value) {
+      await this.release(win, email, item, row);
+    }
+  },
+
+  async showWhitelist(win) {
+    const doc = win.document;
+    const select = doc.getElementById("hmail-spam-account");
+    const email = select?.value;
+    if (!email) {
+      this.notify(win, "Chưa có tài khoản thư nào.");
+      return;
+    }
+    if (!this.Creds.get(email)) {
+      this.showAuth(win, email, "register");
+      return;
+    }
+    this.notify(win, "Đang tải danh sách tin cậy…");
+    this.setBusy(win, true);
+    this.showSkeleton(win);
+    let data;
+    try {
+      data = await this.Api.whitelist(email);
+    } catch (e) {
+      this.setBusy(win, false);
+      if (e.code === "email_not_verified") {
+        try {
+          await this.Api.verifyRequest(email);
+        } catch (e2) {}
+        this.showAuth(win, email, "verify");
+        this.notify(win, "Địa chỉ chưa xác thực — đã gửi mã.");
+        return;
+      }
+      if (e.code === "invalid_or_missing_token") {
+        this.Creds.clear(email);
+        this.showAuth(win, email, "register");
+        this.notify(win, "Phiên đã hết hạn, hãy đăng nhập lại.");
+        return;
+      }
+      this.notify(win, "Không tải được danh sách: " + this.explain(e));
+      return;
+    }
+    this.setBusy(win, false);
+    this.renderWhitelist(win, email, data);
+  },
+
+  renderWhitelist(win, email, data) {
+    const doc = win.document;
+    const el = (t, c, x) => this.el(doc, t, c, x);
+    const list = doc.getElementById("hmail-spam-list");
+    if (!list) {
+      return;
+    }
+    list.textContent = "";
+
+    const back = el("button", "hmail-spam-btn", "← Thư bị giữ");
+    back.addEventListener("click", () => this.refresh(win));
+    list.appendChild(back);
+
+    list.appendChild(el("p", "hmail-spam-note",
+      "Thư từ người gửi tin cậy không bao giờ bị giữ lại. Nhập một địa chỉ " +
+      "(doitac@congty.com) hoặc cả tên miền (congty.com) rồi bấm Thêm."));
+
+    // Hàng thêm mục mới -------------------------------------------------
+    const addRow = el("div", "hmail-spam-wl-add");
+    const input = el("input", "hmail-spam-search");
+    input.type = "text";
+    input.placeholder = "doitac@congty.com hoặc congty.com";
+    const addBtn = el("button", "hmail-spam-btn primary", "Thêm");
+    const submit = async () => {
+      const value = input.value.trim().toLowerCase();
+      if (!value) {
+        return;
+      }
+      const isEmail = value.includes("@");
+      if (!isEmail && !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(value)) {
+        this.notify(win,
+          "Hãy nhập một địa chỉ email hoặc tên miền hợp lệ.");
+        return;
+      }
+      addBtn.disabled = true;
+      addBtn.textContent = "Đang thêm…";
+      this.setBusy(win, true);
+      try {
+        const res = await this.Api.whitelistAdd(email, value);
+        this.setBusy(win, false);
+        let text = `Đã tin cậy ${value}.`;
+        if (res?.removed_blacklist?.length) {
+          text += ` Đã gỡ ${res.removed_blacklist.length} mục chặn xung đột.`;
+        }
+        this.notify(win, text);
+        this.showWhitelist(win);
+      } catch (e) {
+        this.setBusy(win, false);
+        addBtn.disabled = false;
+        addBtn.textContent = "Thêm";
+        if (e.code === "email_not_verified" ||
+            e.code === "step_up_required") {
+          try {
+            await this.Api.verifyRequest(email);
+          } catch (e2) {}
+          this.showAuth(win, email, "verify");
+          this.notify(win, "Cần xác thực — đã gửi mã.");
+          return;
+        }
+        this.notify(win, "Không thêm được: " + this.explain(e));
+      }
+    };
+    addBtn.addEventListener("click", submit);
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") {
+        submit();
+      }
+    });
+    addRow.append(input, addBtn);
+    list.appendChild(addRow);
+
+    const items = data?.items || [];
+    this.notify(win, `${items.length} người gửi tin cậy`);
+    if (!items.length) {
+      list.appendChild(el("p", "hmail-spam-note",
+        "Chưa có mục nào. Bạn cũng có thể bấm “Tin cậy” ngay trên một thư " +
+        "trong danh sách Thư bị giữ."));
+      return;
+    }
+
+    for (const item of items) {
+      const row = el("div", "hmail-spam-row");
+      row.dataset.id = item.id;
+      const head = el("div", "hmail-spam-row-head");
+      head.append(
+        el("span", "hmail-spam-from", item.value),
+        el("span", "hmail-spam-time", item.created_at
+          ? new Date(item.created_at * 1000).toLocaleDateString() : "")
+      );
+      const meta = el("div", "hmail-spam-meta",
+        (item.type === "domain" ? "Cả tên miền" : "Địa chỉ email") +
+        " · " + this.wlStatusLabel(item.pmg_status));
+
+      const actions = el("div", "hmail-spam-actions");
+      const remove = el("button", "hmail-spam-btn", "Xoá");
+      remove.addEventListener("click", async () => {
+        if (!Services.prompt.confirm(win, "Người gửi tin cậy",
+              `Bỏ ${item.value} khỏi danh sách tin cậy?\n\n` +
+              "Thư từ nguồn này có thể bị giữ lại như bình thường.")) {
+          return;
+        }
+        remove.disabled = true;
+        remove.textContent = "Đang xoá…";
+        try {
+          await this.Api.whitelistRemove(email, item.id);
+          row.remove();
+          this.notify(win, `Đã bỏ ${item.value} khỏi danh sách tin cậy.`);
+        } catch (e) {
+          remove.disabled = false;
+          remove.textContent = "Xoá";
+          this.notify(win, "Không xoá được: " + this.explain(e));
+        }
+      });
+      actions.appendChild(remove);
+
+      row.append(head, meta, actions);
+      list.appendChild(row);
+    }
+  },
+
+  wlStatusLabel(status) {
+    switch (status) {
+      case "sent":
+        return "đã đồng bộ máy chủ lọc";
+      case "local":
+        return "áp dụng phía dịch vụ";
+      case "failed":
+        return "chưa đồng bộ được — thêm lại để thử lại";
+      default:
+        return status || "";
+    }
+  },
 };
+
+// ---------------------------------------------------------------------------
+// Tự kiểm luồng thư bị giữ + người gửi tin cậy (pref hmail.debug.spamtest =
+// "run", serverUrl đã trỏ vào mock): mở tab thật, đi hết đăng nhập → xác
+// thực → danh sách (có nút Tin cậy) → whitelist thêm/xoá qua đúng các nút
+// người dùng bấm. Kết quả ghi ngược vào pref; cấu hình mock được dọn sạch
+// khi xong dù đậu hay rớt.
+(function hMailSpamSelfTest() {
+  let mode = "";
+  try {
+    mode = Services.prefs.getCharPref("hmail.debug.spamtest", "");
+  } catch (e) {}
+  if (mode !== "run") {
+    return;
+  }
+  Services.prefs.setCharPref("hmail.debug.spamtest", "running");
+  const report = text => {
+    try {
+      Services.prefs.setCharPref("hmail.debug.spamtest", text.slice(0, 900));
+      Services.prefs.savePrefFile(null);
+    } catch (e) {}
+  };
+  const steps = [];
+  setTimeout(async () => {
+    const win = Services.wm.getMostRecentWindow("mail:3pane");
+    const doc = win.document;
+    const waitFor = (test, timeout = 20000) =>
+      new Promise((resolve, reject) => {
+        const t0 = win.performance.now();
+        const poll = () => {
+          let hit = null;
+          try {
+            hit = test();
+          } catch (e) {}
+          if (hit) {
+            resolve(hit);
+            return;
+          }
+          if (win.performance.now() - t0 > timeout) {
+            reject(new Error("timeout @ " + steps[steps.length - 1]));
+            return;
+          }
+          win.setTimeout(poll, 300);
+        };
+        poll();
+      });
+    const button = text => [...doc.querySelectorAll(
+      "#hmail-spam-panel button")].find(b => b.textContent === text);
+    let email = "";
+    try {
+      steps.push("open-tab");
+      hMailSpam.openTab(win);
+      email = doc.getElementById("hmail-spam-account")?.value || "";
+
+      steps.push("dang-nhap");
+      (await waitFor(() => button("Đăng nhập"))).click();
+      steps.push("xac-thuc");
+      const code = await waitFor(() => doc.querySelector(".hmail-spam-code"));
+      code.value = "123456";
+      button("Xác nhận").click();
+
+      steps.push("danh-sach");
+      await waitFor(() => button("Nhận thư"));
+      if (!button("Tin cậy")) {
+        throw new Error("dòng thư bị giữ không có nút Tin cậy");
+      }
+
+      steps.push("mo-whitelist");
+      button("Người gửi tin cậy").click();
+      steps.push("them-muc");
+      const input = await waitFor(
+        () => doc.querySelector(".hmail-spam-wl-add input"));
+      input.value = "vendor.com";
+      button("Thêm").click();
+      steps.push("thay-muc-moi");
+      const entry = await waitFor(() =>
+        [...doc.querySelectorAll("#hmail-spam-list .hmail-spam-from")]
+          .find(s => s.textContent === "vendor.com"));
+
+      steps.push("xoa-muc");
+      const id = entry.closest(".hmail-spam-row").dataset.id;
+      await hMailSpam.Api.whitelistRemove(email, id);
+      hMailSpam.showWhitelist(win);
+      await waitFor(() =>
+        ![...doc.querySelectorAll("#hmail-spam-list .hmail-spam-from")]
+          .some(s => s.textContent === "vendor.com") &&
+        doc.querySelector(".hmail-spam-wl-add"));
+
+      report("ok: " + steps.join(" > "));
+    } catch (e) {
+      report("err: " + (e.message || e) + " (đã qua: " + steps.join(" > ") + ")");
+    } finally {
+      // Trả cấu hình về máy chủ thật, xoá token của mock.
+      try {
+        hMailSpam.Creds.clear(email);
+      } catch (e) {}
+      try {
+        Services.prefs.clearUserPref("hmail.spam.serverUrl");
+        Services.prefs.savePrefFile(null);
+      } catch (e) {}
+    }
+  }, 12000);
+})();
