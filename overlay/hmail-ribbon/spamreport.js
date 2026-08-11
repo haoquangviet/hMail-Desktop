@@ -1305,10 +1305,53 @@ var hMailSpam = {
     }
     list.appendChild(top);
 
-    list.appendChild(el("div", "hmail-spam-subject", data.subject || "(không tiêu đề)"));
-    list.appendChild(el("div", "hmail-spam-meta",
-      `Từ: ${data.from || "?"}\nĐến: ${data.receiver || "?"}` +
-      (data.spamlevel != null ? `\nĐiểm spam: ${data.spamlevel}` : "")));
+    // Khối định danh cỡ lớn: giả mạo lộ ra ở đây — địa chỉ THẬT được in
+    // đậm để đối chiếu với tên hiển thị hoa mỹ.
+    if (item) {
+      item._headers = data.headers || "";
+    }
+    const idBox = el("div", "hmail-spam-idbox");
+    idBox.appendChild(el("div", "hmail-spam-preview-subject",
+      data.subject || "(không tiêu đề)"));
+    const from = this.parseAddr(data.from);
+    const fromRow = el("div", "hmail-spam-idrow");
+    fromRow.appendChild(el("span", "hmail-spam-idlabel", "Từ:"));
+    if (from.name) {
+      fromRow.appendChild(el("span", "hmail-spam-idname", from.name));
+    }
+    fromRow.appendChild(el("span", "hmail-spam-addr",
+      from.addr ? `<${from.addr}>` : (data.from || "?")));
+    idBox.appendChild(fromRow);
+    const toRow = el("div", "hmail-spam-idrow");
+    toRow.appendChild(el("span", "hmail-spam-idlabel", "Đến:"));
+    toRow.appendChild(el("span", "hmail-spam-addr", data.receiver || "?"));
+    idBox.appendChild(toRow);
+    if (data.spamlevel != null) {
+      idBox.appendChild(el("div", "hmail-spam-meta",
+        `Điểm spam: ${data.spamlevel}`));
+    }
+    // Soi dấu hiệu trên dữ liệu PREVIEW — đầy đủ nhất (headers, điểm spam
+    // chính xác) — chứ không phải bản tóm tắt của dòng danh sách.
+    for (const sign of this.spoofSigns({
+      from: data.from || item?.from,
+      spamlevel: data.spamlevel ?? item?.spamlevel,
+      _headers: data.headers || "",
+    })) {
+      idBox.appendChild(el("div", "hmail-spam-warn", "⚠ Cảnh giác: " + sign));
+    }
+    if (data.headers) {
+      const toggle = el("button", "hmail-spam-btn",
+        "Xem phần đầu thư (headers)");
+      const pre = el("pre", "hmail-spam-headers", data.headers);
+      pre.hidden = true;
+      toggle.addEventListener("click", () => {
+        pre.hidden = !pre.hidden;
+        toggle.textContent = pre.hidden
+          ? "Xem phần đầu thư (headers)" : "Ẩn phần đầu thư";
+      });
+      idBox.append(toggle, pre);
+    }
+    list.appendChild(idBox);
 
     const body = String(data.body || "");
     if (!body.trim()) {
@@ -1398,6 +1441,51 @@ var hMailSpam = {
   // đẩy xuống máy chủ lọc (hết bị giữ), mục "domain" thi hành phía dịch vụ.
   // Thêm mục tin cậy cũng tự gỡ các mục blacklist xung đột — whitelist thắng.
 
+  /** Tách "Tên hiển thị <địa chỉ>" thành hai phần. */
+  parseAddr(value) {
+    const m = /^\s*"?([^"<]*?)"?\s*<([^<>\s]+@[^<>\s]+)>\s*$/
+      .exec(String(value || ""));
+    if (m) {
+      return { name: m[1].trim(), addr: m[2].toLowerCase() };
+    }
+    const bare = String(value || "").trim();
+    return /@/.test(bare) ? { name: "", addr: bare.toLowerCase() }
+                          : { name: bare, addr: "" };
+  },
+
+  /**
+   * Các dấu hiệu giả mạo của một thư bị giữ — dùng cho cảnh báo ở màn xem
+   * chi tiết và hộp xác nhận Tin cậy. Trả về mảng câu tiếng Việt.
+   */
+  spoofSigns(item) {
+    const signs = [];
+    const { name, addr } = this.parseAddr(
+      item?.from || item?.envelope_sender || "");
+    const domain = addr.split("@")[1] || "";
+    // Tên hiển thị nhắc tới một tên miền KHÁC địa chỉ thật — chiêu phổ
+    // biến nhất: 'Google Meet | congty.com <ke-gian@mien-la.com>'.
+    const mentioned = (name.toLowerCase()
+      .match(/\b[a-z0-9-]+(\.[a-z0-9-]+)+\b/g) || [])
+      .filter(d => domain && d !== domain &&
+                   !domain.endsWith("." + d) && !d.endsWith("." + domain));
+    if (mentioned.length) {
+      signs.push(`tên hiển thị nhắc tới "${mentioned[0]}" nhưng địa chỉ ` +
+                 `thật là "${domain}" — chiêu giả mạo phổ biến`);
+    }
+    const rt = /^reply-to:\s*(.+)$/im.exec(String(item?._headers || ""));
+    if (rt) {
+      const replyTo = this.parseAddr(rt[1]).addr;
+      if (replyTo && addr && replyTo !== addr) {
+        signs.push(`địa chỉ nhận trả lời (Reply-To) là "${replyTo}", ` +
+                   "khác người gửi — thư trả lời sẽ đi nơi khác");
+      }
+    }
+    if ((item?.spamlevel ?? 0) >= 5) {
+      signs.push(`máy lọc chấm điểm spam cao (${item.spamlevel})`);
+    }
+    return signs;
+  },
+
   /** Rút địa chỉ người gửi trần từ một dòng thư bị giữ ("Tên <a@b>" → a@b). */
   senderAddress(item) {
     const raw = String(item?.from || item?.envelope_sender || "");
@@ -1412,18 +1500,26 @@ var hMailSpam = {
       return;
     }
     const canRelease = item.status === "quarantined" &&
-      !!row.querySelector(".hmail-spam-actions .primary");
-    const check = { value: canRelease };
+      !!row?.querySelector?.(".hmail-spam-actions .primary");
+    // Tin cậy là mở cổng vĩnh viễn — bắt người dùng nhìn thấy dấu hiệu
+    // giả mạo (nếu có) TRƯỚC khi gật đầu.
+    const signs = this.spoofSigns(item);
+    let message = `Đưa ${sender} vào danh sách tin cậy?\n\n` +
+      "Thư từ địa chỉ này sẽ KHÔNG BAO GIỜ bị giữ lại nữa.";
+    if (signs.length) {
+      message += "\n\n⚠ CẢNH GIÁC — thư này có dấu hiệu giả mạo:\n" +
+        signs.map(s => "• " + s).join("\n") +
+        "\n\nChỉ tin cậy khi bạn chắc chắn người gửi là thật.";
+    } else {
+      message += "\n\nChỉ tin cậy khi bạn chắc chắn đây là người gửi an toàn.";
+    }
+    const check = { value: canRelease && !signs.length };
     let ok;
     if (canRelease) {
-      ok = Services.prompt.confirmCheck(win, "Người gửi tin cậy",
-        `Đưa ${sender} vào danh sách tin cậy?\n\n` +
-        "Thư từ địa chỉ này gửi tới bạn sẽ không bị giữ lại nữa.",
+      ok = Services.prompt.confirmCheck(win, "Người gửi tin cậy", message,
         "Đồng thời nhận thư này về hộp thư", check);
     } else {
-      ok = Services.prompt.confirm(win, "Người gửi tin cậy",
-        `Đưa ${sender} vào danh sách tin cậy?\n\n` +
-        "Thư từ địa chỉ này gửi tới bạn sẽ không bị giữ lại nữa.");
+      ok = Services.prompt.confirm(win, "Người gửi tin cậy", message);
     }
     if (!ok) {
       return;
@@ -1799,7 +1895,13 @@ var hMailSpam = {
       button("Xem").click();
       await waitFor(() => {
         const frame = doc.querySelector(".hmail-spam-preview");
-        return frame?.currentURI?.spec?.startsWith("data:text/html");
+        return frame?.currentURI?.spec?.startsWith("data:text/html") &&
+          doc.querySelector(".hmail-spam-preview-subject") &&
+          // Mock trả thư giả mạo (tên miền lệch + Reply-To lệch + điểm 7):
+          // phải hiện ít nhất 2 cảnh báo và nút xem headers.
+          doc.querySelectorAll(".hmail-spam-warn").length >= 2 &&
+          [...doc.querySelectorAll("button")]
+            .some(b => b.textContent.includes("headers"));
       });
       steps.push("quay-lai");
       button("← Quay lại").click();

@@ -3362,6 +3362,61 @@ select.hmail-ai-field,
     border-radius: 4px;
 }
 
+/* Khối định danh ở màn xem chi tiết: tiêu đề và địa chỉ THẬT phải to rõ —
+   người dùng đối chiếu được tên hiển thị hoa mỹ với địa chỉ thật. */
+.hmail-spam-idbox {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 10px 12px;
+    background-color: Canvas;
+}
+
+.hmail-spam-preview-subject {
+    font-size: 1.18rem;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+.hmail-spam-idrow {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    flex-wrap: wrap;
+    font-size: 0.95rem;
+}
+
+.hmail-spam-idlabel { opacity: 0.6; flex: none; }
+
+.hmail-spam-idname { font-weight: 600; }
+
+.hmail-spam-addr {
+    font-weight: 700;
+    color: var(--hmail-accent, #0F6CBD);
+    overflow-wrap: anywhere;
+}
+
+.hmail-spam-warn {
+    padding: 6px 10px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    background-color: color-mix(in srgb, #D93025 12%, Canvas);
+    color: color-mix(in srgb, #D93025 70%, CanvasText);
+}
+
+.hmail-spam-headers {
+    margin: 0;
+    padding: 8px 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    font: 11px Consolas, monospace;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    background-color: color-mix(in srgb, CanvasText 5%, Canvas);
+    user-select: text !important;
+    -moz-user-select: text !important;
+}
+
 /* Hàng thêm người gửi tin cậy: ô nhập chiếm chỗ, nút Thêm đứng cạnh. */
 .hmail-spam-wl-add {
     display: flex;
