@@ -69,6 +69,11 @@ var hMailUpdate = {
     const mac = Services.appinfo.OS === "Darwin";
     const wanted = mac ? /\.dmg$/i : /\.exe$/i;
     for (const asset of assets) {
+      // Release vừa tạo thì asset còn đang tải lên (state "starting") —
+      // URL lúc đó tải về là 404. Chỉ nhận asset đã lên xong.
+      if (asset?.state && asset.state !== "uploaded") {
+        continue;
+      }
       if (wanted.test(String(asset.name || ""))) {
         return String(asset.browser_download_url || "");
       }
@@ -216,7 +221,8 @@ var hMailUpdate = {
       } catch (e2) {}
       Services.prompt.alert(win, "hMail Desktop",
         "Không tải được bộ cài: " + (e.message || e) +
-        "\n\nBạn có thể tải thủ công tại:\n" + this.PAGE);
+        "\n\nBản phát hành có thể vừa đăng và tệp còn đang được tải lên — " +
+        "thử lại sau vài phút, hoặc tải thủ công tại:\n" + this.PAGE);
     }
   },
   // ------------------------------------------------- trang Cài đặt
@@ -528,3 +534,53 @@ var hMailUpdate = {
     }
   },
 };
+
+// ---------------------------------------------------------------------------
+// Tự kiểm đường cập nhật (pref hmail.debug.updatetest = "run"): hỏi API
+// phát hành, chọn asset cho hệ điều hành này rồi TẢI THẬT về thư mục tạm —
+// đúng bộ máy Downloads mà nút cập nhật dùng. Kết quả ghi ngược vào pref.
+(function hMailUpdateSelfTest() {
+  let mode = "";
+  try {
+    mode = Services.prefs.getCharPref("hmail.debug.updatetest", "");
+  } catch (e) {}
+  if (mode !== "run") {
+    return;
+  }
+  Services.prefs.setCharPref("hmail.debug.updatetest", "running");
+  const report = text => {
+    try {
+      Services.prefs.setCharPref("hmail.debug.updatetest", text.slice(0, 900));
+      Services.prefs.savePrefFile(null);
+    } catch (e) {}
+  };
+  setTimeout(async () => {
+    try {
+      const t0 = Date.now();
+      const info = await hMailUpdate.latest();
+      if (!info) {
+        report("err: latest() tra null — API phat hanh khong doc duoc");
+        return;
+      }
+      if (!info.download) {
+        report("err: khong thay asset cho HDH nay (ban " + info.version + ")");
+        return;
+      }
+      const { Downloads } = ChromeUtils.importESModule(
+        "resource://gre/modules/Downloads.sys.mjs");
+      const target = PathUtils.join(
+        PathUtils.tempDir, "hmail-updatetest.bin");
+      const download = await Downloads.createDownload({
+        source: info.download, target });
+      await download.start();
+      const size = (await IOUtils.stat(target)).size;
+      await IOUtils.remove(target);
+      report("ok: ban " + info.version + " tai duoc " +
+             Math.round(size / 1024 / 1024) + " MB trong " +
+             Math.round((Date.now() - t0) / 1000) + "s tu " +
+             String(info.download).split("/")[2]);
+    } catch (e) {
+      report("err: " + (e.message || e) + " :: " + (e.name || ""));
+    }
+  }, 15000);
+})();
