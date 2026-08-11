@@ -28,7 +28,9 @@ var hMailComposeAI = {
       id: "reply",
       label: "Soạn thư trả lời",
       scope: "both",
-      prompt: "Soạn một thư trả lời lịch sự, chuyên nghiệp bằng tiếng Việt. " +
+      prompt: "Soạn một thư trả lời lịch sự, chuyên nghiệp. Viết BẰNG ĐÚNG " +
+              "NGÔN NGỮ CỦA THƯ ĐƯỢC TRẢ LỜI (thư tiếng Anh thì trả lời " +
+              "tiếng Anh…), trừ khi người dùng yêu cầu ngôn ngữ khác. " +
               "Chỉ trả về nội dung thư, không thêm lời dẫn, không thêm tiêu " +
               "đề. Nếu người dùng đã viết dở thì tiếp tục ý của họ.",
     },
@@ -39,7 +41,8 @@ var hMailComposeAI = {
       quick: true,
       prompt: "Viết đúng 3 câu trả lời ngắn khác nhau cho thư này, mỗi câu " +
               "một dòng, bắt đầu bằng dấu gạch ngang. Mỗi câu tối đa 2 câu " +
-              "văn, lịch sự, tiếng Việt. Không giải thích gì thêm.",
+              "văn, lịch sự, viết BẰNG ĐÚNG NGÔN NGỮ CỦA THƯ ĐƯỢC TRẢ LỜI. " +
+              "Không giải thích gì thêm.",
     },
     {
       id: "polish",
@@ -369,8 +372,29 @@ var hMailComposeAI = {
       }]);
       this.show(win, reply, !!action.quick);
       this.notify(win, hMailAI.usageLine());
+      // Đang trả lời một thư có thật: lượt soạn hộ này ghi vào lịch sử
+      // hMail AI của chính thư đó — panel bên khung đọc kể lại được.
+      const hdr = this.originalHdr(win);
+      if (hdr) {
+        hMailAI.logFeature?.(hdr,
+          "Soạn thảo trong thư trả lời: " +
+          (action.label || freeText || action.id), reply);
+      }
     } catch (e) {
       this.notify(win, "Lỗi: " + hMailAI.explain(e));
+    }
+  },
+
+  /** Thư gốc mà composer này đang trả lời/chuyển tiếp, nếu có. */
+  originalHdr(win) {
+    try {
+      const uri = win.gMsgCompose?.originalMsgURI;
+      if (!uri) {
+        return null;
+      }
+      return MailServices.messageServiceFromURI(uri).messageURIToMsgHdr(uri);
+    } catch (e) {
+      return null;
     }
   },
 

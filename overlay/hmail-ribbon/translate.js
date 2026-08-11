@@ -351,6 +351,10 @@ var hMailTranslate = {
           }]);
         }
         this.remember(key, stored);
+        // Để lại vết trong hMail AI của thư này: mở panel là biết thư đã
+        // được dịch và đọc lại được bản dịch.
+        hMailAI.logFeature?.(hdr, `Dịch thư này sang ${lang.label}`,
+          Array.isArray(stored) ? stored.join("\n") : stored);
       } catch (e) {
         this.status(win, "Không dịch được: " + hMailAI.explain(e));
         return;

@@ -2656,7 +2656,8 @@ select.hmail-ai-field,
 
 .hmail-quickreply-studio-row {
     display: flex;
-    align-items: center;
+    /* Ô yêu cầu tự giãn chiều cao: nút Viết bám đáy thay vì trôi giữa. */
+    align-items: flex-end;
     gap: 8px;
 }
 

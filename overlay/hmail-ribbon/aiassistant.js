@@ -38,6 +38,11 @@ var hMailAI = {
   SYSTEM_PROMPT:
     "Bạn là trợ lý email chuyên nghiệp tích hợp trong hMail. Nguyên tắc:\n" +
     "- Luôn trả lời bằng TIẾNG VIỆT, chính xác, ngắn gọn, đúng trọng tâm.\n" +
+    "- NGOẠI LỆ khi được nhờ SOẠN NỘI DUNG THƯ (trả lời, viết hộ): viết " +
+    "bằng đúng ngôn ngữ của thư gốc trừ khi người dùng chỉ định ngôn ngữ " +
+    "khác — quy tắc tiếng Việt ở trên chỉ áp dụng cho phần trao đổi với " +
+    "người dùng, không áp cho nội dung thư soạn hộ. Tương tự khi được nhờ " +
+    "DỊCH: kết quả phải bằng ngôn ngữ đích được yêu cầu.\n" +
     "- Viết tiếng Việt CÓ DẤU đầy đủ, đúng chính tả (\"đơn hàng\", không " +
     "phải \"don hang\"). Tuyệt đối không trả lời bằng tiếng Việt không dấu, " +
     "kể cả khi thư gốc viết không dấu.\n" +
@@ -643,6 +648,43 @@ var hMailAI = {
       convo.turns = convo.turns.slice(-this.MAX_HISTORY_MESSAGES);
     }
     await this.saveHistory();
+  },
+
+  /**
+   * Các tính năng NGOÀI panel (dịch thư, trả lời nhanh, soạn hộ trong
+   * composer…) cũng phải để lại vết trong hMail AI của đúng thư đó — mở
+   * panel là thấy lại thư này đã được AI làm gì, đọc lại được kết quả.
+   * Ghi vào lịch sử chung rồi vẽ lại panel nào đang mở đúng thư.
+   */
+  async logFeature(hdr, userText, assistantText) {
+    try {
+      if (!hdr || !userText) {
+        return;
+      }
+      // Đọc lại file trước khi ghi: mỗi cửa sổ giữ một bản cache của cùng
+      // một file lịch sử — không đọc lại là cửa sổ này đè mất lượt cửa sổ
+      // kia vừa ghi (composer và 3-pane là hai cửa sổ khác nhau).
+      this._history = null;
+      await this.remember(hdr, "user", String(userText).slice(0, 2000));
+      if (assistantText) {
+        await this.remember(hdr, "assistant",
+                            String(assistantText).slice(0, 8000));
+      }
+      for (const type of ["mail:3pane", "mail:messageWindow"]) {
+        const win = Services.wm.getMostRecentWindow(type);
+        const ai = win?.hMailAI;
+        try {
+          const current = ai?.selectedMessage?.(win);
+          if (current && ai.messageKey(current) === this.messageKey(hdr) &&
+              win.document.getElementById("hmail-ai-log")) {
+            ai._history = null;
+            ai.restore(win);
+          }
+        } catch (e) {}
+      }
+    } catch (e) {
+      Cu.reportError("hMail AI logFeature failed: " + e);
+    }
   },
 
   async forget(hdr) {

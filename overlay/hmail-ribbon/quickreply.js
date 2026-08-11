@@ -475,6 +475,36 @@ var hMailQuickReply = {
   },
 
   /**
+   * Số người nhận KHÁC trong thư — ngoài người gửi và ngoài chính mình.
+   * Lớn hơn 0 nghĩa là trả lời riêng người gửi sẽ bỏ sót người khác.
+   */
+  otherRecipients(hdr) {
+    try {
+      const mine = new Set();
+      for (const identity of MailServices.accounts.allIdentities) {
+        const email = (identity.email || "").trim().toLowerCase();
+        if (email) {
+          mine.add(email);
+        }
+      }
+      const sender = /[^\s<>,"']+@[^\s<>,"']+/
+        .exec(hdr.mime2DecodedAuthor || "")?.[0]?.toLowerCase();
+      const raw = [hdr.mime2DecodedRecipients, hdr.ccList]
+        .filter(Boolean).join(", ");
+      const addrs = new Set();
+      for (const m of raw.matchAll(/[^\s<>,"']+@[^\s<>,"']+/g)) {
+        const addr = m[0].toLowerCase();
+        if (!mine.has(addr) && addr !== sender) {
+          addrs.add(addr);
+        }
+      }
+      return addrs.size;
+    } catch (e) {
+      return 0;
+    }
+  },
+
+  /**
    * "Nhờ AI viết" — a floating studio above the bar. The one-shot version
    * dropped its draft straight into the reply box, and that was the end of
    * the conversation: no way to ask for a rewrite, a different tone, or
@@ -498,6 +528,12 @@ var hMailQuickReply = {
     const ask = el("textarea", "hmail-quickreply-studio-ask");
     ask.rows = 1;
     ask.placeholder = "Yêu cầu cho AI… (Enter để gửi)";
+    // Ô yêu cầu tự giãn theo nội dung — gõ dài không phải đọc qua khe
+    // một dòng.
+    ask.addEventListener("input", () => {
+      ask.style.height = "auto";
+      ask.style.height = Math.min(ask.scrollHeight, 150) + "px";
+    });
     const go = el("button", "hmail-quickreply-studio-go", "Viết");
 
     const actions = el("div", "hmail-quickreply-studio-actions");
@@ -527,7 +563,10 @@ var hMailQuickReply = {
           turns.push({
             role: "user",
             text: "Đây là email cần trả lời:\n---\n" + text + "\n---\n" +
-                  "Soạn nội dung thư trả lời ngắn gọn, lịch sự. Chỉ trả về " +
+                  "Soạn nội dung thư trả lời ngắn gọn, lịch sự. Trả lời " +
+                  "BẰNG ĐÚNG NGÔN NGỮ CỦA THƯ GỐC (thư tiếng Anh thì trả " +
+                  "lời tiếng Anh, thư tiếng Việt thì tiếng Việt…), trừ khi " +
+                  "tôi yêu cầu ngôn ngữ khác. Chỉ trả về " +
                   "nội dung thư, không lời dẫn, không chào ký tên." +
                   (wish ? "\nYêu cầu của tôi: " + wish : ""),
           });
@@ -547,6 +586,10 @@ var hMailQuickReply = {
         ask.value = "";
         go.textContent = "Viết lại";
         this.say(win, hMailAI.usageLine());
+        // Lượt nhờ-AI-viết này thuộc về thư đang trả lời — ghi vào lịch
+        // sử hMail AI của thư để panel kể lại được.
+        hMailAI.logFeature?.(hdr,
+          "Nhờ AI viết trả lời" + (wish ? ": " + wish : ""), draftText);
       } catch (e) {
         out.textContent = "Lỗi: " + hMailAI.explain(e);
       } finally {
@@ -721,6 +764,42 @@ var hMailQuickReply = {
     if (!identity) {
       this.say(win, "Chưa có tài khoản để gửi.");
       return;
+    }
+
+    // Thư có nhiều người nhận mà đang gửi riêng người gửi: hỏi một câu —
+    // quên bật Trả lời tất cả là cả nhóm bị bỏ sót khỏi cuộc trao đổi.
+    if (!replyAll) {
+      let warnPref = true;
+      try {
+        warnPref = Services.prefs.getBoolPref("hmail.quickreply.warnReplyAll");
+      } catch (e) {}
+      const others = this.otherRecipients(hdr);
+      if (warnPref && others >= 1) {
+        const flags = Services.prompt.BUTTON_POS_0 *
+            Services.prompt.BUTTON_TITLE_IS_STRING +
+          Services.prompt.BUTTON_POS_1 *
+            Services.prompt.BUTTON_TITLE_IS_STRING +
+          Services.prompt.BUTTON_POS_2 * Services.prompt.BUTTON_TITLE_CANCEL;
+        const check = { value: false };
+        const pick = Services.prompt.confirmEx(win, "Trả lời nhanh",
+          `Ngoài người gửi, thư này còn ${others} người nhận khác — bạn ` +
+          "đang trả lời RIÊNG người gửi.\n\nGửi cho ai?",
+          flags, "Trả lời tất cả", "Chỉ người gửi", null,
+          "Không hỏi lại", check);
+        if (check.value) {
+          try {
+            Services.prefs.setBoolPref("hmail.quickreply.warnReplyAll",
+                                       false);
+          } catch (e) {}
+        }
+        if (pick === 2) {
+          this.say(win, "");
+          return;
+        }
+        if (pick === 0) {
+          replyAll = true;
+        }
+      }
     }
 
     this.say(win, "Đang gửi…");
