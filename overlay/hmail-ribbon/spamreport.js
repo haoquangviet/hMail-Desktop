@@ -675,6 +675,160 @@ var hMailSpam = {
     }
   },
 
+  // ------------------------------------------------ tự lấy mã xác thực
+  // Mã 6 số được dịch vụ gửi tới CHÍNH hộp thư mà hMail đang quản — vậy
+  // app tự canh thư đến, móc mã và xác nhận hộ; người dùng chỉ việc nhìn.
+
+  verifyWatcher: null,
+
+  stopVerifyWatch() {
+    if (this.verifyWatcher) {
+      try {
+        MailServices.mfn.removeListener(this.verifyWatcher);
+      } catch (e) {}
+      this.verifyWatcher = null;
+    }
+  },
+
+  /** Thư này có dáng thư gửi mã của dịch vụ lọc cho đúng địa chỉ không? */
+  looksLikeVerifyMail(hdr, email) {
+    try {
+      const account = MailServices.accounts
+        .findAccountForServer(hdr.folder.server);
+      const owner = (account?.defaultIdentity?.email || "")
+        .trim().toLowerCase();
+      if (owner !== email) {
+        return false;
+      }
+      // Chỉ thư mới trong 15 phút — mã cũ hết giá trị, đỡ vớ nhầm.
+      if (Date.now() / 1000 - hdr.dateInSeconds > 15 * 60) {
+        return false;
+      }
+      const hay = ((hdr.mime2DecodedAuthor || "") + " " +
+                   (hdr.mime2DecodedSubject || "")).toLowerCase();
+      let base = "";
+      try {
+        base = new URL(this.serverUrl()).hostname.toLowerCase()
+          .split(".").slice(-2).join(".");
+      } catch (e) {}
+      // Chặt chẽ: đúng miền dịch vụ, hoặc từ khoá đặc thù của thư gửi mã
+      // — KHÔNG dùng chữ "spam" trần, hộp thư báo cáo spam toàn thư như thế.
+      return (base && hay.includes(base)) ||
+        /verif|x[áa]c th[ựu]c|m[ãa] x[áa]c|spam-report|quarantine/.test(hay);
+    } catch (e) {
+      return false;
+    }
+  },
+
+  /** Mã 6 số trong thư: tiêu đề trước, rồi thân (kể cả phần base64). */
+  async codeFromMessage(hdr) {
+    const inText = text => {
+      const m = /(?:^|\D)(\d{6})(?:\D|$)/.exec(text || "");
+      return m ? m[1] : "";
+    };
+    let code = inText(hdr.mime2DecodedSubject);
+    if (code) {
+      return code;
+    }
+    try {
+      const raw = await this.rawMessage(hdr);
+      const cut = raw.search(/\r?\n\r?\n/);
+      const body = cut >= 0 ? raw.slice(cut) : raw;
+      code = inText(body);
+      if (code) {
+        return code;
+      }
+      // Thân mã hoá base64: giải từng khối rồi tìm tiếp.
+      for (const block of body.match(/(?:[A-Za-z0-9+/]{40,}=*\s*){2,}/g) ||
+                          []) {
+        try {
+          code = inText(atob(block.replace(/\s+/g, "")));
+          if (code) {
+            return code;
+          }
+        } catch (e) {}
+      }
+    } catch (e) {}
+    return "";
+  },
+
+  watchVerifyCode(win, email, apply) {
+    this.stopVerifyWatch();
+    const self = this;
+    let done = false;
+    const tryMessage = async hdr => {
+      if (done || !self.looksLikeVerifyMail(hdr, email)) {
+        return;
+      }
+      const code = await self.codeFromMessage(hdr);
+      if (!done && code) {
+        done = true;
+        self.stopVerifyWatch();
+        apply(code);
+      }
+    };
+
+    // Thư có thể ĐÃ tới trước khi màn này mở: soi các thư mới nhất trong
+    // Hộp thư đến và Thư rác của đúng tài khoản.
+    try {
+      for (const account of MailServices.accounts.accounts) {
+        const owner = (account.defaultIdentity?.email || "")
+          .trim().toLowerCase();
+        if (owner !== email) {
+          continue;
+        }
+        const root = account.incomingServer?.rootFolder;
+        if (!root) {
+          continue;
+        }
+        for (const flag of [Ci.nsMsgFolderFlags.Inbox,
+                            Ci.nsMsgFolderFlags.Junk]) {
+          const folder = root.getFolderWithFlags(flag);
+          if (!folder) {
+            continue;
+          }
+          const db = folder.msgDatabase;
+          if (db.reverseEnumerateMessages) {
+            // Đi từ thư mới nhất, lùi quá 15 phút là dừng.
+            let checked = 0;
+            for (const hdr of db.reverseEnumerateMessages()) {
+              if (++checked > 80 ||
+                  Date.now() / 1000 - hdr.dateInSeconds > 15 * 60) {
+                break;
+              }
+              tryMessage(hdr);
+            }
+          } else if (folder.getTotalMessages(false) <= 2000) {
+            // Không có enumerator ngược: chỉ dám quét xuôi hộp thư nhỏ.
+            for (const hdr of folder.messages) {
+              if (Date.now() / 1000 - hdr.dateInSeconds <= 15 * 60) {
+                tryMessage(hdr);
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {}
+
+    // Và canh thư sắp tới trong 3 phút.
+    this.verifyWatcher = {
+      msgAdded(hdr) {
+        tryMessage(hdr);
+      },
+    };
+    try {
+      MailServices.mfn.addListener(this.verifyWatcher,
+        Ci.nsIMsgFolderNotificationService.msgAdded);
+    } catch (e) {
+      this.verifyWatcher = null;
+    }
+    win.setTimeout(() => {
+      if (!done) {
+        self.stopVerifyWatch();
+      }
+    }, 3 * 60 * 1000);
+  },
+
   // ------------------------------------------------------------------ UI
 
   el(doc, tag, cls, text) {
@@ -800,7 +954,8 @@ var hMailSpam = {
 
     // stage === "verify"
     list.appendChild(el("p", "hmail-spam-note",
-      `Nhập mã 6 số vừa được gửi tới ${email}. Mã nằm trong hộp thư của bạn.`));
+      `Mã 6 số vừa được gửi tới ${email} — hMail đang canh hộp thư để tự ` +
+      "điền và xác nhận giúp bạn. Thư về chậm thì nhập tay cũng được."));
     const code = el("input", "hmail-spam-code");
     code.type = "text";
     code.inputMode = "numeric";
@@ -819,6 +974,7 @@ var hMailSpam = {
       this.notify(win, "Đang xác thực…");
       try {
         await this.Api.verifyConfirm(email, value);
+        this.stopVerifyWatch();
         this.setBusy(win, false);
         this.notify(win, "Đã xác thực.");
         this.refresh(win);
@@ -848,6 +1004,16 @@ var hMailSpam = {
 
     list.append(code, confirm, resend);
     code.focus();
+
+    // Tự canh hộp thư: thư chứa mã về là điền và xác nhận luôn.
+    this.watchVerifyCode(win, email, found => {
+      if (!doc.contains(code) || code.value.trim().length === 6) {
+        return;
+      }
+      code.value = found;
+      this.notify(win, "Đã tự lấy mã từ hộp thư — đang xác nhận…");
+      submit();
+    });
   },
 
   async refresh(win) {
@@ -1191,6 +1357,21 @@ var hMailSpam = {
         this.notify(win, "Phiên đã hết hạn, hãy đăng nhập lại.");
         return;
       }
+      // Không để khung xương đứng trơ: báo rõ và cho đường quay lại.
+      const list = doc.getElementById("hmail-spam-list");
+      if (list) {
+        list.textContent = "";
+        list.appendChild(this.el(doc, "p", "hmail-spam-note",
+          e.status === 404
+            ? "Máy chủ lọc chưa bật tính năng người gửi tin cậy — chờ " +
+              "bản cập nhật phía máy chủ rồi thử lại."
+            : "Không tải được danh sách: " + this.explain(e)));
+        const retry = this.el(doc, "button", "hmail-spam-btn", "Thử lại");
+        retry.addEventListener("click", () => this.showWhitelist(win));
+        const back = this.el(doc, "button", "hmail-spam-btn", "← Thư bị giữ");
+        back.addEventListener("click", () => this.refresh(win));
+        list.append(retry, back);
+      }
       this.notify(win, "Không tải được danh sách: " + this.explain(e));
       return;
     }
@@ -1390,7 +1571,9 @@ var hMailSpam = {
       steps.push("xac-thuc");
       const code = await waitFor(() => doc.querySelector(".hmail-spam-code"));
       code.value = "123456";
-      button("Xác nhận").click();
+      // Bộ tự lấy mã có thể đã xác nhận xong trước khi kịp bấm — nút
+      // không còn thì coi như đã qua bước này.
+      button("Xác nhận")?.click();
 
       steps.push("danh-sach");
       await waitFor(() => button("Nhận thư"));
