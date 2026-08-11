@@ -344,7 +344,7 @@ var hMailSpam = {
       case "email_not_verified":
         return "địa chỉ chưa được xác thực";
       case "step_up_required":
-        return "cần nhập lại mã xác thực";
+        return "phiên nhận thư của quản trị miền đã hết (5 phút) — cần mã mới";
       case "invalid_or_missing_token":
         return "phiên đăng nhập đã hết hạn";
       case "domain_not_allowed":
@@ -1054,7 +1054,20 @@ var hMailSpam = {
         this.stopVerifyWatch();
         this.setBusy(win, false);
         this.notify(win, "Đã xác thực.");
-        this.refresh(win);
+        // Có việc đang dở vì hết phiên (Nhận thư của quản trị miền):
+        // làm nốt luôn, người dùng không phải bấm lại.
+        const pending = this._pendingRelease;
+        this._pendingRelease = null;
+        if (pending && pending.email === email) {
+          const done = await this.release(
+            win, pending.email, pending.item, pending.row);
+          await this.refresh(win);
+          if (done) {
+            this.notify(win, "Đã xác thực và chuyển thư vào hộp thư của bạn.");
+          }
+        } else {
+          this.refresh(win);
+        }
       } catch (e) {
         this.setBusy(win, false);
         confirm.disabled = false;
@@ -1174,7 +1187,12 @@ var hMailSpam = {
     this.notify(win,
       (want ? `${items.length}/${all.length} thư trong trang` :
               `${total} thư`) +
-      ` · ${data?.since_days || "?"} ngày`);
+      ` · ${data?.since_days || "?"} ngày` +
+      // Quản trị miền: báo trước phiên nhận thư đã hết để khỏi bất ngờ
+      // khi bấm Nhận thư bị hỏi mã (mã sẽ được tự điền).
+      (data?.release_step_up && data?.release_window_valid === false
+        ? " · phiên nhận thư đã hết — bấm Nhận thư sẽ xác thực lại tự động"
+        : ""));
 
     if (!items.length) {
       list.appendChild(el("p", "hmail-spam-note",
@@ -1292,6 +1310,16 @@ var hMailSpam = {
         } catch (e) {
           release.disabled = false;
           release.textContent = "Nhận thư";
+          if (e.code === "step_up_required") {
+            this._pendingRelease = { email, item, row };
+            try {
+              await this.Api.verifyRequest(email);
+            } catch (e2) {}
+            this.showAuth(win, email, "verify");
+            this.notify(win, "Phiên nhận thư của quản trị miền đã hết " +
+              "(5 phút) — đã gửi mã mới, hMail sẽ tự điền và nhận thư giúp.");
+            return;
+          }
           this.notify(win, "Không nhận được thư: " + this.explain(e));
         }
       });
@@ -1453,7 +1481,7 @@ var hMailSpam = {
   async release(win, email, item, row) {
     this.notify(win, "Đang nhận thư…");
     this.setBusy(win, true);
-    const button = row.querySelector(".hmail-spam-actions .primary");
+    const button = row?.querySelector?.(".hmail-spam-actions .primary");
     if (button) {
       button.disabled = true;
       button.textContent = "Đang nhận…";
@@ -1462,9 +1490,12 @@ var hMailSpam = {
       await this.Api.release(email, item.id);
       this.setBusy(win, false);
       this.notify(win, "Đã chuyển thư vào hộp thư của bạn.");
-      row.dataset.status = "delivered";
+      item.status = "delivered";
+      if (row?.dataset) {
+        row.dataset.status = "delivered";
+      }
       button?.remove();
-      return;
+      return true;
     } catch (e) {
       this.setBusy(win, false);
       if (button) {
@@ -1472,14 +1503,20 @@ var hMailSpam = {
         button.textContent = "Nhận thư";
       }
       if (e.code === "step_up_required") {
+        // Quản trị miền: máy chủ chỉ cho nhận thư trong 5 phút sau lần
+        // xác thực gần nhất. Ghi nhớ việc đang dở — xác thực xong là tự
+        // nhận tiếp, không bắt bấm lại; mã thì bộ canh hộp thư tự điền.
+        this._pendingRelease = { email, item, row };
         try {
           await this.Api.verifyRequest(email);
         } catch (e2) {}
         this.showAuth(win, email, "verify");
-        this.notify(win, "Cần xác thực lại — đã gửi mã.");
-        return;
+        this.notify(win, "Phiên nhận thư của quản trị miền đã hết (5 phút)" +
+          " — đã gửi mã mới, hMail sẽ tự điền và nhận thư giúp bạn.");
+        return false;
       }
       this.notify(win, "Không nhận được thư: " + this.explain(e));
+      return false;
     }
   },
 
@@ -1959,6 +1996,26 @@ var hMailSpam = {
       steps.push("quay-lai");
       button("← Quay lại").click();
       await waitFor(() => button("Nhận thư"));
+
+      // Mock trả step_up_required cho lần Nhận thư đầu (giả lập phiên
+      // quản trị miền hết hạn): app phải hỏi mã rồi TỰ nhận tiếp.
+      steps.push("nhan-thu-het-phien");
+      button("Nhận thư").click();
+      // Hai đường cùng về đích: bộ canh hộp thư có thể tự điền mã và
+      // nhận thư xong trước khi test kịp thấy ô nhập — chỉ cần đích đúng.
+      await waitFor(() => {
+        const status = doc.getElementById("hmail-spam-status")
+          ?.textContent || "";
+        if (status.includes("chuyển thư vào hộp thư")) {
+          return true;
+        }
+        const code2 = doc.querySelector(".hmail-spam-code");
+        if (code2 && code2.value.trim().length !== 6) {
+          code2.value = "123456";
+          button("Xác nhận")?.click();
+        }
+        return false;
+      }, 30000);
 
       steps.push("mo-whitelist");
       button("Người gửi tin cậy").click();
