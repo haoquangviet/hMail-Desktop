@@ -3113,11 +3113,16 @@ select.hmail-ai-field,
     overflow: hidden;
 }
 
+/* flex-basis 0 + height 0 là BẮT BUỘC (cùng lý do .hmail-import): vbox của
+   tab nằm trong deck lấy chiều cao theo tab cao nhất — để panel này phồng
+   theo nội dung (100 dòng ≈ 2700px) là CẢ ỨNG DỤNG bị kéo cao hơn cửa sổ,
+   thanh cuộn danh sách thư mất mũi tên dưới vì đáy nằm ngoài màn hình. */
 .hmail-spam-tab .hmail-spam {
     display: flex;
     flex-direction: column;
-    flex: 1 1 auto;
-    min-height: 0;
+    flex: 1 1 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
     max-width: 1000px;
     width: 100%;
     padding-inline: 16px;
@@ -3250,36 +3255,46 @@ select.hmail-ai-field,
     100% { background-position: 0 0; }
 }
 
+/* Vùng danh sách nền xám trắng; hàng là dải trắng phẳng tuyệt đối — không
+   viền, không bo góc — tách nhau bằng chính nền xám lộ ra giữa các hàng. */
 .hmail-spam-list {
     flex: 1 1 auto;
     overflow-y: auto;
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 6px 8px 12px;
+    gap: 2px;
+    padding: 8px;
+    background-color: color-mix(in srgb, CanvasText 5%, Canvas);
 }
 
 .hmail-spam-row {
-    border: 1px solid color-mix(in srgb, CanvasText 10%, transparent);
-    border-inline-start: 3px solid color-mix(in srgb, CanvasText 20%, transparent);
-    border-radius: 4px;
-    padding: 6px 8px;
     display: flex;
-    flex-direction: column;
-    gap: 3px;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 0;
+    background-color: Canvas;
 }
 
-.hmail-spam-row[data-status="quarantined"] { border-inline-start-color: #C8781A; }
-.hmail-spam-row[data-status="delivered"]   { border-inline-start-color: #2E7D32; }
-.hmail-spam-row[data-status="rejected"],
-.hmail-spam-row[data-status="bounced"]     { border-inline-start-color: #9E9E9E; }
+.hmail-spam-row:hover {
+    background-color: color-mix(in srgb, var(--hmail-accent) 6%, Canvas);
+}
+
+.hmail-spam-row-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
 
 .hmail-spam-row-head {
     display: flex;
     justify-content: space-between;
     gap: 8px;
-    font-size: 0.82rem;
+    font-size: 0.8rem;
 }
 
 .hmail-spam-from {
@@ -3289,24 +3304,49 @@ select.hmail-ai-field,
     white-space: nowrap;
 }
 
-.hmail-spam-time { flex: none; opacity: 0.6; }
+.hmail-spam-time { flex: none; opacity: 0.6; font-size: 0.75rem; }
 
 .hmail-spam-subject {
-    font-size: 0.88rem;
+    font-size: 0.85rem;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .hmail-spam-meta {
-    font-size: 0.76rem;
+    font-size: 0.74rem;
     opacity: 0.6;
     white-space: pre-line;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .hmail-spam-actions {
     display: flex;
     gap: 6px;
-    margin-top: 2px;
+    flex: none;
+    align-items: center;
+}
+
+.hmail-spam-row .hmail-spam-btn {
+    font-size: 0.78rem;
+    padding: 3px 8px;
+}
+
+/* Thanh phân trang dưới cùng. */
+.hmail-spam-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 6px 8px;
+    border-top: 1px solid color-mix(in srgb, CanvasText 10%, transparent);
+}
+
+.hmail-spam-page-info {
+    font-size: 0.8rem;
+    opacity: 0.7;
+    font-variant-numeric: tabular-nums;
 }
 
 .hmail-spam-note {

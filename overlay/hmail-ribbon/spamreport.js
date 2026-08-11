@@ -859,7 +859,10 @@ var hMailSpam = {
       select.appendChild(opt);
     }
     select.value = this.currentIdentity(win);
-    select.addEventListener("change", () => this.refresh(win));
+    select.addEventListener("change", () => {
+      this._page = 1;
+      this.refresh(win);
+    });
     bar.appendChild(select);
     root.appendChild(bar);
 
@@ -879,8 +882,25 @@ var hMailSpam = {
     range.value = String(this.sinceDays());
     range.addEventListener("change", () => {
       Services.prefs.setIntPref("hmail.spam.sinceDays", parseInt(range.value, 10));
+      this._page = 1;
       this.refresh(win);
     });
+
+    // Lọc theo trạng thái — áp lên trang đang xem, không tốn lượt gọi
+    // máy chủ (qlist bị giới hạn 20 lần/phút).
+    const filter = el("select", "hmail-spam-range");
+    filter.id = "hmail-spam-filter";
+    for (const [v, label] of [["", "Tất cả trạng thái"],
+                              ["quarantined", "Đang giữ"],
+                              ["delivered", "Đã nhận"],
+                              ["rejected", "Bị từ chối"],
+                              ["bounced", "Trả lại"],
+                              ["deferred", "Hoãn"]]) {
+      const opt = el("option", null, label);
+      opt.value = v;
+      filter.appendChild(opt);
+    }
+    filter.addEventListener("change", () => this.renderCached(win));
 
     const search = el("input", "hmail-spam-search");
     search.id = "hmail-spam-search";
@@ -890,6 +910,7 @@ var hMailSpam = {
     let timer = null;
     search.addEventListener("input", () => {
       win.clearTimeout(timer);
+      this._page = 1;
       timer = win.setTimeout(() => this.refresh(win), 500);
     });
 
@@ -897,7 +918,7 @@ var hMailSpam = {
     wlBtn.title = "Danh sách địa chỉ / tên miền không bao giờ bị giữ thư";
     wlBtn.addEventListener("click", () => this.showWhitelist(win));
 
-    tools.append(refreshBtn, range, search, wlBtn);
+    tools.append(refreshBtn, range, filter, search, wlBtn);
     root.appendChild(tools);
 
     const progress = el("div", "hmail-spam-progress");
@@ -912,7 +933,62 @@ var hMailSpam = {
     list.id = "hmail-spam-list";
     root.appendChild(list);
 
+    // Thanh phân trang — máy chủ trả total nên biết chính xác còn bao nhiêu.
+    const pager = el("div", "hmail-spam-pager");
+    pager.id = "hmail-spam-pager";
+    const prev = el("button", "hmail-spam-btn", "‹ Trước");
+    prev.id = "hmail-spam-prev";
+    prev.addEventListener("click", () => {
+      if (this._page > 1) {
+        this._page--;
+        this.refresh(win);
+      }
+    });
+    const info = el("span", "hmail-spam-page-info", "");
+    info.id = "hmail-spam-page-info";
+    const next = el("button", "hmail-spam-btn", "Sau ›");
+    next.id = "hmail-spam-next";
+    next.addEventListener("click", () => {
+      this._page++;
+      this.refresh(win);
+    });
+    pager.append(prev, info, next);
+    pager.hidden = true;
+    root.appendChild(pager);
+
     return root;
+  },
+
+  PER_PAGE: 50,
+  _page: 1,
+
+  /** Cập nhật thanh phân trang theo phản hồi mới nhất; null = giấu đi. */
+  setPager(win, data) {
+    const doc = win.document;
+    const pager = doc.getElementById("hmail-spam-pager");
+    if (!pager) {
+      return;
+    }
+    if (!data) {
+      pager.hidden = true;
+      return;
+    }
+    const total = data.total ?? (data.items || []).length;
+    const perPage = data.per_page || this.PER_PAGE;
+    const pages = Math.max(1, Math.ceil(total / perPage));
+    this._page = Math.min(this._page, pages);
+    doc.getElementById("hmail-spam-page-info").textContent =
+      `Trang ${this._page}/${pages} · ${total} thư`;
+    doc.getElementById("hmail-spam-prev").disabled = this._page <= 1;
+    doc.getElementById("hmail-spam-next").disabled = this._page >= pages;
+    pager.hidden = pages <= 1;
+  },
+
+  /** Vẽ lại danh sách từ dữ liệu đã tải (đổi bộ lọc không gọi lại máy chủ). */
+  renderCached(win) {
+    if (this._lastRender) {
+      this.renderList(win, this._lastRender.email, this._lastRender.data);
+    }
   },
 
   /** Sign-in / verification form, shown in place of the list. */
@@ -924,6 +1000,7 @@ var hMailSpam = {
       return;
     }
     list.textContent = "";
+    this.setPager(win, null);
 
     if (stage === "register") {
       list.appendChild(el("p", "hmail-spam-note",
@@ -1036,8 +1113,8 @@ var hMailSpam = {
     const search = doc.getElementById("hmail-spam-search");
     const query = {
       since_days: this.sinceDays(),
-      page: 1,
-      per_page: 100,
+      page: this._page,
+      per_page: this.PER_PAGE,
     };
     const q = (search?.value || "").trim();
     if (q.length >= 2) {
@@ -1078,6 +1155,7 @@ var hMailSpam = {
     }
 
     this.setBusy(win, false);
+    this._lastRender = { email, data };
     this.renderList(win, email, data);
   },
 
@@ -1086,12 +1164,22 @@ var hMailSpam = {
     const el = (t, c, x) => this.el(doc, t, c, x);
     const list = doc.getElementById("hmail-spam-list");
     list.textContent = "";
+    this.setPager(win, data);
 
-    const items = data?.items || [];
-    this.notify(win, `${items.length} thư (${data?.since_days || "?"} ngày)`);
+    const all = data?.items || [];
+    const want = doc.getElementById("hmail-spam-filter")?.value || "";
+    const items = want ? all.filter(i => (i.status || "other") === want)
+                       : all;
+    const total = data?.total ?? all.length;
+    this.notify(win,
+      (want ? `${items.length}/${all.length} thư trong trang` :
+              `${total} thư`) +
+      ` · ${data?.since_days || "?"} ngày`);
 
     if (!items.length) {
-      list.appendChild(el("p", "hmail-spam-note", "Không có thư nào bị giữ."));
+      list.appendChild(el("p", "hmail-spam-note",
+        want ? "Trang này không có thư ở trạng thái đã lọc."
+             : "Không có thư nào bị giữ."));
       return;
     }
 
@@ -1099,22 +1187,25 @@ var hMailSpam = {
       const row = el("div", "hmail-spam-row");
       row.dataset.status = item.status || "other";
 
+      // Bố cục phẳng: khối thông tin bên trái, cụm nút gọn bên phải.
+      const main = el("div", "hmail-spam-row-main");
       const head = el("div", "hmail-spam-row-head");
       head.append(
         el("span", "hmail-spam-from", item.from || item.envelope_sender || "?"),
         el("span", "hmail-spam-time",
            new Date((item.time || 0) * 1000).toLocaleString())
       );
-
-      const subject = el("div", "hmail-spam-subject", item.subject || "(không tiêu đề)");
+      const subject = el("div", "hmail-spam-subject",
+        item.subject || "(không tiêu đề)");
       const meta = el("div", "hmail-spam-meta",
         `${item.receiver || ""} · ${Math.round((item.bytes || 0) / 1024)} KB` +
         (item.spamlevel != null ? ` · điểm ${item.spamlevel}` : "") +
         ` · ${this.statusLabel(item.status)}`);
+      main.append(head, subject, meta);
 
       const actions = el("div", "hmail-spam-actions");
       const view = el("button", "hmail-spam-btn", "Xem");
-      view.addEventListener("click", () => this.preview(win, email, item));
+      view.addEventListener("click", () => this.preview(win, email, item, row));
       actions.appendChild(view);
 
       // Only genuinely held mail can be released; tracker rows have no body.
@@ -1135,7 +1226,7 @@ var hMailSpam = {
         actions.appendChild(trust);
       }
 
-      row.append(head, subject, meta, actions);
+      row.append(main, actions);
       list.appendChild(row);
     }
   },
@@ -1151,7 +1242,7 @@ var hMailSpam = {
     }
   },
 
-  async preview(win, email, item) {
+  async preview(win, email, item, row) {
     this.notify(win, "Đang tải nội dung…");
     this.setBusy(win, true);
     this.showSkeleton(win, 6);
@@ -1166,10 +1257,10 @@ var hMailSpam = {
     }
     this.setBusy(win, false);
     this.notify(win, "");
-    this.showPreview(win, data);
+    this.showPreview(win, email, data, item, row);
   },
 
-  showPreview(win, data) {
+  showPreview(win, email, data, item, row) {
     const doc = win.document;
     const el = (t, c, x) => this.el(doc, t, c, x);
     const list = doc.getElementById("hmail-spam-list");
@@ -1177,14 +1268,55 @@ var hMailSpam = {
       return;
     }
     list.textContent = "";
+    this.setPager(win, null);
 
+    // Thanh trên cùng: quay lại + hành động ngay tại chỗ, khỏi lộn về
+    // danh sách chỉ để bấm Nhận thư.
+    const top = el("div", "hmail-spam-actions");
     const back = el("button", "hmail-spam-btn", "← Quay lại");
     back.addEventListener("click", () => this.refresh(win));
-    list.appendChild(back);
+    top.appendChild(back);
+    if (item?.status === "quarantined") {
+      const release = el("button", "hmail-spam-btn primary", "Nhận thư");
+      release.addEventListener("click", async () => {
+        release.disabled = true;
+        release.textContent = "Đang nhận…";
+        try {
+          await this.Api.release(email, item.id);
+          this.notify(win, "Đã chuyển thư vào hộp thư của bạn.");
+          item.status = "delivered";
+          if (row) {
+            row.dataset.status = "delivered";
+          }
+          release.remove();
+        } catch (e) {
+          release.disabled = false;
+          release.textContent = "Nhận thư";
+          this.notify(win, "Không nhận được thư: " + this.explain(e));
+        }
+      });
+      top.appendChild(release);
+    }
+    if (item && this.senderAddress(item)) {
+      const trust = el("button", "hmail-spam-btn", "Tin cậy");
+      trust.addEventListener("click", () =>
+        this.trustSender(win, email, item, row || top));
+      top.appendChild(trust);
+    }
+    list.appendChild(top);
 
     list.appendChild(el("div", "hmail-spam-subject", data.subject || "(không tiêu đề)"));
     list.appendChild(el("div", "hmail-spam-meta",
-      `Từ: ${data.from || "?"}\nĐến: ${data.receiver || "?"}`));
+      `Từ: ${data.from || "?"}\nĐến: ${data.receiver || "?"}` +
+      (data.spamlevel != null ? `\nĐiểm spam: ${data.spamlevel}` : "")));
+
+    const body = String(data.body || "");
+    if (!body.trim()) {
+      list.appendChild(el("p", "hmail-spam-note",
+        "Thư không có phần nội dung hiển thị được — chỉ có phần đầu thư " +
+        "ở trên. Bấm Nhận thư nếu muốn đọc trọn vẹn trong hộp thư."));
+      return;
+    }
 
     // The body is attacker-controlled. Render it in a content browser with a
     // restrictive sandbox rather than in this chrome document, and never as
@@ -1198,7 +1330,6 @@ var hMailSpam = {
     frame.className = "hmail-spam-preview";
     list.appendChild(frame);
 
-    const body = String(data.body || "");
     const html = data.body_is_html
       ? body
       : `<pre style="white-space:pre-wrap;font:13px sans-serif">${
@@ -1212,11 +1343,16 @@ var hMailSpam = {
 
     win.setTimeout(() => {
       try {
+        // data: URI cấp cao nhất bị Gecko CHẶN khi principal kích hoạt là
+        // content/null (security.data_uri.block_toplevel_data_uri_navigations)
+        // — chính là lý do khung xem trước từng trắng trơn. Load bằng system
+        // principal thì được phép; document đích vẫn mang origin mồ côi của
+        // data: URI, cộng CSP default-src 'none' + máy chủ đã khử script.
         frame.fixupAndLoadURIString(
           "data:text/html;charset=utf-8," + encodeURIComponent(page),
           {
             triggeringPrincipal:
-              Services.scriptSecurityManager.createNullPrincipal({}),
+              Services.scriptSecurityManager.getSystemPrincipal(),
           });
       } catch (e) {
         Cu.reportError("hMail spam preview failed: " + e);
@@ -1387,6 +1523,7 @@ var hMailSpam = {
       return;
     }
     list.textContent = "";
+    this.setPager(win, null);
 
     const back = el("button", "hmail-spam-btn", "← Thư bị giữ");
     back.addEventListener("click", () => this.refresh(win));
@@ -1462,6 +1599,7 @@ var hMailSpam = {
     for (const item of items) {
       const row = el("div", "hmail-spam-row");
       row.dataset.id = item.id;
+      const main = el("div", "hmail-spam-row-main");
       const head = el("div", "hmail-spam-row-head");
       head.append(
         el("span", "hmail-spam-from", item.value),
@@ -1471,6 +1609,7 @@ var hMailSpam = {
       const meta = el("div", "hmail-spam-meta",
         (item.type === "domain" ? "Cả tên miền" : "Địa chỉ email") +
         " · " + this.wlStatusLabel(item.pmg_status));
+      main.append(head, meta);
 
       const actions = el("div", "hmail-spam-actions");
       const remove = el("button", "hmail-spam-btn", "Xoá");
@@ -1494,7 +1633,7 @@ var hMailSpam = {
       });
       actions.appendChild(remove);
 
-      row.append(head, meta, actions);
+      row.append(main, actions);
       list.appendChild(row);
     }
   },
@@ -1512,6 +1651,58 @@ var hMailSpam = {
     }
   },
 };
+
+// ---------------------------------------------------------------------------
+// Đầu dò layout (pref hmail.debug.layout = "run"): đo chiều cao thật của
+// từng tầng quanh danh sách thư — tìm tầng nào tràn khỏi cửa sổ làm thanh
+// cuộn bị cắt mất đáy. Kết quả JSON ghi ngược vào pref.
+(function hMailLayoutProbe() {
+  let mode = "";
+  try {
+    mode = Services.prefs.getCharPref("hmail.debug.layout", "");
+  } catch (e) {}
+  if (mode !== "run") {
+    return;
+  }
+  const report = text => {
+    try {
+      Services.prefs.setCharPref("hmail.debug.layout", text.slice(0, 900));
+      Services.prefs.savePrefFile(null);
+    } catch (e) {}
+  };
+  setTimeout(() => {
+    try {
+      const win = Services.wm.getMostRecentWindow("mail:3pane");
+      const doc = win.document;
+      const out = { win: [win.innerWidth, win.innerHeight] };
+      const box = (key, el) => {
+        if (el) {
+          const r = el.getBoundingClientRect();
+          out[key] = [Math.round(r.top), Math.round(r.bottom),
+                      Math.round(r.height)];
+        }
+      };
+      const tabmail = doc.getElementById("tabmail");
+      box("tabmail", tabmail);
+      box("ribbon", doc.querySelector(".hmail-ribbon, #hmail-ribbon"));
+      box("statusbar", doc.getElementById("status-bar"));
+      box("mailbox", doc.getElementById("messengerBox"));
+      const a3 = tabmail?.currentAbout3Pane;
+      if (a3) {
+        out.a3win = [a3.innerWidth, a3.innerHeight];
+        const ad = a3.document;
+        box("a3-threadPane", ad.getElementById("threadPane"));
+        box("a3-threadTree", ad.getElementById("threadTree"));
+        box("a3-treeParent", ad.getElementById("threadTree")?.parentElement);
+        box("a3-messagePane", ad.getElementById("messagePane"));
+        box("a3-body", ad.body);
+      }
+      report("ok: " + JSON.stringify(out));
+    } catch (e) {
+      report("err: " + e);
+    }
+  }, 15000);
+})();
 
 // ---------------------------------------------------------------------------
 // Tự kiểm luồng thư bị giữ + người gửi tin cậy (pref hmail.debug.spamtest =
@@ -1580,6 +1771,39 @@ var hMailSpam = {
       if (!button("Tin cậy")) {
         throw new Error("dòng thư bị giữ không có nút Tin cậy");
       }
+
+      steps.push("phan-trang");
+      await waitFor(() => !doc.getElementById("hmail-spam-pager").hidden);
+      doc.getElementById("hmail-spam-next").click();
+      await waitFor(() => doc.getElementById("hmail-spam-page-info")
+        .textContent.startsWith("Trang 2/"));
+      doc.getElementById("hmail-spam-prev").click();
+      await waitFor(() => doc.getElementById("hmail-spam-page-info")
+        .textContent.startsWith("Trang 1/"));
+
+      steps.push("loc-trang-thai");
+      const filter = doc.getElementById("hmail-spam-filter");
+      filter.value = "delivered";
+      filter.dispatchEvent(new win.Event("change"));
+      await waitFor(() => {
+        const rows = [...doc.querySelectorAll(
+          "#hmail-spam-list .hmail-spam-row")];
+        return rows.length &&
+          rows.every(r => r.dataset.status === "delivered");
+      });
+      filter.value = "";
+      filter.dispatchEvent(new win.Event("change"));
+      await waitFor(() => button("Nhận thư"));
+
+      steps.push("xem-truoc");
+      button("Xem").click();
+      await waitFor(() => {
+        const frame = doc.querySelector(".hmail-spam-preview");
+        return frame?.currentURI?.spec?.startsWith("data:text/html");
+      });
+      steps.push("quay-lai");
+      button("← Quay lại").click();
+      await waitFor(() => button("Nhận thư"));
 
       steps.push("mo-whitelist");
       button("Người gửi tin cậy").click();
