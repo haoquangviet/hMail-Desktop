@@ -33,15 +33,17 @@
   }
 
   /* Tables are the usual culprit: a fixed pixel width plus table-layout:fixed
-     makes the browser honour it whatever the window does. */
+     makes the browser honour it whatever the window does.
+     KHÔNG đè table-layout và KHÔNG word-break trên ô: word-break làm
+     min-content của ô còn 1 ký tự, cộng ép auto-layout là cột số tiền
+     trong biên lai bị xé dọc thành từng chữ số một. overflow-wrap thường
+     đủ: chỉ bẻ khi thật sự tràn, không phá bề rộng nội tại của cột. */
   table {
     max-width: 100% !important;
-    table-layout: auto !important;
   }
 
   td, th {
-    overflow-wrap: break-word !important;
-    word-break: break-word !important;
+    overflow-wrap: break-word;
   }
 
   /* Images scale down but never up, so a small logo stays small. */

@@ -80,8 +80,35 @@ var hMailSignature = {
       return;
     }
     const parsed = new win.DOMParser().parseFromString(html, "text/html");
+    this.sanitizeTree(parsed.body);
     for (const node of Array.from(parsed.body.childNodes)) {
       editor.appendChild(editor.ownerDocument.importNode(node, true));
+    }
+  },
+
+  /**
+   * Khử phần tử và thuộc tính thực thi được trước khi HTML bên ngoài đi
+   * vào editor. Editor sống trong DOCUMENT CHROME: <script> qua DOMParser
+   * vốn trơ vĩnh viễn, nhưng thuộc tính on* (onerror, onload…) hay
+   * javascript: trong href/src thì vẫn sống — một chữ ký dán từ clipboard
+   * mà mang onerror là mã lạ chạy với quyền chrome. Chữ ký hợp pháp không
+   * bao giờ cần những thứ này nên cắt thẳng tay.
+   */
+  sanitizeTree(root) {
+    for (const bad of root.querySelectorAll(
+      "script, iframe, frame, frameset, object, embed, link, meta, base")) {
+      bad.remove();
+    }
+    for (const node of root.querySelectorAll("*")) {
+      for (const attr of Array.from(node.attributes || [])) {
+        const name = attr.name.toLowerCase();
+        if (name.startsWith("on") ||
+            (/^(href|src|action|formaction|xlink:href)$/.test(name) &&
+             /^\s*(javascript|vbscript|data:text\/html)/i
+               .test(attr.value || ""))) {
+          node.removeAttribute(attr.name);
+        }
+      }
     }
   },
 
@@ -1073,6 +1100,7 @@ var hMailSignature = {
           const parsed = new win.DOMParser()
             .parseFromString(html, "text/html");
           this.stripComments(parsed.body);
+          this.sanitizeTree(parsed.body);
           doc.execCommand("insertHTML", false,
                           serializeNodes(parsed.body.childNodes));
         }
