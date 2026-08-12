@@ -28,6 +28,9 @@ var hMailBackground = {
         return;
       }
       win.addEventListener("close", event => this.onClose(win, event), true);
+      // "Thu nhỏ vào khay" của Thunderbird làm cửa sổ biến mất khỏi thanh
+      // tác vụ — ai bật (hay bật nhầm) mà không biết sẽ tưởng app mất.
+      win.addEventListener("sizemodechange", () => this.onSizeMode(win));
       this.syncTray(win);
       Services.prefs.addObserver(this.PREF, () => this.syncTray(win));
     } catch (e) {
@@ -119,6 +122,39 @@ var hMailBackground = {
     }
   },
 
+  /**
+   * Cửa sổ vừa bị thu nhỏ trong lúc "mail.minimizeToTray" đang bật: nó sẽ
+   * biến khỏi thanh tác vụ, chỉ còn biểu tượng nhỏ ở khay cạnh đồng hồ.
+   * Nói rõ MỘT LẦN — người bật nhầm sẽ biết app không hề mất và tắt ở đâu.
+   */
+  onSizeMode(win) {
+    try {
+      if (win.windowState !== win.STATE_MINIMIZED) {
+        return;
+      }
+      let toTray = false;
+      try {
+        toTray = Services.prefs.getBoolPref("mail.minimizeToTray");
+      } catch (e) {}
+      if (!toTray) {
+        return;
+      }
+      let shown = false;
+      try {
+        shown = Services.prefs.getBoolPref("hmail.tray.noticeShown");
+      } catch (e) {}
+      if (shown) {
+        return;
+      }
+      Services.prefs.setBoolPref("hmail.tray.noticeShown", true);
+      this.toast(win,
+        "hMail được thu vào khay hệ thống (biểu tượng cạnh đồng hồ) vì " +
+        "tuỳ chọn \"thu nhỏ vào khay\" đang bật. Nhấp biểu tượng ở khay " +
+        "để mở lại; muốn thu nhỏ nằm trên thanh tác vụ như thường thì tắt " +
+        "tuỳ chọn này trong Cài đặt ▸ Hệ thống tích hợp.");
+    } catch (e) {}
+  },
+
   /** Said once, the first time it happens, so nobody thinks hMail hung. */
   notice(win) {
     let shown = false;
@@ -132,9 +168,14 @@ var hMailBackground = {
       Services.prefs.setBoolPref(this.NOTICE_PREF, true);
     } catch (e) {}
 
-    const text = "hMail vẫn đang chạy để nhận thư mới. Mở lại từ thanh tác " +
-                 "vụ, thoát hẳn bằng Ctrl+Q, hoặc tắt chế độ này trong Cài " +
-                 "đặt ▸ Hệ thống tích hợp.";
+    this.toast(win,
+      "hMail vẫn đang chạy để nhận thư mới. Mở lại từ thanh tác " +
+      "vụ, thoát hẳn bằng Ctrl+Q, hoặc tắt chế độ này trong Cài " +
+      "đặt ▸ Hệ thống tích hợp.");
+  },
+
+  /** Thông báo hệ thống, rơi về hộp thoại khi máy tắt notification. */
+  toast(win, text) {
     try {
       const alerts = Cc["@mozilla.org/alerts-service;1"]
         .getService(Ci.nsIAlertsService);
