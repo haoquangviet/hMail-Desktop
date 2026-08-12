@@ -567,7 +567,8 @@ var hMailQuickReply = {
                   "BẰNG ĐÚNG NGÔN NGỮ CỦA THƯ GỐC (thư tiếng Anh thì trả " +
                   "lời tiếng Anh, thư tiếng Việt thì tiếng Việt…), trừ khi " +
                   "tôi yêu cầu ngôn ngữ khác. Chỉ trả về " +
-                  "nội dung thư, không lời dẫn, không chào ký tên." +
+                  "nội dung thư, không lời dẫn, không chào ký tên, không " +
+                  "kèm dòng Subject/Tiêu đề." +
                   (wish ? "\nYêu cầu của tôi: " + wish : ""),
           });
         } else if (wish) {
@@ -580,7 +581,11 @@ var hMailQuickReply = {
         }
         const reply = await hMailAI.ask(turns);
         turns.push({ role: "assistant", text: reply });
-        draftText = String(reply).trim();
+        draftText = String(reply).trim()
+          // Trả lời nhanh gửi trong chính luồng thư — tiêu đề có sẵn;
+          // model thi thoảng vẫn mở đầu bằng "Subject: Re: …", cắt bỏ.
+          .replace(/^(?:subject|tiêu đề|chủ đề)\s*:[^\n]*\n+/i, "")
+          .trim();
         out.textContent = draftText;
         insert.disabled = false;
         ask.value = "";

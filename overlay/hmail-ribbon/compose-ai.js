@@ -366,10 +366,11 @@ var hMailComposeAI = {
 
     this.notify(win, "Đang suy nghĩ…", true);
     try {
-      const reply = await hMailAI.ask([{
+      let reply = await hMailAI.ask([{
         role: "user",
         text: `${action.prompt}\n\n---\n${context}`,
       }]);
+      reply = this.captureSubject(win, reply);
       this.show(win, reply, !!action.quick);
       this.notify(win, hMailAI.usageLine());
       // Đang trả lời một thư có thật: lượt soạn hộ này ghi vào lịch sử
@@ -383,6 +384,36 @@ var hMailComposeAI = {
     } catch (e) {
       this.notify(win, "Lỗi: " + hMailAI.explain(e));
     }
+  },
+
+  /**
+   * Nhấc dòng "Subject:/Tiêu đề:" mở đầu bản nháp ra khỏi nội dung: thư
+   * đang trống tiêu đề thì điền thẳng vào ô Tiêu đề (soạn thư mới được
+   * AI đặt tên luôn), tiêu đề đã có thì bỏ dòng đó — nội dung thư không
+   * bao giờ mang dòng Subject bên trong.
+   */
+  captureSubject(win, text) {
+    const value = String(text || "");
+    const lines = value.split(/\r?\n/);
+    let first = 0;
+    while (first < lines.length && !lines[first].trim()) {
+      first++;
+    }
+    const m = /^(?:subject|tiêu đề|chủ đề)\s*:\s*(.*)$/i
+      .exec(lines[first] || "");
+    if (!m) {
+      return value;
+    }
+    const subject = m[1].trim();
+    try {
+      const field = win.document.getElementById("msgSubject");
+      if (field && subject && !field.value.trim()) {
+        field.value = subject;
+        field.dispatchEvent(new win.Event("input", { bubbles: true }));
+        this.notify(win, `Đã điền tiêu đề: ${subject}`);
+      }
+    } catch (e) {}
+    return lines.slice(first + 1).join("\n").replace(/^\s+/, "");
   },
 
   /** Thư gốc mà composer này đang trả lời/chuyển tiếp, nếu có. */
