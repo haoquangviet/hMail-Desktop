@@ -162,9 +162,10 @@ var hMailUpdate = {
    * it. Opening the release page in a browser was one more app, one more
    * click, and one more chance to pick the other platform's file.
    */
-  async downloadAndInstall(win, url, version) {
+  async downloadAndInstall(win, url, version, onStatus = null) {
     const busy = typeof hMailBusy !== "undefined" ? hMailBusy : win.hMailBusy;
     try {
+      onStatus?.(`Đang chuẩn bị tải bản ${version}…`);
       const { Downloads } = ChromeUtils.importESModule(
         "resource://gre/modules/Downloads.sys.mjs");
       const dir = await Downloads.getPreferredDownloadsDirectory();
@@ -191,6 +192,7 @@ var hMailUpdate = {
         try {
           if (download.hasProgress) {
             busy?.update("hmail-update", `${download.progress}%`);
+            onStatus?.(`Đang tải bản ${version}… ${download.progress}%`);
           }
         } catch (e) {}
       };
@@ -198,6 +200,7 @@ var hMailUpdate = {
       try {
         busy?.end("hmail-update");
       } catch (e) {}
+      onStatus?.(`Đã tải xong bộ cài bản ${version}.`);
 
       const mac = Services.appinfo.OS === "Darwin";
       const flags =
@@ -215,14 +218,20 @@ var hMailUpdate = {
       if (run === 0) {
         file.launch();
       }
+      // Người dùng bấm "Để sau" vẫn còn đường quay lại: trả đường dẫn để
+      // nơi gọi giữ nút "Chạy bộ cài" — tải xong mà không thấy gì tiếp
+      // theo là người dùng tưởng tải hỏng.
+      return file.path;
     } catch (e) {
       try {
         busy?.end("hmail-update");
       } catch (e2) {}
+      onStatus?.("Không tải được: " + (e.message || e));
       Services.prompt.alert(win, "hMail Desktop",
         "Không tải được bộ cài: " + (e.message || e) +
         "\n\nBản phát hành có thể vừa đăng và tệp còn đang được tải lên — " +
         "thử lại sau vài phút, hoặc tải thủ công tại:\n" + this.PAGE);
+      return null;
     }
   },
   // ------------------------------------------------- trang Cài đặt
@@ -310,12 +319,39 @@ var hMailUpdate = {
       });
 
       const open = el("button", "hmail-update-button", "Mở trang tải");
-      open.addEventListener("click", () => {
+      open.addEventListener("click", async () => {
+        // Đã tải xong từ trước: nút giờ là "Chạy bộ cài".
+        if (open.dataset.hmailRun) {
+          try {
+            const file = Cc["@mozilla.org/file/local;1"]
+              .createInstance(Ci.nsIFile);
+            file.initWithPath(open.dataset.hmailRun);
+            if (file.exists()) {
+              file.launch();
+              return;
+            }
+          } catch (e) {}
+          delete open.dataset.hmailRun;
+        }
         // With a known installer URL the button downloads it directly;
         // the release page is only for when the check has not run.
         if (open.dataset.hmailDownload) {
-          this.downloadAndInstall(doc.defaultView,
-            open.dataset.hmailDownload, open.dataset.hmailVersion || "");
+          // Tiến trình phải hiện NGAY TẠI dòng trạng thái cạnh nút — tải
+          // 70–200 MB mà im lặng là người dùng tưởng chưa tải được.
+          open.disabled = true;
+          const version = open.dataset.hmailVersion || "";
+          const path = await this.downloadAndInstall(doc.defaultView,
+            open.dataset.hmailDownload, version,
+            text => { status.textContent = text; });
+          open.disabled = false;
+          if (path) {
+            delete open.dataset.hmailDownload;
+            open.dataset.hmailRun = path;
+            open.textContent = `Chạy bộ cài ${version}`;
+            status.textContent = `Đã tải xong bộ cài vào: ${path}. ` +
+              "Bấm \"Chạy bộ cài\" khi sẵn sàng — hMail sẽ tự đóng để " +
+              "cập nhật.";
+          }
         } else {
           this.openPage(doc.defaultView);
         }

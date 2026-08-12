@@ -46,11 +46,29 @@ var hMailAccountHub = {
   tick(win) {
     try {
       this.nameTab(win);
+      this.rebrand(win);
       this.offerImport(win);
       this.offerAccountOptions(win);
       this.fillUsernames(win);
       this.offerSkip(win);
     } catch (e) {}
+  },
+
+  /**
+   * Hub báo "Cấu hình được tìm thấy trong Mozilla ISPDB" — người dùng hMail
+   * không cần biết ISPDB là gì và không nên thấy thương hiệu khác. Thay mọi
+   * text node nhắc tới ISPDB bằng câu tiếng người.
+   */
+  rebrand(win) {
+    for (const root of this.roots(win)) {
+      const walker = win.document.createTreeWalker(
+        root, win.NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (/ISPDB/i.test(node.nodeValue || "")) {
+          node.nodeValue = "Đã tự tìm thấy cấu hình máy chủ phù hợp";
+        }
+      }
+    }
   },
 
   /**
@@ -151,6 +169,19 @@ var hMailAccountHub = {
     return null;
   },
 
+  /** Phần tử lá đang hiển thị có chữ khớp mẫu — xuyên mọi shadow root. */
+  findByText(win, pattern) {
+    for (const root of this.roots(win)) {
+      for (const node of root.querySelectorAll("*")) {
+        if (!node.childElementCount && !node.hidden &&
+            pattern.test(node.textContent || "")) {
+          return node;
+        }
+      }
+    }
+    return null;
+  },
+
   findAll(win, selector) {
     const out = [];
     for (const root of this.roots(win)) {
@@ -197,14 +228,22 @@ var hMailAccountHub = {
    * itself when the account is ready, so nothing is lost by walking past.
    */
   offerSkip(win) {
-    const spinner = this.find(win,
+    let spinner = this.find(win,
       "#syncingAccountsSubheader, .account-hub-sync, #syncAccountsForm, " +
       "#emailSyncAccountsForm, account-hub-email-sync, " +
       "[id*='ync'] .loading-container, .account-hub-view[name*='ync']");
+    // Markup của hub đổi theo từng đời Thunderbird — selector trượt là
+    // spinner quay vô hạn không lối thoát. Nhận diện theo CHÍNH DÒNG CHỮ
+    // đang hiện thì đời nào cũng bắt được.
+    if (!spinner) {
+      spinner = this.findByText(win,
+        /đang khám phá|đồng bộ h[oó]a lịch|discovering address|syncing (calendar|address)/i);
+    }
     const dialog = this.find(win, "#accountHubDialog") ||
                    win.document.getElementById("accountHub");
     if (!spinner || !dialog || spinner.hidden) {
       this.since = 0;
+      this._autoSkipped = false;
       win.document.getElementById("hmail-hub-skip")?.remove();
       return;
     }
@@ -213,6 +252,16 @@ var hMailAccountHub = {
       return;
     }
     if (win.performance.now() - this.since < this.SKIP_AFTER_MS) {
+      return;
+    }
+    // Kẹt quá lâu thì tự thoát hẳn: tài khoản đã tạo xong từ trước bước
+    // này, phần lịch/danh bạ hMail tự lo — giữ người dùng đứng nhìn
+    // spinner thêm nữa không mua được gì.
+    if (win.performance.now() - this.since > 45000) {
+      if (!this._autoSkipped) {
+        this._autoSkipped = true;
+        this.finish(win);
+      }
       return;
     }
     if (win.document.getElementById("hmail-hub-skip")) {
@@ -329,7 +378,9 @@ var hMailAccountHub = {
   /** Close the hub and hand the discovery to hMail's own CalDAV setup. */
   finish(win, { sync = true } = {}) {
     try {
-      const close = this.find(win, "#closeButton, .close-button, [dialog-close]");
+      const close = this.find(win,
+        "#closeButton, .close-button, [dialog-close], " +
+        "#accountHubDialogClose, button[class*='close']");
       if (close) {
         close.click();
       } else {
