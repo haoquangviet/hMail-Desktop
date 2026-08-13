@@ -90,6 +90,24 @@ Object.assign(hMailAI, {
         required: ["body"],
       },
     },
+    {
+      name: "compose_new",
+      description: "Mở cửa sổ soạn THƯ MỚI (không phải trả lời) tới một " +
+                   "người nhận với tiêu đề và nội dung soạn sẵn. Dùng khi " +
+                   "người dùng nhờ 'viết thư riêng/thư mới cho ai đó'. Thư " +
+                   "KHÔNG được gửi đi — người dùng xem lại rồi tự gửi.",
+      parameters: {
+        type: "object",
+        properties: {
+          to: { type: "string",
+                description: "Địa chỉ email người nhận (lấy từ thư đang " +
+                             "xem nếu có); để trống nếu chưa rõ" },
+          subject: { type: "string", description: "Tiêu đề thư" },
+          body: { type: "string", description: "Nội dung thư" },
+        },
+        required: ["body"],
+      },
+    },
   ],
 
   /** Actions that change or send things get a confirmation. */
@@ -113,10 +131,12 @@ Object.assign(hMailAI, {
    */
   async runTool(win, name, args) {
     const hdr = this.selectedMessage(win);
-    if (!hdr) {
+    // Soạn thư mới không cần thư nào đang chọn — mọi hành động khác đều
+    // tác động lên "thư hiện tại" nên thiếu là dừng.
+    if (!hdr && name !== "compose_new") {
       return { ok: false, error: "Không có thư nào đang được chọn." };
     }
-    const folder = hdr.folder;
+    const folder = hdr?.folder;
 
     try {
       switch (name) {
@@ -251,6 +271,31 @@ Object.assign(hMailAI, {
           return { ok: true,
                    done: "đã mở cửa sổ trả lời với nội dung soạn sẵn " +
                          "(chưa gửi)" };
+        }
+
+        case "compose_new": {
+          const body = String(args.body || "").trim();
+          if (!body) {
+            return { ok: false, error: "Thiếu nội dung thư." };
+          }
+          const params = Cc["@mozilla.org/messengercompose/composeparams;1"]
+            .createInstance(Ci.nsIMsgComposeParams);
+          const fields = Cc["@mozilla.org/messengercompose/composefields;1"]
+            .createInstance(Ci.nsIMsgCompFields);
+          fields.to = String(args.to || "").trim();
+          fields.subject = String(args.subject || "").trim();
+          fields.body = body.replace(/\n/g, "<br>");
+          params.composeFields = fields;
+          params.type = Ci.nsIMsgCompType.New;
+          params.format = Ci.nsIMsgCompFormat.HTML;
+          params.identity = (folder && MailServices.accounts
+              .findAccountForServer(folder.server)?.defaultIdentity) ||
+            MailServices.accounts.defaultAccount?.defaultIdentity || null;
+          MailServices.compose.OpenComposeWindowWithParams(null, params);
+          return { ok: true,
+                   done: "đã mở cửa sổ soạn thư mới" +
+                         (fields.to ? ` tới ${fields.to}` : "") +
+                         " với nội dung soạn sẵn (chưa gửi)" };
         }
 
         default:

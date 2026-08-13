@@ -1510,6 +1510,32 @@ select.hmail-ai-field,
     text-align: center;
 }
 
+/* Hàng đáy dưới ô nhập: mẹo bên trái, badge chi phí bên phải. */
+.hmail-ai-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 1.4em;
+}
+
+.hmail-ai-footer .hmail-ai-tip {
+    text-align: start;
+}
+
+/* Chi phí lượt vừa rồi: viên tròn nhỏ, trỏ chuột vào mới kể chi tiết. */
+.hmail-ai-usage-badge {
+    flex: none;
+    border-radius: 999px;
+    padding: 1px 9px;
+    font-size: 0.72em;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    background-color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 12%, Canvas);
+    color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 80%, CanvasText);
+    cursor: default;
+}
+
 /* --- settings form --- */
 
 .hmail-ai-settings {

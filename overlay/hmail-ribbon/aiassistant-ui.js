@@ -221,8 +221,18 @@ Object.assign(hMailAI, {
     sendBtn.addEventListener("click", submit);
 
     composer.append(plusBtn, input, sendBtn);
-    ask.append(composer,
-      el("div", "hmail-ai-tip", "Enter để gửi · Shift+Enter xuống dòng"));
+    // Hàng đáy: mẹo bên trái, badge chi phí tròn bên phải. Chi phí từng
+    // nằm chung dòng trạng thái phía trên và đè mất "Đang suy nghĩ…" —
+    // giờ dòng đó chỉ dành cho trạng thái, tiền nằm gọn trong badge,
+    // trỏ chuột vào mới hiện chi tiết token.
+    const footer = el("div", "hmail-ai-footer");
+    const usageBadge = el("span", "hmail-ai-usage-badge");
+    usageBadge.id = "hmail-ai-usage-badge";
+    usageBadge.hidden = true;
+    footer.append(
+      el("div", "hmail-ai-tip", "Enter để gửi · Shift+Enter xuống dòng"),
+      usageBadge);
+    ask.append(composer, footer);
     root.appendChild(ask);
 
     this.applyLook(win, root);
@@ -396,6 +406,26 @@ Object.assign(hMailAI, {
     const theme = this.pref("hmail.ai.theme", "system");
     panel.classList.toggle("theme-light", theme === "light");
     panel.classList.toggle("theme-dark", theme === "dark");
+  },
+
+  /**
+   * Chi phí lượt trao đổi vừa rồi — số tiền trong badge tròn dưới đáy,
+   * chi tiết token nằm trong tooltip khi trỏ chuột vào.
+   */
+  updateUsageBadge(win) {
+    const badge = win.document.getElementById("hmail-ai-usage-badge");
+    if (!badge) {
+      return;
+    }
+    const full = this.usageLine();
+    if (!full) {
+      badge.hidden = true;
+      return;
+    }
+    const value = this.cost(this.lastUsage);
+    badge.textContent = value > 0 ? `$${value.toFixed(4)}` : "0đ";
+    badge.title = "Lượt trao đổi vừa rồi: " + full;
+    badge.hidden = false;
   },
 
   notify(win, text, busy = false) {
@@ -874,7 +904,8 @@ Object.assign(hMailAI, {
       await this.remember(hdr, "user", prompt.label);
       await this.remember(hdr, "assistant", reply);
       this.addTurn(win, "assistant", reply);
-      this.notify(win, this.usageLine());
+      this.notify(win, "");
+      this.updateUsageBadge(win);
     } catch (e) {
       this.reportError(win, e);
     }
@@ -978,7 +1009,8 @@ Object.assign(hMailAI, {
           { role: "assistant", text: reply }).slice(-12);
       }
       this.addTurn(win, "assistant", reply);
-      this.notify(win, this.usageLine());
+      this.notify(win, "");
+      this.updateUsageBadge(win);
     } catch (e) {
       this.reportError(win, e);
     }
