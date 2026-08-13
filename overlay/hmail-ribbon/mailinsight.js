@@ -201,8 +201,17 @@ var hMailInsight = {
         const hdr = this.selected(win);
         const key = hdr ? `${hdr.folder?.URI}#${hdr.messageKey}` : null;
         if (key !== last) {
+          // Đứng yên thêm một nhịp tick rồi mới phân tích: người dùng bấm
+          // mũi tên lướt 20 thư thì 19 thư lướt qua không việc gì phải
+          // stream về chạy regex — chỉ thư họ DỪNG LẠI mới đáng.
           last = key;
-          this.showBanner(win, hdr).catch(() => {});
+          this._pendingBanner = hdr;
+          return;
+        }
+        if (this._pendingBanner && key) {
+          const pending = this._pendingBanner;
+          this._pendingBanner = null;
+          this.showBanner(win, pending).catch(() => {});
           return;
         }
         if (key && this.cache?.key === key &&
@@ -282,7 +291,21 @@ var hMailInsight = {
     }
 
     const key = `${hdr.folder?.URI}#${hdr.messageKey}`;
+    // Đồng hồ đo (pref hmail.debug.perflog = "on"): mỗi lần phân tích ghi
+    // cỡ thư / thời gian vào pref để soi "mở thư chậm" bằng số thật.
+    const t0 = Cu.now();
     const result = await this.analyze(hdr);
+    try {
+      if (Services.prefs.getCharPref("hmail.debug.perflog", "") === "on") {
+        const line = `${Math.round((hdr.messageSize || 0) / 1024)}KB/` +
+          `${Math.round(Cu.now() - t0)}ms`;
+        const prev = Services.prefs.getCharPref("hmail.debug.perfdata", "");
+        Services.prefs.setCharPref("hmail.debug.perfdata",
+          (prev ? prev + " " : "") .concat(line).split(" ").slice(-8)
+            .join(" "));
+        Services.prefs.savePrefFile(null);
+      }
+    } catch (e) {}
     this.cache = { key, result };
     if (result.level === "ok" || this.isDismissed(hdr, key)) {
       return;
@@ -540,13 +563,27 @@ var hMailInsight = {
     }
   },
 
-  /** Raw RFC 5322 text of a message. */
-  raw(hdr) {
+  /**
+   * Raw RFC 5322 text of a message — CÓ TRẦN. Phân tích chỉ cần header và
+   * phần đầu thân chữ; nuốt trọn 20 MB đính kèm base64 vào một chuỗi JS
+   * cho mỗi lần mở thư là lý do "mở thư chậm": thư IMAP chưa offline còn
+   * bị tải mạng lần thứ hai song song với lần hiển thị. Đủ trần thì trả
+   * ngay và huỷ stream.
+   */
+  raw(hdr, maxBytes = 256 * 1024) {
     return new Promise((resolve, reject) => {
       try {
         const uri = hdr.folder.getUriForMsg(hdr);
         const service = MailServices.messageServiceFromURI(uri);
         const chunks = [];
+        let size = 0;
+        let settled = false;
+        const finish = () => {
+          if (!settled) {
+            settled = true;
+            resolve(chunks.join(""));
+          }
+        };
         const listener = {
           QueryInterface: ChromeUtils.generateQI([
             "nsIStreamListener", "nsIRequestObserver",
@@ -557,10 +594,20 @@ var hMailInsight = {
               .createInstance(Ci.nsIBinaryInputStream);
             binary.setInputStream(stream);
             chunks.push(binary.readBytes(count));
+            size += count;
+            if (maxBytes && size >= maxBytes) {
+              finish();
+              try {
+                request.cancel(Cr.NS_BINDING_ABORTED);
+              } catch (e) {}
+            }
           },
           onStopRequest(request, status) {
+            if (settled) {
+              return;
+            }
             Components.isSuccessCode(status)
-              ? resolve(chunks.join(""))
+              ? finish()
               : reject(new Error("không đọc được thư"));
           },
         };
