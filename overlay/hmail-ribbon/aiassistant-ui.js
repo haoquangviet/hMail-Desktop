@@ -229,6 +229,23 @@ Object.assign(hMailAI, {
     const usageBadge = el("span", "hmail-ai-usage-badge");
     usageBadge.id = "hmail-ai-usage-badge";
     usageBadge.hidden = true;
+    // Tooltip tự vẽ NGAY TRÊN badge — tooltip hệ thống bám theo chuột ở
+    // đáy màn hình, chữ dài đọc không nổi.
+    usageBadge.addEventListener("mouseenter", () => {
+      doc.getElementById("hmail-ai-usage-tip")?.remove();
+      if (!usageBadge.dataset.detail) {
+        return;
+      }
+      const tip = el("div", "hmail-ai-usage-tip");
+      tip.id = "hmail-ai-usage-tip";
+      for (const line of usageBadge.dataset.detail.split("\n")) {
+        tip.appendChild(el("div", null, line));
+      }
+      footer.appendChild(tip);
+    });
+    usageBadge.addEventListener("mouseleave", () => {
+      doc.getElementById("hmail-ai-usage-tip")?.remove();
+    });
     footer.append(
       el("div", "hmail-ai-tip", "Enter để gửi · Shift+Enter xuống dòng"),
       usageBadge);
@@ -424,7 +441,9 @@ Object.assign(hMailAI, {
     }
     const value = this.cost(this.lastUsage);
     badge.textContent = value > 0 ? `$${value.toFixed(4)}` : "0đ";
-    badge.title = "Lượt trao đổi vừa rồi: " + full;
+    // Mỗi ý một dòng cho tooltip tự vẽ — một chuỗi dài khó đọc.
+    badge.dataset.detail = "Lượt trao đổi vừa rồi\n" +
+      full.split(" · ").join("\n");
     badge.hidden = false;
   },
 

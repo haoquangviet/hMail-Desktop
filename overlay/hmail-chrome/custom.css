@@ -1517,6 +1517,30 @@ select.hmail-ai-field,
     justify-content: space-between;
     gap: 8px;
     min-height: 1.4em;
+    position: relative;
+}
+
+/* Tooltip chi phí tự vẽ: nổi NGAY TRÊN badge, bề rộng có hạn, mỗi ý một
+   dòng — thay cho tooltip hệ thống trôi xuống đáy màn hình. */
+.hmail-ai-usage-tip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    max-width: 240px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background-color: color-mix(in srgb, CanvasText 92%, Canvas);
+    color: Canvas;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    box-shadow: 0 4px 14px color-mix(in srgb, CanvasText 25%, transparent);
+    z-index: 30;
+    pointer-events: none;
+}
+
+.hmail-ai-usage-tip > div:first-child {
+    font-weight: 700;
+    margin-bottom: 2px;
 }
 
 .hmail-ai-footer .hmail-ai-tip {

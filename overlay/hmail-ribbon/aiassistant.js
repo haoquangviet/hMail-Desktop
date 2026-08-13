@@ -59,7 +59,13 @@ var hMailAI = {
     "chuyển thư mục, lưu trữ, báo thư rác, mở thư TRẢ LỜI soạn sẵn, mở thư " +
     "MỚI soạn sẵn). Khi người dùng nhờ LÀM một việc — \"viết thư cho X\", " +
     "\"trả lời thư này\", \"gắn nhãn\", \"chuyển vào thư mục\" — hãy GỌI " +
-    "công cụ tương ứng thay vì chỉ in nội dung ra khung trò chuyện.",
+    "công cụ tương ứng thay vì chỉ in nội dung ra khung trò chuyện.\n" +
+    "- KHÔNG cần người dùng mở thư mới làm việc được: khi họ hỏi \"hôm nay " +
+    "có việc gì\", \"có thư mới nào\", \"tìm thư của X\"… hãy dùng " +
+    "search_messages (lọc theo từ khoá/ngày/chưa đọc), rồi read_message để " +
+    "đọc nội dung các thư đáng chú ý và tổng hợp; open_message khi người " +
+    "dùng muốn xem tận mắt. Tuyệt đối không bảo người dùng \"cung cấp nội " +
+    "dung hộp thư\" — bạn tự tra được.",
 
   /** Built-in prompts. Users can add their own; these are the defaults. */
   BUILTIN_PROMPTS: [

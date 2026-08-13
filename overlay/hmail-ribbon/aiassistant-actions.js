@@ -91,6 +91,52 @@ Object.assign(hMailAI, {
       },
     },
     {
+      name: "search_messages",
+      description: "Tìm thư trong Hộp thư đến của MỌI tài khoản: theo từ " +
+                   "khoá (người gửi/tiêu đề), số ngày gần đây, có thể chỉ " +
+                   "lấy thư chưa đọc. Trả về danh sách {id, from, subject, " +
+                   "date, unread, folder}. Dùng khi người dùng hỏi về thư " +
+                   "từ, việc cần làm, thư mới… mà chưa mở thư nào.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string",
+                   description: "Từ khoá lọc người gửi/tiêu đề; bỏ trống " +
+                                "để lấy tất cả" },
+          days: { type: "number",
+                  description: "Chỉ lấy thư trong N ngày gần đây (mặc định 7)" },
+          unread_only: { type: "boolean",
+                         description: "true = chỉ thư chưa đọc" },
+          limit: { type: "number", description: "Tối đa bao nhiêu thư (mặc định 20)" },
+        },
+      },
+    },
+    {
+      name: "read_message",
+      description: "Đọc nội dung một thư theo id lấy từ search_messages — " +
+                   "không cần mở thư trên màn hình. Dùng để tóm tắt hay " +
+                   "trả lời câu hỏi về thư đó.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "id thư từ search_messages" },
+        },
+        required: ["id"],
+      },
+    },
+    {
+      name: "open_message",
+      description: "Mở một thư (theo id từ search_messages) lên màn hình " +
+                   "cho người dùng xem.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "id thư từ search_messages" },
+        },
+        required: ["id"],
+      },
+    },
+    {
       name: "compose_new",
       description: "Mở cửa sổ soạn THƯ MỚI (không phải trả lời) tới một " +
                    "người nhận với tiêu đề và nội dung soạn sẵn. Dùng khi " +
@@ -129,11 +175,32 @@ Object.assign(hMailAI, {
    * Perform one action. Returns a small object the model gets back verbatim,
    * so failures are described rather than thrown.
    */
+  /** Các hành động cấp HỘP THƯ — chạy được khi chưa mở thư nào. */
+  MAILBOX_TOOLS: new Set(["compose_new", "search_messages", "read_message",
+                          "open_message"]),
+
+  /** Đổi id "folderURI#key" từ search_messages ngược về nsIMsgDBHdr. */
+  hdrFromId(id) {
+    try {
+      const cut = String(id || "").lastIndexOf("#");
+      if (cut < 0) {
+        return null;
+      }
+      const { MailUtils } = ChromeUtils.importESModule(
+        "resource:///modules/MailUtils.sys.mjs");
+      const folder = MailUtils.getExistingFolder(id.slice(0, cut));
+      const key = parseInt(id.slice(cut + 1), 10);
+      return folder?.msgDatabase?.getMsgHdrForKey?.(key) || null;
+    } catch (e) {
+      return null;
+    }
+  },
+
   async runTool(win, name, args) {
     const hdr = this.selectedMessage(win);
-    // Soạn thư mới không cần thư nào đang chọn — mọi hành động khác đều
-    // tác động lên "thư hiện tại" nên thiếu là dừng.
-    if (!hdr && name !== "compose_new") {
+    // Hành động cấp hộp thư không cần thư nào đang chọn — mọi hành động
+    // khác đều tác động lên "thư hiện tại" nên thiếu là dừng.
+    if (!hdr && !this.MAILBOX_TOOLS.has(name)) {
       return { ok: false, error: "Không có thư nào đang được chọn." };
     }
     const folder = hdr?.folder;
@@ -271,6 +338,86 @@ Object.assign(hMailAI, {
           return { ok: true,
                    done: "đã mở cửa sổ trả lời với nội dung soạn sẵn " +
                          "(chưa gửi)" };
+        }
+
+        case "search_messages": {
+          const query = String(args.query || "").trim().toLowerCase();
+          const days = Math.min(Math.max(Number(args.days) || 7, 1), 90);
+          const limit = Math.min(Math.max(Number(args.limit) || 20, 1), 50);
+          const cutoff = Date.now() / 1000 - days * 86400;
+          const found = [];
+          for (const server of MailServices.accounts.allServers) {
+            if (!["imap", "pop3", "none"].includes(server.type)) {
+              continue;
+            }
+            const inbox = server.rootFolder
+              ?.getFolderWithFlags?.(Ci.nsMsgFolderFlags.Inbox);
+            const db = inbox?.msgDatabase;
+            if (!db) {
+              continue;
+            }
+            // Đi từ thư mới nhất lùi về; quá mốc thời gian là dừng — hộp
+            // trăm nghìn thư không bị quét trọn.
+            let checked = 0;
+            const iter = db.reverseEnumerateMessages
+              ? db.reverseEnumerateMessages() : inbox.messages;
+            for (const msg of iter) {
+              if (++checked > 5000) {
+                break;
+              }
+              if (msg.dateInSeconds < cutoff) {
+                if (db.reverseEnumerateMessages) {
+                  break;
+                }
+                continue;
+              }
+              if (args.unread_only && msg.isRead) {
+                continue;
+              }
+              const from = msg.mime2DecodedAuthor || "";
+              const subject = msg.mime2DecodedSubject || "";
+              if (query &&
+                  !(from + " " + subject).toLowerCase().includes(query)) {
+                continue;
+              }
+              found.push({
+                id: `${inbox.URI}#${msg.messageKey}`,
+                from, subject,
+                ts: msg.dateInSeconds,
+                date: new Date(msg.dateInSeconds * 1000).toLocaleString(),
+                unread: !msg.isRead,
+                folder: `${server.prettyName}`,
+              });
+            }
+          }
+          found.sort((a, b) => b.ts - a.ts);
+          const items = found.slice(0, limit).map(({ ts, ...rest }) => rest);
+          return { ok: true, count: items.length,
+                   total_matched: found.length, items };
+        }
+
+        case "read_message": {
+          const target = this.hdrFromId(args.id);
+          if (!target) {
+            return { ok: false, error: "Không tìm thấy thư với id này." };
+          }
+          const text = String(await this.messageText(target) || "");
+          return { ok: true,
+                   from: target.mime2DecodedAuthor || "",
+                   subject: target.mime2DecodedSubject || "",
+                   date: new Date(target.dateInSeconds * 1000).toLocaleString(),
+                   body: text.slice(0, 6000) };
+        }
+
+        case "open_message": {
+          const target = this.hdrFromId(args.id);
+          if (!target) {
+            return { ok: false, error: "Không tìm thấy thư với id này." };
+          }
+          const { MailUtils } = ChromeUtils.importESModule(
+            "resource:///modules/MailUtils.sys.mjs");
+          MailUtils.displayMessageInFolderTab(target);
+          return { ok: true, done: "đã mở thư lên màn hình" };
         }
 
         case "compose_new": {
