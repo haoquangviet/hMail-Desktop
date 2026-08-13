@@ -45,6 +45,12 @@ var hMailAccountHub = {
 
   tick(win) {
     try {
+      // Tick này sống cả đời cửa sổ, còn roots() đi querySelectorAll toàn
+      // cây shadow của hub — hộp thoại đang ĐÓNG thì không làm gì hết.
+      const hub = win.document.getElementById("accountHub");
+      if (!hub || (!hub.open && !hub.hasAttribute("open"))) {
+        return;
+      }
       this.nameTab(win);
       this.rebrand(win);
       this.offerImport(win);
