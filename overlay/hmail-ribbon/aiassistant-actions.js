@@ -699,55 +699,142 @@ Object.assign(hMailAI, {
                 "?\n\n(Hoàn tác được bằng Ctrl+Z ngay sau đó.)")) {
             return { ok: false, error: "Người dùng đã từ chối." };
           }
-          let done = 0;
-          for (const { folder, list } of byFolder.values()) {
-            try {
-              if (action === "trash") {
-                const trash = folder.server.rootFolder
-                  .getFolderWithFlags(Ci.nsMsgFolderFlags.Trash);
-                if (!trash) {
-                  continue;
-                }
-                MailServices.copy.copyMessages(folder, list, trash, true,
-                                               null, a3.msgWindow, true);
-              } else if (action === "move") {
-                MailServices.copy.copyMessages(folder, list, target, true,
-                                               null, a3.msgWindow, true);
-              } else if (action === "archive") {
-                const { MessageArchiver } = ChromeUtils.importESModule(
-                  "resource:///modules/MessageArchiver.sys.mjs");
-                const archiver = new MessageArchiver();
-                archiver.msgWindow = a3.msgWindow;
-                archiver.archiveMessages(list);
-              } else if (action === "read") {
-                folder.markMessagesRead(list, true);
-              } else if (action === "tag") {
-                const wanted = String(args.tag || "").trim();
-                let key = null;
-                for (const t of MailServices.tags.getAllTags()) {
-                  if (t.tag.toLowerCase() === wanted.toLowerCase()) {
-                    key = t.key;
-                  }
-                }
-                if (!key) {
-                  MailServices.tags.addTagForKey(
-                    wanted.toLowerCase().replace(/[^a-z0-9]/g, "") ||
-                      "hmailai", wanted, "#0F6CBD", "");
-                  for (const t of MailServices.tags.getAllTags()) {
-                    if (t.tag === wanted) {
-                      key = t.key;
-                    }
-                  }
-                }
-                folder.addKeywordsToMessages(list, key);
+          // Nhãn: giải quyết key một lần trước vòng lặp.
+          let tagKey = null;
+          if (action === "tag") {
+            const wanted = String(args.tag || "").trim();
+            for (const t of MailServices.tags.getAllTags()) {
+              if (t.tag.toLowerCase() === wanted.toLowerCase()) {
+                tagKey = t.key;
               }
-              done += list.length;
-            } catch (e) {
-              Cu.reportError("hMail act_on_filtered: " + e);
+            }
+            if (!tagKey) {
+              MailServices.tags.addTagForKey(
+                wanted.toLowerCase().replace(/[^a-z0-9]/g, "") || "hmailai",
+                wanted, "#0F6CBD", "");
+              for (const t of MailServices.tags.getAllTags()) {
+                if (t.tag === wanted) {
+                  tagKey = t.key;
+                }
+              }
             }
           }
+
+          // Hàng nghìn thư trong MỘT lệnh copyMessages là một giao dịch
+          // IMAP khổng lồ trên main thread — cả app đứng hình. Chia lô
+          // 200 thư, chờ từng lô xong (copy listener) rồi mới lô kế, giữa
+          // hai lô nhường main thread; tiến độ hiện trên thanh bận và
+          // trong panel. Chạy NỀN: trả lời model ngay, việc dọn tự chạy.
+          const BATCH = 200;
+          const jobId = "hmail-ai-bulk";
+          const busy = typeof hMailBusy !== "undefined" ? hMailBusy
+                                                        : win.hMailBusy;
+          const total = hdrs.length;
+          const say = text => {
+            try {
+              win.hMailAI?.notify?.(win, text);
+            } catch (e) {}
+          };
+          const copyBatch = (folder, list, dest, isMove) =>
+            new Promise(resolve => {
+              const listener = {
+                QueryInterface: ChromeUtils.generateQI(["nsIMsgCopyServiceListener"]),
+                onStartCopy() {},
+                onProgress() {},
+                setMessageKey() {},
+                getMessageId() {
+                  return null;
+                },
+                onStopCopy(status) {
+                  resolve(Components.isSuccessCode(status));
+                },
+              };
+              try {
+                MailServices.copy.copyMessages(folder, list, dest, isMove,
+                                               listener, a3.msgWindow, true);
+              } catch (e) {
+                resolve(false);
+              }
+            });
+          const idle = () => new Promise(r => win.setTimeout(r, 60));
+
+          const run = async () => {
+            let done = 0;
+            let failed = 0;
+            try {
+              busy?.start(jobId, `${label[0].toUpperCase() + label.slice(1)} ` +
+                          `${total} thư`, "Việc dọn thư sẽ dừng dở dang.");
+            } catch (e) {}
+            for (const { folder, list } of byFolder.values()) {
+              let dest = null;
+              if (action === "trash") {
+                dest = folder.server.rootFolder
+                  .getFolderWithFlags(Ci.nsMsgFolderFlags.Trash);
+                if (!dest) {
+                  failed += list.length;
+                  continue;
+                }
+              } else if (action === "move") {
+                dest = target;
+              }
+              for (let i = 0; i < list.length; i += BATCH) {
+                const chunk = list.slice(i, i + BATCH);
+                let ok = true;
+                try {
+                  if (action === "trash" || action === "move") {
+                    ok = await copyBatch(folder, chunk, dest, true);
+                  } else if (action === "archive") {
+                    const { MessageArchiver } = ChromeUtils.importESModule(
+                      "resource:///modules/MessageArchiver.sys.mjs");
+                    const archiver = new MessageArchiver();
+                    archiver.msgWindow = a3.msgWindow;
+                    await new Promise(resolve => {
+                      archiver.oncomplete = resolve;
+                      archiver.archiveMessages(chunk);
+                      // Không có oncomplete ở bản này thì đừng chờ mãi.
+                      win.setTimeout(resolve, 4000);
+                    });
+                  } else if (action === "read") {
+                    folder.markMessagesRead(chunk, true);
+                  } else if (action === "tag") {
+                    folder.addKeywordsToMessages(chunk, tagKey);
+                  }
+                } catch (e) {
+                  ok = false;
+                  Cu.reportError("hMail act_on_filtered batch: " + e);
+                }
+                if (ok) {
+                  done += chunk.length;
+                } else {
+                  failed += chunk.length;
+                }
+                const pct = Math.round(((done + failed) / total) * 100);
+                try {
+                  busy?.update(jobId, `${done + failed}/${total} (${pct}%)`);
+                } catch (e) {}
+                say(`Đang ${label}: ${done + failed}/${total} thư…`);
+                await idle();
+              }
+            }
+            try {
+              busy?.end(jobId);
+            } catch (e) {}
+            say(`Đã ${label} ${done}/${total} thư` +
+                (failed ? ` — ${failed} thư không xử lý được.` : "."));
+            try {
+              win.hMailAI?.addTurn?.(win, "action",
+                `Hoàn tất: đã ${label} ${done}/${total} thư` +
+                (failed ? ` (${failed} lỗi)` : ""));
+            } catch (e) {}
+          };
+          // Không await: trả lời model ngay để panel không "suy nghĩ" suốt
+          // 5 phút; tiến độ đi qua thanh trạng thái và thanh bận.
+          run().catch(e => Cu.reportError("hMail act_on_filtered: " + e));
           return { ok: true,
-                   done: `đã ${label} ${done}/${hdrs.length} thư` };
+                   done: `đã bắt đầu ${label} ${total} thư ở nền — chạy theo ` +
+                         `lô ${BATCH} thư, tiến độ hiện trên thanh trạng ` +
+                         "thái; app vẫn dùng bình thường",
+                   background: true, total };
         }
 
         case "compose_new": {
