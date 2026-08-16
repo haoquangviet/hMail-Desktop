@@ -57,6 +57,18 @@ var hMailBackground = {
       if (Services.appinfo.OS !== "WINNT") {
         return;
       }
+      // MỘT icon khay duy nhất: helper của hMail là icon thường trực có
+      // menu chuột phải; icon "thư mới" của Thunderbird đứng cạnh thành
+      // hai icon cho một ứng dụng. Bật chế độ nền thì tắt icon kia; tắt
+      // chế độ nền thì trả về mặc định.
+      try {
+        if (this.enabled()) {
+          Services.prefs.setBoolPref("mail.biff.show_tray_icon", false);
+        } else if (Services.prefs.prefHasUserValue(
+                     "mail.biff.show_tray_icon")) {
+          Services.prefs.clearUserPref("mail.biff.show_tray_icon");
+        }
+      } catch (e) {}
       if (!this.enabled()) {
         return; // The helper exits by itself when hMail does.
       }
@@ -84,8 +96,28 @@ var hMailBackground = {
                     // second launch would open a different mailbox.
                     `--profile=${Services.dirsvc.get("ProfD", Ci.nsIFile).path}`],
         stderr: "pipe",
+      }).then(proc => {
+        try {
+          Services.prefs.setCharPref("hmail.tray.status",
+                                     "spawned pid=" + proc.pid);
+        } catch (e) {}
+        // Helper chết (crash, exit sớm) thì biết đường mà thử lại — và để
+        // lại exit code cho người gỡ lỗi thay vì im lặng không icon.
+        proc.wait().then(({ exitCode }) => {
+          this.trayStarted = false;
+          try {
+            Services.prefs.setCharPref("hmail.tray.status",
+                                       "exited code=" + exitCode);
+          } catch (e) {}
+          if (this.enabled()) {
+            win.setTimeout(() => this.syncTray(win), 30000);
+          }
+        });
       }).catch(e => {
         this.trayStarted = false;
+        try {
+          Services.prefs.setCharPref("hmail.tray.status", "spawn-failed: " + e);
+        } catch (e2) {}
         Cu.reportError("hMail tray helper did not start: " + e);
       });
     } catch (e) {
@@ -192,6 +224,47 @@ var hMailBackground = {
     }
   },
 
+  // ------------------------------------------------- khởi động cùng máy
+  // Ghi vào HKCU\...\CurrentVersion\Run — theo từng người dùng, không cần
+  // quyền admin, và hiện đàng hoàng trong Task Manager ▸ Startup apps để
+  // người dùng tắt được từ phía Windows.
+
+  AUTOSTART_KEY: "Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+  AUTOSTART_NAME: "hMail Desktop",
+
+  autostartEnabled() {
+    try {
+      const key = Cc["@mozilla.org/windows-registry-key;1"]
+        .createInstance(Ci.nsIWindowsRegKey);
+      key.open(key.ROOT_KEY_CURRENT_USER, this.AUTOSTART_KEY, key.ACCESS_READ);
+      const has = key.hasValue(this.AUTOSTART_NAME);
+      key.close();
+      return has;
+    } catch (e) {
+      return false;
+    }
+  },
+
+  setAutostart(enabled) {
+    try {
+      const key = Cc["@mozilla.org/windows-registry-key;1"]
+        .createInstance(Ci.nsIWindowsRegKey);
+      key.open(key.ROOT_KEY_CURRENT_USER, this.AUTOSTART_KEY,
+               key.ACCESS_READ | key.ACCESS_WRITE);
+      if (enabled) {
+        const app = Services.dirsvc.get("XREExeF", Ci.nsIFile).path;
+        key.writeStringValue(this.AUTOSTART_NAME, `"${app}"`);
+      } else if (key.hasValue(this.AUTOSTART_NAME)) {
+        key.removeValue(this.AUTOSTART_NAME);
+      }
+      key.close();
+      return true;
+    } catch (e) {
+      Cu.reportError("hMail autostart failed: " + e);
+      return false;
+    }
+  },
+
   /**
    * The switch, in Cài đặt ▸ Hệ thống tích hợp, directly under
    * Thunderbird's "minimise to tray" so the two read as a pair.
@@ -225,6 +298,25 @@ var hMailBackground = {
 
       row.appendChild(box);
       anchor.parentNode?.insertBefore(row, anchor.nextSibling);
+
+      // Khởi động cùng Windows — cặp tự nhiên với chế độ chạy nền: máy
+      // bật lên là thư bắt đầu về.
+      if (Services.appinfo.OS === "WINNT") {
+        const startRow = doc.createElementNS(XUL, "hbox");
+        startRow.id = "hmail-autostart-row";
+        startRow.setAttribute("align", "start");
+        const startBox = doc.createElementNS(XUL, "checkbox");
+        startBox.setAttribute("label",
+          "Khởi động hMail cùng Windows khi bật máy");
+        startBox.checked = this.autostartEnabled();
+        startBox.addEventListener("command", () => {
+          if (!this.setAutostart(startBox.checked)) {
+            startBox.checked = this.autostartEnabled();
+          }
+        });
+        startRow.appendChild(startBox);
+        row.parentNode?.insertBefore(startRow, row.nextSibling);
+      }
     } catch (e) {
       Cu.reportError("hMail background prefs failed: " + e);
     }
