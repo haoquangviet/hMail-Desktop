@@ -2665,6 +2665,51 @@ select.hmail-ai-field,
     height: auto;
 }
 
+.hmail-zip-preview {
+    display: flex;
+    flex-direction: column;
+}
+
+.hmail-zip-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.hmail-zip-host {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.hmail-zip-frame {
+    flex: 1 1 auto;
+    min-height: 400px;
+    border: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+    border-radius: 6px;
+    background-color: white;
+}
+
+.hmail-zip-table {
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+
+.hmail-zip-table th,
+.hmail-zip-table td {
+    border: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+    padding: 3px 8px;
+    white-space: nowrap;
+}
+
+.hmail-zip-table th {
+    background-color: color-mix(in srgb, CanvasText 6%, Canvas);
+    font-weight: 600;
+}
+
 /* --- tab Di chuyển dữ liệu --- */
 
 .hmail-move-path {

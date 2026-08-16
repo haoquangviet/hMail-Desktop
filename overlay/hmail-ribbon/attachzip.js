@@ -19,8 +19,14 @@ var hMailZipView = {
   TAB_MODE: "hmailZipView",
   MAX_ARCHIVE: 50 * 1024 * 1024,
   MAX_PREVIEW: 256 * 1024,
-  TEXT_EXT: /\.(txt|log|csv|json|xml|html?|md|ini|cfg|conf|yml|yaml|js|ts|css|php|py|sh|bat|ps1|sql|eml)$/i,
-  IMAGE_EXT: /\.(png|jpe?g|gif|webp|bmp|ico)$/i,
+  MAX_RENDER: 4 * 1024 * 1024,
+  TEXT_EXT: /\.(txt|log|md|ini|cfg|conf|yml|yaml|js|ts|css|php|py|sh|bat|ps1|sql|eml)$/i,
+  HTML_EXT: /\.(html?|xhtml)$/i,
+  XML_EXT: /\.xml$/i,
+  JSON_EXT: /\.json$/i,
+  CSV_EXT: /\.(csv|tsv)$/i,
+  PDF_EXT: /\.pdf$/i,
+  IMAGE_EXT: /\.(png|jpe?g|gif|webp|bmp|ico|svg)$/i,
   ZIP_EXT: /\.(zip|jar|xpi|docx|xlsx|pptx|odt|ods|odp|epub)$/i,
 
   // ------------------------------------------------------------- cài móc
@@ -258,41 +264,246 @@ var hMailZipView = {
     return root;
   },
 
+  base64(win, bytes) {
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 32768) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 32768));
+    }
+    return win.btoa(binary);
+  },
+
+  /**
+   * Khung render CÁCH LY cho HTML/PDF: browser content với principal mồ
+   * côi và CSP default-src 'none' — không script, không mạng, không form.
+   * Cùng công thức đã dùng cho xem trước thư bị giữ.
+   */
+  sandboxFrame(win, doc, dataUrl) {
+    const frame = doc.createXULElement("browser");
+    frame.setAttribute("type", "content");
+    frame.setAttribute("nodefaultsrc", "true");
+    frame.setAttribute("maychangeremoteness", "true");
+    frame.setAttribute("messagemanagergroup", "single-site");
+    frame.setAttribute("flex", "1");
+    frame.className = "hmail-zip-frame";
+    win.setTimeout(() => {
+      try {
+        frame.fixupAndLoadURIString(dataUrl, {
+          triggeringPrincipal:
+            Services.scriptSecurityManager.getSystemPrincipal(),
+        });
+      } catch (e) {
+        Cu.reportError("hMail zip frame failed: " + e);
+      }
+    }, 0);
+    return frame;
+  },
+
+  /** Khử script/handler/khung ngoài khỏi HTML rồi thêm CSP — hai lớp. */
+  neutralizeHtml(html) {
+    return "<!doctype html><meta charset=\"utf-8\">" +
+      "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src " +
+      "'none'; style-src 'unsafe-inline'; img-src data:\">" +
+      String(html)
+        .replace(/<!doctype[^>]*>/gi, "")
+        .replace(/<(script|iframe|object|embed|applet|frame|frameset|link|meta|base)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "")
+        .replace(/<(script|iframe|object|embed|applet|frame|frameset|link|meta|base)\b[^>]*\/?>/gi, "")
+        .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+        .replace(/(href|src|action|formaction)\s*=\s*(["']?)\s*(javascript|vbscript|data:text\/html)[^"'\s>]*/gi, "$1=$2#")
+        .replace(/<form\b[^>]*>/gi, "<form action=\"#\" onsubmit=\"return false\">");
+  },
+
+  /** XML thụt lề đẹp; hỏng thì trả nguyên. */
+  prettyXml(text) {
+    try {
+      const parsed = new DOMParser().parseFromString(text, "application/xml");
+      if (parsed.getElementsByTagName("parsererror").length) {
+        return text;
+      }
+      const lines = [];
+      const walk = (node, depth) => {
+        const pad = "  ".repeat(depth);
+        if (node.nodeType === 3) {
+          const t = node.nodeValue.trim();
+          if (t) {
+            lines.push(pad + t);
+          }
+          return;
+        }
+        if (node.nodeType !== 1) {
+          return;
+        }
+        const attrs = [...node.attributes]
+          .map(a => ` ${a.name}="${a.value}"`).join("");
+        const kids = [...node.childNodes]
+          .filter(n => n.nodeType === 1 || (n.nodeType === 3 && n.nodeValue.trim()));
+        if (!kids.length) {
+          lines.push(`${pad}<${node.nodeName}${attrs}/>`);
+        } else if (kids.length === 1 && kids[0].nodeType === 3) {
+          lines.push(`${pad}<${node.nodeName}${attrs}>` +
+                     kids[0].nodeValue.trim() + `</${node.nodeName}>`);
+        } else {
+          lines.push(`${pad}<${node.nodeName}${attrs}>`);
+          for (const kid of kids) {
+            walk(kid, depth + 1);
+          }
+          lines.push(`${pad}</${node.nodeName}>`);
+        }
+      };
+      walk(parsed.documentElement, 0);
+      return lines.join("\n");
+    } catch (e) {
+      return text;
+    }
+  },
+
   preview(win, view, reader, item) {
     const doc = win.document;
     const el = (t, c, x) => this.el(doc, t, c, x);
     view.textContent = "";
     view.appendChild(el("div", "hmail-zip-preview-head",
       `${item.name} — ${Math.round(item.size / 1024)} KB`));
+    const decode = bytes => new TextDecoder("utf-8", { fatal: false })
+      .decode(bytes);
+    const truncated = cap => item.size > cap
+      ? el("div", "hmail-import-note",
+           `(Hiện ${Math.round(cap / 1024)} KB đầu — tệp còn dài hơn.)`)
+      : null;
     try {
-      if (this.IMAGE_EXT.test(item.name)) {
-        const bytes = this.readEntryBytes(reader, item.name, this.MAX_PREVIEW * 8);
-        let binary = "";
-        for (let i = 0; i < bytes.length; i += 32768) {
-          binary += String.fromCharCode
-            .apply(null, bytes.subarray(i, i + 32768));
-        }
-        const ext = item.name.split(".").pop().toLowerCase();
+      const name = item.name;
+
+      // Ảnh: hiện tĩnh qua data URI (SVG cũng qua <img> nên script trong
+      // SVG không chạy).
+      if (this.IMAGE_EXT.test(name)) {
+        const bytes = this.readEntryBytes(reader, name, this.MAX_RENDER);
+        const ext = name.split(".").pop().toLowerCase();
         const mime = { png: "image/png", gif: "image/gif", webp: "image/webp",
-                       bmp: "image/bmp", ico: "image/x-icon" }[ext] ||
-                     "image/jpeg";
+                       bmp: "image/bmp", ico: "image/x-icon",
+                       svg: "image/svg+xml" }[ext] || "image/jpeg";
         const img = el("img", "hmail-zip-img");
-        img.src = `data:${mime};base64,${win.btoa(binary)}`;
+        img.src = `data:${mime};base64,${this.base64(win, bytes)}`;
         view.appendChild(img);
         return;
       }
-      if (this.TEXT_EXT.test(item.name)) {
-        const bytes = this.readEntryBytes(reader, item.name, this.MAX_PREVIEW);
-        const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-        // textContent — chữ là chữ, không bao giờ thành DOM hay mã chạy.
-        const pre = el("pre", "hmail-zip-text", text);
-        view.appendChild(pre);
-        if (item.size > this.MAX_PREVIEW) {
-          view.appendChild(el("div", "hmail-import-note",
-            "(Hiện 256 KB đầu — tệp còn dài hơn.)"));
+
+      // HTML (hoá đơn điện tử, thư mẫu…): render thật trong khung cách ly
+      // — người dùng thấy đúng hình hài tài liệu, còn nút xem mã nguồn cho
+      // ai muốn soi.
+      if (this.HTML_EXT.test(name)) {
+        const bytes = this.readEntryBytes(reader, name, this.MAX_RENDER);
+        const html = decode(bytes);
+        const bar = el("div", "hmail-zip-bar");
+        const asPage = el("button", "hmail-spam-btn primary", "Xem trang");
+        const asSource = el("button", "hmail-spam-btn", "Xem mã nguồn");
+        bar.append(asPage, asSource,
+          el("span", "hmail-import-note",
+             "Trang được hiển thị trong khung cách ly: không script, không " +
+             "tải tài nguyên ngoài, không gửi biểu mẫu."));
+        view.appendChild(bar);
+        const host = el("div", "hmail-zip-host");
+        view.appendChild(host);
+        const showPage = () => {
+          host.textContent = "";
+          host.appendChild(this.sandboxFrame(win, doc,
+            "data:text/html;charset=utf-8," +
+            encodeURIComponent(this.neutralizeHtml(html))));
+        };
+        const showSource = () => {
+          host.textContent = "";
+          host.appendChild(el("pre", "hmail-zip-text", html));
+        };
+        asPage.addEventListener("click", showPage);
+        asSource.addEventListener("click", showSource);
+        showPage();
+        return;
+      }
+
+      // PDF: trình xem PDF nội bộ của Gecko (pdf.js) vốn chạy trong sandbox
+      // content — không có plugin ngoài nào được gọi.
+      if (this.PDF_EXT.test(name)) {
+        const bytes = this.readEntryBytes(reader, name, this.MAX_RENDER * 4);
+        view.appendChild(this.sandboxFrame(win, doc,
+          `data:application/pdf;base64,${this.base64(win, bytes)}`));
+        return;
+      }
+
+      // XML: thụt lề có cấu trúc — hoá đơn điện tử VN đọc được bằng mắt.
+      if (this.XML_EXT.test(name)) {
+        const bytes = this.readEntryBytes(reader, name, this.MAX_PREVIEW);
+        view.appendChild(el("pre", "hmail-zip-text",
+                            this.prettyXml(decode(bytes))));
+        const note = truncated(this.MAX_PREVIEW);
+        if (note) {
+          view.appendChild(note);
         }
         return;
       }
+
+      // JSON: định dạng lại 2 khoảng trắng.
+      if (this.JSON_EXT.test(name)) {
+        const bytes = this.readEntryBytes(reader, name, this.MAX_PREVIEW);
+        const raw = decode(bytes);
+        let text = raw;
+        try {
+          text = JSON.stringify(JSON.parse(raw), null, 2);
+        } catch (e) {}
+        view.appendChild(el("pre", "hmail-zip-text", text));
+        return;
+      }
+
+      // CSV/TSV: bảng thật, tối đa 500 dòng.
+      if (this.CSV_EXT.test(name)) {
+        const bytes = this.readEntryBytes(reader, name, this.MAX_PREVIEW);
+        const text = decode(bytes);
+        const sep = /\.tsv$/i.test(name) ? "\t" :
+          (text.split("\n")[0].split(";").length >
+           text.split("\n")[0].split(",").length ? ";" : ",");
+        const table = el("table", "hmail-zip-table");
+        const rows = text.split(/\r?\n/).filter(l => l.trim()).slice(0, 500);
+        rows.forEach((line, idx) => {
+          const tr = el("tr");
+          for (const cell of line.split(sep)) {
+            tr.appendChild(el(idx === 0 ? "th" : "td", null,
+                              cell.replace(/^"|"$/g, "")));
+          }
+          table.appendChild(tr);
+        });
+        view.appendChild(table);
+        return;
+      }
+
+      if (this.TEXT_EXT.test(name)) {
+        const bytes = this.readEntryBytes(reader, name, this.MAX_PREVIEW);
+        // textContent — chữ là chữ, không bao giờ thành DOM hay mã chạy.
+        view.appendChild(el("pre", "hmail-zip-text", decode(bytes)));
+        const note = truncated(this.MAX_PREVIEW);
+        if (note) {
+          view.appendChild(note);
+        }
+        return;
+      }
+
+      // Tài liệu Office là zip lồng zip: mở tiếp một tab nữa để soi.
+      if (this.ZIP_EXT.test(name)) {
+        const open = el("button", "hmail-spam-btn primary",
+                        "Xem bên trong tệp này");
+        open.addEventListener("click", async () => {
+          try {
+            const bytes = this.readEntryBytes(reader, name, this.MAX_ARCHIVE);
+            const path = PathUtils.join(PathUtils.tempDir,
+              `hmail-zipview-${Date.now()}.zip`);
+            await IOUtils.write(path, bytes);
+            const inner = this.openReader(path);
+            win.document.getElementById("tabmail").openTab(this.TAB_MODE,
+              { reader: inner, path, label: name });
+          } catch (e) {
+            view.appendChild(el("div", "hmail-import-note",
+              "Không mở được: " + (e.message || e)));
+          }
+        });
+        view.appendChild(open);
+        return;
+      }
+
       view.appendChild(el("div", "hmail-import-note",
         "Loại tệp này chỉ hiện tên và kích thước — không có chế độ xem " +
         "trước an toàn. Đừng mở nếu bạn không chắc về người gửi."));
