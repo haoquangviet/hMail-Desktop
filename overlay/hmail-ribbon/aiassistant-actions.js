@@ -186,6 +186,38 @@ Object.assign(hMailAI, {
       },
     },
     {
+      name: "create_filter",
+      description: "Tạo BỘ LỌC THƯ lâu dài cho một tài khoản (giống Công " +
+                   "cụ ▸ Bộ lọc thư): thư ĐẾN sau này khớp điều kiện sẽ tự " +
+                   "được xử lý. Điều kiện: người gửi chứa / tiêu đề chứa / " +
+                   "người nhận chứa. Hành động: chuyển thư mục, gắn nhãn, " +
+                   "đánh dấu đã đọc, xoá, gắn cờ. Dùng khi người dùng nói " +
+                   "\"từ giờ thư của X thì…\", \"tự động chuyển…\". Bộ lọc " +
+                   "hiện trong Công cụ ▸ Bộ lọc thư để người dùng sửa.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Tên bộ lọc, ngắn gọn" },
+          account: { type: "string",
+                     description: "Email/tên tài khoản áp dụng; bỏ trống = " +
+                                  "tài khoản của thư đang xem hoặc mặc định" },
+          sender_contains: { type: "string" },
+          subject_contains: { type: "string" },
+          recipient_contains: { type: "string" },
+          action: { type: "string",
+                    enum: ["move", "tag", "read", "delete", "flag"] },
+          folder: { type: "string",
+                    description: "Thư mục đích cho 'move' (tạo mới nếu chưa " +
+                                 "có, dưới gốc tài khoản)" },
+          tag: { type: "string", description: "Tên nhãn cho 'tag'" },
+          apply_now: { type: "boolean",
+                       description: "Chạy ngay bộ lọc lên Hộp thư đến hiện " +
+                                    "có (mặc định false)" },
+        },
+        required: ["name", "action"],
+      },
+    },
+    {
       name: "compose_new",
       description: "Mở cửa sổ soạn THƯ MỚI (không phải trả lời) tới một " +
                    "người nhận với tiêu đề và nội dung soạn sẵn. Dùng khi " +
@@ -227,7 +259,35 @@ Object.assign(hMailAI, {
   /** Các hành động cấp HỘP THƯ — chạy được khi chưa mở thư nào. */
   MAILBOX_TOOLS: new Set(["compose_new", "search_messages", "read_message",
                           "open_message", "filter_messages",
-                          "act_on_filtered"]),
+                          "act_on_filtered", "create_filter"]),
+
+  /** msgWindow của 3-pane (getFilterList/applyFilters cần một cái). */
+  msgWindowOf(win) {
+    try {
+      return this.about3Pane(win)?.msgWindow ||
+        Cc["@mozilla.org/messenger/msgwindow;1"].createInstance(Ci.nsIMsgWindow);
+    } catch (e) {
+      return null;
+    }
+  },
+
+  /** Server theo email/tên; không khớp thì server của thư đang xem/mặc định. */
+  serverFor(account, fallbackHdr) {
+    const acc = String(account || "").trim().toLowerCase();
+    if (acc) {
+      for (const server of MailServices.accounts.allServers) {
+        const ident = MailServices.accounts
+          .findAccountForServer(server)?.defaultIdentity?.email || "";
+        if (server.prettyName.toLowerCase().includes(acc) ||
+            ident.toLowerCase().includes(acc)) {
+          return server;
+        }
+      }
+      return null;
+    }
+    return fallbackHdr?.folder?.server ||
+      MailServices.accounts.defaultAccount?.incomingServer || null;
+  },
 
   /** about:3pane của tab đang mở, nơi có thanh Lọc nhanh và gDBView. */
   about3Pane(win) {
@@ -894,6 +954,144 @@ Object.assign(hMailAI, {
                    background: true, total };
         }
 
+        case "create_filter": {
+          const server = this.serverFor(args.account, hdr);
+          if (!server) {
+            return { ok: false, error: "Không tìm thấy tài khoản để đặt bộ lọc." };
+          }
+          const conds = [];
+          if (args.sender_contains) {
+            conds.push(["from", args.sender_contains]);
+          }
+          if (args.subject_contains) {
+            conds.push(["subject", args.subject_contains]);
+          }
+          if (args.recipient_contains) {
+            conds.push(["to", args.recipient_contains]);
+          }
+          if (!conds.length) {
+            return { ok: false,
+                     error: "Bộ lọc cần ít nhất một điều kiện (người gửi / " +
+                            "tiêu đề / người nhận)." };
+          }
+          const action = String(args.action || "");
+          const actLabel = { move: "chuyển thư mục", tag: "gắn nhãn",
+                             read: "đánh dấu đã đọc", delete: "xoá",
+                             flag: "gắn cờ" }[action];
+          if (!actLabel) {
+            return { ok: false, error: `Hành động không hỗ trợ: ${action}` };
+          }
+          let dest = null;
+          if (action === "move") {
+            const wanted = String(args.folder || "").trim();
+            if (!wanted) {
+              return { ok: false, error: "Thiếu thư mục đích." };
+            }
+            dest = this.findFolderNamed(wanted, server);
+            if (!dest) {
+              // Tạo mới dưới gốc tài khoản — người dùng nói "vào thư mục
+              // Đối tác" thì phải có thư mục Đối tác.
+              try {
+                server.rootFolder.createSubfolder(wanted, null);
+                await new Promise(r => win.setTimeout(r, 800));
+                dest = this.findFolderNamed(wanted, server);
+              } catch (e) {}
+              if (!dest) {
+                return { ok: false,
+                         error: `Không tạo được thư mục "${wanted}".` };
+              }
+            }
+          }
+          const condText = conds.map(([f, v]) =>
+            ({ from: "người gửi", subject: "tiêu đề", to: "người nhận" }[f]) +
+            ` chứa "${v}"`).join(" VÀ ");
+          if (!this.confirm(win, "hMail AI — tạo bộ lọc",
+                `Tạo bộ lọc "${args.name}" cho tài khoản ${server.prettyName}` +
+                `:\n\nKhi ${condText}\n→ ${actLabel}` +
+                (dest ? ` sang "${dest.prettyName}"` : "") +
+                (action === "tag" ? ` "${args.tag}"` : "") +
+                "\n\nÁp dụng cho thư đến sau này" +
+                (args.apply_now ? " và chạy ngay trên Hộp thư đến" : "") +
+                ". Sửa/xoá được trong Công cụ ▸ Bộ lọc thư.")) {
+            return { ok: false, error: "Người dùng đã từ chối." };
+          }
+
+          const list = server.getFilterList(this.msgWindowOf(win));
+          const filter = list.createFilter(String(args.name));
+          filter.enabled = true;
+          filter.filterType = Ci.nsMsgFilterType.InboxRule |
+                              Ci.nsMsgFilterType.Manual;
+          for (const [field, value] of conds) {
+            const term = filter.createTerm();
+            term.attrib = { from: Ci.nsMsgSearchAttrib.Sender,
+                            subject: Ci.nsMsgSearchAttrib.Subject,
+                            to: Ci.nsMsgSearchAttrib.To }[field];
+            term.op = Ci.nsMsgSearchOp.Contains;
+            const v = term.value;
+            v.attrib = term.attrib;
+            v.str = String(value);
+            term.value = v;
+            term.booleanAnd = true;
+            filter.appendTerm(term);
+          }
+          const act = filter.createAction();
+          if (action === "move") {
+            act.type = Ci.nsMsgFilterAction.MoveToFolder;
+            act.targetFolderUri = dest.URI;
+          } else if (action === "tag") {
+            const wanted = String(args.tag || "").trim();
+            let key = null;
+            for (const t of MailServices.tags.getAllTags()) {
+              if (t.tag.toLowerCase() === wanted.toLowerCase()) {
+                key = t.key;
+              }
+            }
+            if (!key) {
+              MailServices.tags.addTagForKey(
+                wanted.toLowerCase().replace(/[^a-z0-9]/g, "") || "hmailai",
+                wanted, "#0F6CBD", "");
+              for (const t of MailServices.tags.getAllTags()) {
+                if (t.tag === wanted) {
+                  key = t.key;
+                }
+              }
+            }
+            act.type = Ci.nsMsgFilterAction.AddTag;
+            act.strValue = key;
+          } else if (action === "read") {
+            act.type = Ci.nsMsgFilterAction.MarkRead;
+          } else if (action === "delete") {
+            act.type = Ci.nsMsgFilterAction.Delete;
+          } else if (action === "flag") {
+            act.type = Ci.nsMsgFilterAction.MarkFlagged;
+          }
+          filter.appendAction(act);
+          list.insertFilterAt(0, filter);
+          list.saveToDefaultFile();
+
+          let applied = "";
+          if (args.apply_now) {
+            try {
+              const inbox = server.rootFolder
+                .getFolderWithFlags(Ci.nsMsgFolderFlags.Inbox);
+              const one = server.getFilterList(this.msgWindowOf(win));
+              // Chạy riêng bộ lọc vừa tạo lên Hộp thư đến hiện có.
+              const tmp = MailServices.filters.getTempFilterList(inbox);
+              tmp.insertFilterAt(0, filter);
+              MailServices.filters.applyFilters(
+                Ci.nsMsgFilterType.Manual, tmp, inbox, this.msgWindowOf(win),
+                null);
+              applied = " và đã chạy lên Hộp thư đến";
+              void one;
+            } catch (e) {
+              applied = " (chạy ngay không thành công: " + (e.message || e) + ")";
+            }
+          }
+          return { ok: true,
+                   done: `đã tạo bộ lọc "${args.name}" (${condText} → ` +
+                         `${actLabel})${applied}; xem ở Công cụ ▸ Bộ lọc thư` };
+        }
+
         case "compose_new": {
           const body = String(args.body || "").trim();
           if (!body) {
@@ -927,6 +1125,63 @@ Object.assign(hMailAI, {
     }
   },
 });
+
+// ---------------------------------------------------------------------------
+// Tự kiểm create_filter (pref hmail.debug.rulestest = "run"): tạo một bộ lọc
+// thật (điều kiện + hành động gắn nhãn) trên tài khoản mặc định — hộp xác
+// nhận được bấm hộ — kiểm tra nó nằm trong danh sách bộ lọc, rồi XOÁ NGAY
+// để không để rác lại.
+(function hMailRulesSelfTest() {
+  let mode = "";
+  try {
+    mode = Services.prefs.getCharPref("hmail.debug.rulestest", "");
+  } catch (e) {}
+  if (mode !== "run") {
+    return;
+  }
+  const report = text => {
+    try {
+      Services.prefs.setCharPref("hmail.debug.rulestest",
+                                 String(text).slice(0, 900));
+      Services.prefs.savePrefFile(null);
+    } catch (e) {}
+  };
+  setTimeout(async () => {
+    const win = Services.wm.getMostRecentWindow("mail:3pane");
+    const origConfirm = hMailAI.confirm;
+    hMailAI.confirm = () => true;
+    try {
+      const NAME = "hMail-selftest-" + Date.now();
+      const res = await hMailAI.runTool(win, "create_filter", {
+        name: NAME, sender_contains: "selftest@example.invalid",
+        action: "tag", tag: "SelfTest",
+      });
+      const server = hMailAI.serverFor("", null);
+      const list = server.getFilterList(hMailAI.msgWindowOf(win));
+      let found = -1;
+      for (let i = 0; i < list.filterCount; i++) {
+        if (list.getFilterAt(i).filterName === NAME) {
+          found = i;
+        }
+      }
+      let terms = 0, actions = 0;
+      if (found >= 0) {
+        const f = list.getFilterAt(found);
+        terms = f.searchTerms.length;
+        actions = f.actionCount;
+        list.removeFilterAt(found);
+        list.saveToDefaultFile();
+      }
+      report(JSON.stringify({ ok: res.ok, done: res.done, error: res.error,
+                              foundInList: found >= 0, terms, actions,
+                              cleaned: found >= 0 }));
+    } catch (e) {
+      report("err: " + (e.message || e));
+    } finally {
+      hMailAI.confirm = origConfirm;
+    }
+  }, 15000);
+})();
 
 // ---------------------------------------------------------------------------
 // Tự kiểm filter_messages (pref hmail.debug.filtertest = "run:<từ khoá>"):

@@ -73,7 +73,11 @@ var hMailAI = {
     "filter_messages để đổ từ khoá vào ô lọc nhanh — danh sách trên màn " +
     "hình thu lại đúng nhóm thư, người dùng nhìn thấy; báo số lượng và hỏi " +
     "xác nhận; rồi act_on_filtered để làm một lần cho tất cả. KHÔNG bao giờ " +
-    "bảo người dùng \"tự thao tác thủ công\" — bạn làm được.",
+    "bảo người dùng \"tự thao tác thủ công\" — bạn làm được.\n" +
+    "- \"Từ giờ / tự động / mỗi khi thư của X đến thì…\" = tạo BỘ LỌC lâu " +
+    "dài bằng create_filter (điều kiện người gửi/tiêu đề/người nhận chứa; " +
+    "hành động chuyển thư mục/gắn nhãn/đánh dấu đọc/xoá/gắn cờ). Khác với " +
+    "act_on_filtered chỉ làm một lần cho thư đã có.",
 
   /** Built-in prompts. Users can add their own; these are the defaults. */
   BUILTIN_PROMPTS: [
