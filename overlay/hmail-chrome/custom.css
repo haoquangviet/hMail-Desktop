@@ -2580,6 +2580,88 @@ select.hmail-ai-field,
    editor phải hiện Y HỆT thứ sẽ lưu và hiện trong thư — ép ở đây là editor
    "nói dối", ảnh méo trong thư mà nhìn trong editor vẫn đẹp. */
 
+/* --- tab xem bên trong tệp nén --- */
+
+.hmail-zip-wrap {
+    display: flex;
+    gap: 12px;
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.hmail-zip-list {
+    flex: 0 0 40%;
+    min-width: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+    border-radius: 8px;
+    padding: 4px;
+}
+
+.hmail-zip-row {
+    appearance: none;
+    -moz-appearance: none;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 0.85rem;
+    text-align: start;
+    cursor: pointer;
+}
+
+.hmail-zip-row:hover {
+    background-color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 8%, Canvas);
+}
+
+.hmail-zip-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.hmail-zip-size {
+    flex: none;
+    opacity: 0.6;
+    font-size: 0.78rem;
+}
+
+.hmail-zip-preview {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: auto;
+    border: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.hmail-zip-preview-head {
+    font-weight: 600;
+    margin-bottom: 8px;
+    overflow-wrap: anywhere;
+}
+
+.hmail-zip-text {
+    margin: 0;
+    font: 12px Consolas, monospace;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text !important;
+    -moz-user-select: text !important;
+}
+
+.hmail-zip-img {
+    max-width: 100%;
+    height: auto;
+}
+
 /* --- tab Di chuyển dữ liệu --- */
 
 .hmail-move-path {
