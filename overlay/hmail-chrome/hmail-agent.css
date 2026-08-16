@@ -134,6 +134,27 @@ description.text-blurb {
     max-width: 60ch;
 }
 
+/* Chip "đang lọc theo thời gian" trên thanh Lọc nhanh (about:3pane). */
+#hmail-date-chip {
+  appearance: none;
+  -moz-appearance: none;
+  margin-inline-start: 8px;
+  padding: 2px 10px;
+  border: none;
+  border-radius: 999px;
+  background-color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 14%, Canvas);
+  color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 85%, CanvasText);
+  font: inherit;
+  font-size: 0.85em;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#hmail-date-chip:hover {
+  background-color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 24%, Canvas);
+}
+
 /* Thêm tài khoản: hMail chỉ có tài khoản thư — nút "Tài khoản mới" đã đi
    thẳng vào thêm email (hmail.cfg); giấu các lựa chọn nguồn cấp / nhóm tin /
    chat để lối vào bằng bàn phím cũng không lạc vào ngõ cụt. */
