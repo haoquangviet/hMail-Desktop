@@ -68,7 +68,12 @@ var hMailAI = {
     "dung hộp thư\" — bạn tự tra được. Quy trình tổng hợp đúng: " +
     "search_messages KHÔNG kèm từ khoá trước (lấy toàn cảnh), rồi " +
     "read_message 3–5 thư đáng chú ý nhất, rồi mới kết luận kèm nguồn. " +
-    "Kết quả rỗng thì nói rõ đã tìm khoảng thời gian nào, đừng suy diễn.",
+    "Kết quả rỗng thì nói rõ đã tìm khoảng thời gian nào, đừng suy diễn.\n" +
+    "- XỬ LÝ HÀNG LOẠT (xoá/chuyển/gắn nhãn cả một nhóm thư): dùng " +
+    "filter_messages để đổ từ khoá vào ô lọc nhanh — danh sách trên màn " +
+    "hình thu lại đúng nhóm thư, người dùng nhìn thấy; báo số lượng và hỏi " +
+    "xác nhận; rồi act_on_filtered để làm một lần cho tất cả. KHÔNG bao giờ " +
+    "bảo người dùng \"tự thao tác thủ công\" — bạn làm được.",
 
   /** Built-in prompts. Users can add their own; these are the defaults. */
   BUILTIN_PROMPTS: [

@@ -137,6 +137,55 @@ Object.assign(hMailAI, {
       },
     },
     {
+      name: "filter_messages",
+      description: "Điền từ khoá vào ô LỌC NHANH của thư mục đang mở (tự " +
+                   "bật thanh lọc nếu đang ẩn) — danh sách thư trên màn " +
+                   "hình thu lại đúng các thư khớp, người dùng nhìn thấy " +
+                   "ngay. Trả về số thư đang hiển thị sau khi lọc. Dùng " +
+                   "khi người dùng muốn THẤY/XỬ LÝ HÀNG LOẠT một nhóm thư " +
+                   "(xoá, chuyển, gắn nhãn cả cụm) — sau đó gọi " +
+                   "act_on_filtered.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string",
+                   description: "Từ khoá lọc (người gửi/tiêu đề); chuỗi " +
+                                "rỗng để bỏ lọc" },
+          unread_only: { type: "boolean", description: "Chỉ thư chưa đọc" },
+          account: { type: "string",
+                     description: "Email/tên tài khoản cần lọc trong Hộp " +
+                                  "thư đến của nó (lấy từ kết quả " +
+                                  "search_messages: trường folder); bỏ " +
+                                  "trống = thư mục đang mở" },
+          folder: { type: "string",
+                    description: "Tên thư mục cụ thể cần lọc (mặc định Hộp " +
+                                 "thư đến của tài khoản)" },
+        },
+        required: ["query"],
+      },
+    },
+    {
+      name: "act_on_filtered",
+      description: "Thực hiện MỘT hành động lên TOÀN BỘ thư đang hiển thị " +
+                   "trong danh sách (sau khi filter_messages): 'trash' " +
+                   "chuyển vào Thùng rác, 'move' chuyển sang thư mục, " +
+                   "'tag' gắn nhãn, 'read' đánh dấu đã đọc, 'archive' lưu " +
+                   "trữ. Luôn hỏi người dùng xác nhận số lượng trước khi " +
+                   "làm.",
+      parameters: {
+        type: "object",
+        properties: {
+          action: { type: "string",
+                    enum: ["trash", "move", "tag", "read", "archive"] },
+          folder: { type: "string",
+                    description: "Tên hoặc đường dẫn thư mục đích (cho " +
+                                 "'move')" },
+          tag: { type: "string", description: "Tên nhãn (cho 'tag')" },
+        },
+        required: ["action"],
+      },
+    },
+    {
       name: "compose_new",
       description: "Mở cửa sổ soạn THƯ MỚI (không phải trả lời) tới một " +
                    "người nhận với tiêu đề và nội dung soạn sẵn. Dùng khi " +
@@ -177,7 +226,71 @@ Object.assign(hMailAI, {
    */
   /** Các hành động cấp HỘP THƯ — chạy được khi chưa mở thư nào. */
   MAILBOX_TOOLS: new Set(["compose_new", "search_messages", "read_message",
-                          "open_message"]),
+                          "open_message", "filter_messages",
+                          "act_on_filtered"]),
+
+  /** about:3pane của tab đang mở, nơi có thanh Lọc nhanh và gDBView. */
+  about3Pane(win) {
+    try {
+      return win.document.getElementById("tabmail")?.currentAbout3Pane || null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  /** Mọi hdr đang hiển thị trong view (đúng những gì người dùng thấy). */
+  visibleHeaders(a3) {
+    const view = a3?.gDBView;
+    const out = [];
+    if (!view) {
+      return out;
+    }
+    const rows = view.rowCount;
+    for (let i = 0; i < rows; i++) {
+      try {
+        const hdr = view.getMsgHdrAt(i);
+        if (hdr) {
+          out.push(hdr);
+        }
+      } catch (e) {}
+    }
+    return out;
+  },
+
+  /** Tìm thư mục theo tên trong toàn bộ tài khoản (ưu tiên server đang mở). */
+  findFolderNamed(name, preferServer) {
+    const wanted = String(name || "").trim().toLowerCase();
+    if (!wanted) {
+      return null;
+    }
+    let hit = null;
+    const walk = f => {
+      if (hit) {
+        return;
+      }
+      if (f.prettyName.toLowerCase() === wanted ||
+          f.name.toLowerCase() === wanted ||
+          f.URI.toLowerCase().endsWith("/" + encodeURIComponent(wanted))) {
+        hit = f;
+        return;
+      }
+      for (const sub of f.subFolders) {
+        walk(sub);
+      }
+    };
+    if (preferServer) {
+      walk(preferServer.rootFolder);
+    }
+    if (!hit) {
+      for (const server of MailServices.accounts.allServers) {
+        walk(server.rootFolder);
+        if (hit) {
+          break;
+        }
+      }
+    }
+    return hit;
+  },
 
   /** Đổi id "folderURI#key" từ search_messages ngược về nsIMsgDBHdr. */
   hdrFromId(id) {
@@ -440,6 +553,203 @@ Object.assign(hMailAI, {
           return { ok: true, done: "đã mở thư lên màn hình" };
         }
 
+        case "filter_messages": {
+          const a3 = this.about3Pane(win);
+          if (!a3?.quickFilterBar) {
+            return { ok: false,
+                     error: "Không có thư mục nào đang mở để lọc." };
+          }
+          const query = String(args.query || "").trim();
+          // Có chỉ định thư mục/tài khoản: chuyển danh sách sang đó trước
+          // (thư cần dọn thường nằm ở Hộp thư đến của một tài khoản cụ thể,
+          // không phải thư mục đang mở).
+          if (args.folder || args.account) {
+            let target = null;
+            if (args.account) {
+              const acc = String(args.account).toLowerCase();
+              for (const server of MailServices.accounts.allServers) {
+                const ident = MailServices.accounts
+                  .findAccountForServer(server)?.defaultIdentity?.email || "";
+                if (server.prettyName.toLowerCase().includes(acc) ||
+                    ident.toLowerCase().includes(acc)) {
+                  target = args.folder
+                    ? this.findFolderNamed(args.folder, server)
+                    : server.rootFolder
+                        .getFolderWithFlags(Ci.nsMsgFolderFlags.Inbox);
+                  break;
+                }
+              }
+            } else {
+              target = this.findFolderNamed(args.folder, a3.gFolder?.server);
+            }
+            if (!target) {
+              return { ok: false,
+                       error: "Không tìm thấy thư mục/tài khoản yêu cầu." };
+            }
+            if (a3.gFolder?.URI !== target.URI) {
+              a3.displayFolder(target);
+              await new Promise(r => win.setTimeout(r, 900));
+            }
+          }
+          const bar = a3.quickFilterBar;
+          // Bật thanh lọc nếu đang ẩn — đúng nút người dùng hay bấm.
+          try {
+            if (!bar.filterer?.visible) {
+              if (typeof a3.goDoCommand === "function") {
+                a3.goDoCommand("cmd_showQuickFilterBar");
+              } else {
+                bar._showFilterBar?.(true);
+              }
+            }
+          } catch (e) {}
+          // Đi đường chính chủ của thanh lọc: đặt giá trị filter "text"
+          // (giữ nguyên các ô Người gửi/Chủ đề… đang bật), để thanh tự vẽ
+          // chữ vào ô <search-bar> rồi chạy tìm — không đụng DOM của ô
+          // (value của nó chỉ có getter).
+          try {
+            const filterer = bar.filterer;
+            const prev = filterer.getFilterValue?.("text") ||
+                         filterer.filterValues?.text || null;
+            const states = prev?.states || {
+              sender: true, recipients: true, subject: true, body: false,
+            };
+            filterer.setFilterValue("text", { text: query, states });
+            if (typeof args.unread_only === "boolean") {
+              filterer.setFilterValue("unread", args.unread_only ? true : null);
+            }
+            bar.reflectFiltererState?.();
+            // Cho người dùng THẤY từ khoá trong ô — API chính thức của
+            // <search-bar> (value chỉ có getter).
+            try {
+              a3.document.getElementById("qfb-qs-textbox")
+                ?.overrideSearchTerm?.(query);
+            } catch (e) {}
+            bar.updateSearch();
+          } catch (e) {
+            return { ok: false, error: "Không đặt được bộ lọc: " +
+                                       (e.message || e) };
+          }
+          // Chờ view chạy xong tìm kiếm rồi mới đếm: quick filter cập
+          // nhật theo timer + tìm kiếm bất đồng bộ, rowCount có thể trùng
+          // số cũ ngay khi kết quả đã khác — chờ số ổn định 4 nhịp liền
+          // sau ít nhất 1,2 giây, tối đa 8 giây.
+          await new Promise(resolve => {
+            let last = -2;
+            let stable = 0;
+            let ticks = 0;
+            const poll = () => {
+              const now = a3.gDBView?.rowCount ?? -1;
+              stable = now === last ? stable + 1 : 0;
+              last = now;
+              ticks++;
+              if ((ticks >= 8 && stable >= 4) || ticks > 53) {
+                resolve();
+              } else {
+                win.setTimeout(poll, 150);
+              }
+            };
+            win.setTimeout(poll, 300);
+          });
+          const shown = this.visibleHeaders(a3);
+          const sample = shown.slice(0, 5).map(h =>
+            `${h.mime2DecodedAuthor || ""} | ${h.mime2DecodedSubject || ""}`);
+          return { ok: true,
+                   done: query
+                     ? `đã lọc "${query}" — ${shown.length} thư đang hiển thị`
+                     : "đã bỏ lọc",
+                   count: shown.length, sample };
+        }
+
+        case "act_on_filtered": {
+          const a3 = this.about3Pane(win);
+          const hdrs = this.visibleHeaders(a3);
+          if (!hdrs.length) {
+            return { ok: false, error: "Danh sách đang trống — lọc trước đã." };
+          }
+          const action = String(args.action || "");
+          const byFolder = new Map();
+          for (const h of hdrs) {
+            const key = h.folder.URI;
+            if (!byFolder.has(key)) {
+              byFolder.set(key, { folder: h.folder, list: [] });
+            }
+            byFolder.get(key).list.push(h);
+          }
+          const label = {
+            trash: "chuyển vào Thùng rác", move: "chuyển thư mục",
+            tag: "gắn nhãn", read: "đánh dấu đã đọc", archive: "lưu trữ",
+          }[action];
+          if (!label) {
+            return { ok: false, error: `Hành động không hỗ trợ: ${action}` };
+          }
+          let target = null;
+          if (action === "move") {
+            target = this.findFolderNamed(args.folder,
+                                          hdrs[0].folder.server);
+            if (!target) {
+              return { ok: false,
+                       error: `Không tìm thấy thư mục "${args.folder}".` };
+            }
+          }
+          if (!this.confirm(win, "hMail AI",
+                `${label[0].toUpperCase() + label.slice(1)} ${hdrs.length} ` +
+                "thư đang hiển thị trong danh sách" +
+                (target ? ` sang "${target.prettyName}"` : "") +
+                (action === "tag" ? ` với nhãn "${args.tag}"` : "") +
+                "?\n\n(Hoàn tác được bằng Ctrl+Z ngay sau đó.)")) {
+            return { ok: false, error: "Người dùng đã từ chối." };
+          }
+          let done = 0;
+          for (const { folder, list } of byFolder.values()) {
+            try {
+              if (action === "trash") {
+                const trash = folder.server.rootFolder
+                  .getFolderWithFlags(Ci.nsMsgFolderFlags.Trash);
+                if (!trash) {
+                  continue;
+                }
+                MailServices.copy.copyMessages(folder, list, trash, true,
+                                               null, a3.msgWindow, true);
+              } else if (action === "move") {
+                MailServices.copy.copyMessages(folder, list, target, true,
+                                               null, a3.msgWindow, true);
+              } else if (action === "archive") {
+                const { MessageArchiver } = ChromeUtils.importESModule(
+                  "resource:///modules/MessageArchiver.sys.mjs");
+                const archiver = new MessageArchiver();
+                archiver.msgWindow = a3.msgWindow;
+                archiver.archiveMessages(list);
+              } else if (action === "read") {
+                folder.markMessagesRead(list, true);
+              } else if (action === "tag") {
+                const wanted = String(args.tag || "").trim();
+                let key = null;
+                for (const t of MailServices.tags.getAllTags()) {
+                  if (t.tag.toLowerCase() === wanted.toLowerCase()) {
+                    key = t.key;
+                  }
+                }
+                if (!key) {
+                  MailServices.tags.addTagForKey(
+                    wanted.toLowerCase().replace(/[^a-z0-9]/g, "") ||
+                      "hmailai", wanted, "#0F6CBD", "");
+                  for (const t of MailServices.tags.getAllTags()) {
+                    if (t.tag === wanted) {
+                      key = t.key;
+                    }
+                  }
+                }
+                folder.addKeywordsToMessages(list, key);
+              }
+              done += list.length;
+            } catch (e) {
+              Cu.reportError("hMail act_on_filtered: " + e);
+            }
+          }
+          return { ok: true,
+                   done: `đã ${label} ${done}/${hdrs.length} thư` };
+        }
+
         case "compose_new": {
           const body = String(args.body || "").trim();
           if (!body) {
@@ -473,6 +783,49 @@ Object.assign(hMailAI, {
     }
   },
 });
+
+// ---------------------------------------------------------------------------
+// Tự kiểm filter_messages (pref hmail.debug.filtertest = "run:<từ khoá>"):
+// đổ từ khoá vào ô lọc nhanh của thư mục đang mở, chờ view cập nhật, ghi số
+// thư hiển thị + mẫu; xong bỏ lọc trả lại như cũ.
+(function hMailFilterSelfTest() {
+  let mode = "";
+  try {
+    mode = Services.prefs.getCharPref("hmail.debug.filtertest", "");
+  } catch (e) {}
+  if (!mode.startsWith("run:")) {
+    return;
+  }
+  const query = mode.slice(4);
+  const report = text => {
+    try {
+      Services.prefs.setCharPref("hmail.debug.filtertest",
+                                 String(text).slice(0, 900));
+      Services.prefs.savePrefFile(null);
+    } catch (e) {}
+  };
+  setTimeout(async () => {
+    try {
+      const win = Services.wm.getMostRecentWindow("mail:3pane");
+      const res = await hMailAI.runTool(win, "filter_messages",
+        { query, account: "quyet@haoquangviet.com" });
+      const visible = hMailAI.about3Pane(win)?.quickFilterBar?.filterer?.visible;
+      let box = "";
+      try {
+        box = hMailAI.about3Pane(win)?.document
+          .getElementById("qfb-qs-textbox")?.value ?? "";
+      } catch (e) {
+        box = "(getter lỗi)";
+      }
+      await hMailAI.runTool(win, "filter_messages", { query: "" });
+      report(JSON.stringify({ ok: res.ok, count: res.count, barVisible: visible,
+                              boxValue: box, sample: res.sample?.slice(0, 2),
+                              error: res.error || null }));
+    } catch (e) {
+      report("err: " + (e.message || e));
+    }
+  }, 15000);
+})();
 
 // ---------------------------------------------------------------------------
 // Tự kiểm ĐẦU-CUỐI với model thật (pref hmail.debug.aitest = "run"): không
