@@ -1513,6 +1513,25 @@ select.hmail-ai-field,
     text-align: center;
 }
 
+/* Dòng tiến độ việc hàng loạt trong panel: chữ trái, nút Dừng phải. */
+.hmail-ai-bulk-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.hmail-ai-bulk-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.hmail-ai-bulk-row .hmail-ai-btn {
+    flex: none;
+    padding: 3px 10px;
+    font-size: 0.8em;
+}
+
 /* Hàng đáy dưới ô nhập: mẹo bên trái, badge chi phí bên phải. */
 .hmail-ai-footer {
     display: flex;

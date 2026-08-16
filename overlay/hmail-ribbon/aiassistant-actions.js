@@ -725,7 +725,13 @@ Object.assign(hMailAI, {
           // 200 thư, chờ từng lô xong (copy listener) rồi mới lô kế, giữa
           // hai lô nhường main thread; tiến độ hiện trên thanh bận và
           // trong panel. Chạy NỀN: trả lời model ngay, việc dọn tự chạy.
-          const BATCH = 200;
+          // Lô lớn hơn khi thư mục đang offline / cục bộ (không đi mạng
+          // từng thư); IMAP chưa offline thì lô vừa phải để tiến độ nhúc
+          // nhích và Dừng phản hồi nhanh.
+          const firstFolder = hdrs[0].folder;
+          const localish = firstFolder.server.type !== "imap" ||
+            firstFolder.getFlag(Ci.nsMsgFolderFlags.Offline);
+          const BATCH = localish ? 500 : 200;
           const jobId = "hmail-ai-bulk";
           const busy = typeof hMailBusy !== "undefined" ? hMailBusy
                                                         : win.hMailBusy;
@@ -735,6 +741,41 @@ Object.assign(hMailAI, {
               win.hMailAI?.notify?.(win, text);
             } catch (e) {}
           };
+          // Nút Dừng: một dòng hành động trong panel mang nút; đóng app
+          // giữa chừng cũng đi qua cùng cờ này (busy.onStop).
+          let stopped = false;
+          const stopRow = (() => {
+            try {
+              const doc = win.document;
+              const log = doc.getElementById("hmail-ai-log");
+              if (!log) {
+                return null;
+              }
+              const NS = "http://www.w3.org/1999/xhtml";
+              const row = doc.createElementNS(NS, "div");
+              row.className = "hmail-ai-turn action hmail-ai-bulk-row";
+              const text = doc.createElementNS(NS, "span");
+              text.className = "hmail-ai-bulk-text";
+              text.textContent = `Đang ${label} 0/${total} thư…`;
+              const stopBtn = doc.createElementNS(NS, "button");
+              stopBtn.className = "hmail-ai-btn";
+              stopBtn.textContent = "Dừng";
+              stopBtn.addEventListener("click", () => {
+                stopped = true;
+                stopBtn.disabled = true;
+                stopBtn.textContent = "Đang dừng…";
+              });
+              row.append(text, stopBtn);
+              log.appendChild(row);
+              log.scrollTop = log.scrollHeight;
+              return { row, text, stopBtn };
+            } catch (e) {
+              return null;
+            }
+          })();
+          try {
+            busy?.onStop(jobId, () => { stopped = true; });
+          } catch (e) {}
           const copyBatch = (folder, list, dest, isMove) =>
             new Promise(resolve => {
               const listener = {
@@ -778,6 +819,9 @@ Object.assign(hMailAI, {
                 dest = target;
               }
               for (let i = 0; i < list.length; i += BATCH) {
+                if (stopped) {
+                  break;
+                }
                 const chunk = list.slice(i, i + BATCH);
                 let ok = true;
                 try {
@@ -813,19 +857,32 @@ Object.assign(hMailAI, {
                   busy?.update(jobId, `${done + failed}/${total} (${pct}%)`);
                 } catch (e) {}
                 say(`Đang ${label}: ${done + failed}/${total} thư…`);
+                if (stopRow) {
+                  stopRow.text.textContent =
+                    `Đang ${label} ${done + failed}/${total} thư (${pct}%)…`;
+                }
                 await idle();
+              }
+              if (stopped) {
+                break;
               }
             }
             try {
               busy?.end(jobId);
             } catch (e) {}
-            say(`Đã ${label} ${done}/${total} thư` +
-                (failed ? ` — ${failed} thư không xử lý được.` : "."));
-            try {
-              win.hMailAI?.addTurn?.(win, "action",
-                `Hoàn tất: đã ${label} ${done}/${total} thư` +
-                (failed ? ` (${failed} lỗi)` : ""));
-            } catch (e) {}
+            const summary = (stopped ? "Đã dừng theo yêu cầu: " : "Hoàn tất: ") +
+              `đã ${label} ${done}/${total} thư` +
+              (failed ? ` — ${failed} thư không xử lý được` : "") +
+              (stopped ? ` — ${total - done - failed} thư chưa đụng tới` : "");
+            say(summary + ".");
+            if (stopRow) {
+              stopRow.text.textContent = summary;
+              stopRow.stopBtn.remove();
+            } else {
+              try {
+                win.hMailAI?.addTurn?.(win, "action", summary);
+              } catch (e) {}
+            }
           };
           // Không await: trả lời model ngay để panel không "suy nghĩ" suốt
           // 5 phút; tiến độ đi qua thanh trạng thái và thanh bận.
