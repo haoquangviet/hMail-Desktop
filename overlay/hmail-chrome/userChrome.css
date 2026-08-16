@@ -666,30 +666,14 @@ tree-view[data-show-grouped-by-sort="true"] .card-layout.children *:hover {
 	border-bottom: 0px solid rgba(0, 0, 0, 0.15) !important;
 }
 
-/* "More actions" button: hide default icon, inject custom SVG via ::before */
+/* Nút "hành động khác": chỉ giữ mũi tên dropmarker của chính nút — bản cũ
+   chèn thêm icon ⋯ xanh qua ::before, chồng với mũi tên thành hai lớp. */
 #otherActionsButton {
 	position: relative !important;
-	padding-left: 20px !important;
 }
 
 #otherActionsButton .toolbarbutton-icon {
 	display: none;
-}
-
-#otherActionsButton::before {
-	content: "" !important;
-	display: block !important;
-	position: absolute !important;
-	width: 16px;
-	height: 16px;
-	left: 6px;
-	top: 50%;
-	transform: translateY(-50%);
-	mask-image: url("Icons/more.svg") !important;
-	mask-repeat: no-repeat !important;
-	mask-size: contain !important;
-	background-color: #5aa4ef !important;
-	pointer-events: none;
 }
 
 /* Custom masked icons for each header action button */
