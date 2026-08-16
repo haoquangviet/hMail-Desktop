@@ -407,3 +407,60 @@ var hMailMsg = {
     return value;
   },
 };
+
+// ---------------------------------------------------------------------------
+// "Mở liên kết trong tab hMail": menu chuột phải trên liên kết trong thư
+// hiện chỉ có "Mở liên kết trong trình duyệt" — thêm lựa chọn mở ngay
+// trong một tab của hMail (contentTab của Thunderbird, cùng cơ chế trang
+// Ghi chú phát hành), khỏi nhảy sang trình duyệt ngoài. URL liên kết lấy
+// từ mailContextMenu.context — dữ liệu chính chủ mà nút mở-trình-duyệt
+// của Thunderbird cũng dùng.
+(function hMailLinkInTab() {
+  const win = window;
+  const attach = doc => {
+    try {
+      const menu = doc?.getElementById("mailContext");
+      if (!menu || menu.dataset.hmailLinkTab) {
+        return;
+      }
+      menu.dataset.hmailLinkTab = "1";
+      menu.addEventListener("popupshowing", () => {
+        try {
+          const anchor = doc.getElementById("mailContext-openLinkInBrowser");
+          let item = doc.getElementById("hmail-open-link-tab");
+          if (!item) {
+            item = doc.createXULElement("menuitem");
+            item.id = "hmail-open-link-tab";
+            item.setAttribute("label", "Mở liên kết trong tab hMail");
+            item.addEventListener("command", () => {
+              const url = item.dataset.url;
+              const tabmail = win.document.getElementById("tabmail");
+              if (url && tabmail) {
+                tabmail.openTab("contentTab", { url, background: false });
+              }
+            });
+            if (anchor) {
+              anchor.after(item);
+            } else {
+              menu.appendChild(item);
+            }
+          }
+          const context = doc.defaultView.mailContextMenu?.context;
+          const href = String(context?.linkURL || context?.link?.href || "");
+          const usable = context?.onLink && /^https?:/i.test(href);
+          item.hidden = !usable;
+          item.dataset.url = usable ? href : "";
+        } catch (e) {}
+      });
+    } catch (e) {}
+  };
+  try {
+    win.setInterval(() => {
+      const tabmail = win.document.getElementById("tabmail");
+      attach(tabmail?.currentAbout3Pane?.document);
+      attach(tabmail?.currentAboutMessage?.document);
+    }, 1500);
+  } catch (e) {
+    Cu.reportError("hMail link-in-tab init failed: " + e);
+  }
+})();

@@ -65,7 +65,10 @@ var hMailAI = {
     "search_messages (lọc theo từ khoá/ngày/chưa đọc), rồi read_message để " +
     "đọc nội dung các thư đáng chú ý và tổng hợp; open_message khi người " +
     "dùng muốn xem tận mắt. Tuyệt đối không bảo người dùng \"cung cấp nội " +
-    "dung hộp thư\" — bạn tự tra được.",
+    "dung hộp thư\" — bạn tự tra được. Quy trình tổng hợp đúng: " +
+    "search_messages KHÔNG kèm từ khoá trước (lấy toàn cảnh), rồi " +
+    "read_message 3–5 thư đáng chú ý nhất, rồi mới kết luận kèm nguồn. " +
+    "Kết quả rỗng thì nói rõ đã tìm khoảng thời gian nào, đừng suy diễn.",
 
   /** Built-in prompts. Users can add their own; these are the defaults. */
   BUILTIN_PROMPTS: [

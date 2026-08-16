@@ -346,54 +346,74 @@ Object.assign(hMailAI, {
           const limit = Math.min(Math.max(Number(args.limit) || 20, 1), 50);
           const cutoff = Date.now() / 1000 - days * 86400;
           const found = [];
+          const stats = [];
           for (const server of MailServices.accounts.allServers) {
-            if (!["imap", "pop3", "none"].includes(server.type)) {
-              continue;
-            }
-            const inbox = server.rootFolder
-              ?.getFolderWithFlags?.(Ci.nsMsgFolderFlags.Inbox);
-            const db = inbox?.msgDatabase;
-            if (!db) {
-              continue;
-            }
-            // Đi từ thư mới nhất lùi về; quá mốc thời gian là dừng — hộp
-            // trăm nghìn thư không bị quét trọn.
-            let checked = 0;
-            const iter = db.reverseEnumerateMessages
-              ? db.reverseEnumerateMessages() : inbox.messages;
-            for (const msg of iter) {
-              if (++checked > 5000) {
-                break;
+            // Một tài khoản hỏng không được kéo sập cả cuộc tìm — lỗi ở
+            // đâu ghi lại ở đó rồi đi tiếp.
+            try {
+              if (!["imap", "pop3", "none"].includes(server.type)) {
+                continue;
               }
-              if (msg.dateInSeconds < cutoff) {
-                if (db.reverseEnumerateMessages) {
+              const inbox = server.rootFolder
+                ?.getFolderWithFlags?.(Ci.nsMsgFolderFlags.Inbox);
+              const db = inbox?.msgDatabase;
+              if (!db) {
+                stats.push({ server: server.prettyName, error: "no-inbox-db" });
+                continue;
+              }
+              // Đi từ thư mới nhất lùi về; quá mốc thời gian là dừng —
+              // hộp trăm nghìn thư không bị quét trọn. Không có enumerator
+              // ngược thì đành quét xuôi TOÀN BỘ: duyệt 5000 thư CŨ NHẤT
+              // rồi dừng (bản trước) là hộp lớn không bao giờ thấy thư mới.
+              const reverse = typeof db.reverseEnumerateMessages === "function";
+              let checked = 0;
+              let kept = 0;
+              for (const msg of (reverse ? db.reverseEnumerateMessages()
+                                         : inbox.messages)) {
+                checked++;
+                if (reverse && checked > 20000) {
                   break;
                 }
-                continue;
+                if (msg.dateInSeconds < cutoff) {
+                  if (reverse) {
+                    break;
+                  }
+                  continue;
+                }
+                if (args.unread_only && msg.isRead) {
+                  continue;
+                }
+                const from = msg.mime2DecodedAuthor || "";
+                const subject = msg.mime2DecodedSubject || "";
+                if (query &&
+                    !(from + " " + subject).toLowerCase().includes(query)) {
+                  continue;
+                }
+                kept++;
+                found.push({
+                  id: `${inbox.URI}#${msg.messageKey}`,
+                  from, subject,
+                  ts: msg.dateInSeconds,
+                  date: new Date(msg.dateInSeconds * 1000).toLocaleString(),
+                  unread: !msg.isRead,
+                  folder: `${server.prettyName}`,
+                });
               }
-              if (args.unread_only && msg.isRead) {
-                continue;
-              }
-              const from = msg.mime2DecodedAuthor || "";
-              const subject = msg.mime2DecodedSubject || "";
-              if (query &&
-                  !(from + " " + subject).toLowerCase().includes(query)) {
-                continue;
-              }
-              found.push({
-                id: `${inbox.URI}#${msg.messageKey}`,
-                from, subject,
-                ts: msg.dateInSeconds,
-                date: new Date(msg.dateInSeconds * 1000).toLocaleString(),
-                unread: !msg.isRead,
-                folder: `${server.prettyName}`,
-              });
+              stats.push({ server: server.prettyName, reverse, checked, kept });
+            } catch (e) {
+              stats.push({ server: server?.prettyName || "?",
+                           error: String(e.message || e) });
             }
           }
           found.sort((a, b) => b.ts - a.ts);
           const items = found.slice(0, limit).map(({ ts, ...rest }) => rest);
-          return { ok: true, count: items.length,
-                   total_matched: found.length, items };
+          const out = { ok: true, count: items.length,
+                        total_matched: found.length, items };
+          if (args.debug) {
+            out.stats = stats;
+          }
+          this._lastSearchStats = stats;
+          return out;
         }
 
         case "read_message": {
@@ -453,3 +473,41 @@ Object.assign(hMailAI, {
     }
   },
 });
+
+// ---------------------------------------------------------------------------
+// Tự kiểm search_messages (pref hmail.debug.searchtest = "run"): chạy đúng
+// tool trong app thật với hộp thư thật, ghi số liệu từng tài khoản (đi
+// ngược được không, duyệt bao nhiêu, giữ bao nhiêu) vào pref.
+(function hMailSearchSelfTest() {
+  let mode = "";
+  try {
+    mode = Services.prefs.getCharPref("hmail.debug.searchtest", "");
+  } catch (e) {}
+  if (mode !== "run") {
+    return;
+  }
+  const report = text => {
+    try {
+      Services.prefs.setCharPref("hmail.debug.searchtest",
+                                 String(text).slice(0, 900));
+      Services.prefs.savePrefFile(null);
+    } catch (e) {}
+  };
+  setTimeout(async () => {
+    try {
+      const win = Services.wm.getMostRecentWindow("mail:3pane");
+      const res = await hMailAI.runTool(win, "search_messages",
+                                        { days: 3, limit: 5, debug: true });
+      report(JSON.stringify({
+        ok: res.ok, count: res.count, total: res.total_matched,
+        error: res.error || null,
+        first: res.items?.[0]
+          ? `${res.items[0].from} | ${res.items[0].subject}` : null,
+        stats: res.stats,
+      }));
+    } catch (e) {
+      report("err: " + (e.message || e));
+    }
+  }, 15000);
+})();
+
