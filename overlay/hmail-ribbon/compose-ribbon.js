@@ -38,12 +38,16 @@ var hMailComposeRibbon = {
           buttons: [
             { id: "c-attach", label: "Đính kèm", icon: "import",
               cmd: "cmd_attachFile" },
-            { id: "c-image", label: "Chèn ảnh", icon: "mail-col",
+            { id: "c-image", label: "Chèn ảnh", icon: "image",
               cmd: "cmd_image" },
             { id: "c-link", label: "Chèn liên kết", icon: "extention",
               cmd: "cmd_link" },
             { id: "c-table", label: "Chèn bảng", icon: "list",
               cmd: "cmd_table" },
+            // Chỉ hiện khi thân thư CHƯA có chữ ký (thư mở từ mẫu, nháp cũ,
+            // hay identity không tự chèn) — updateState ẩn/hiện.
+            { id: "c-signature", label: "Chèn chữ ký", icon: "signature",
+              fn: win => win.hMailComposeRibbon.insertSignature(win) },
           ],
         },
         {
@@ -58,7 +62,7 @@ var hMailComposeRibbon = {
         {
           label: "Soát lại",
           buttons: [
-            { id: "c-spell", label: "Chính tả", icon: "book",
+            { id: "c-spell", label: "Chính tả", icon: "spellcheck",
               cmd: "cmd_spelling" },
             { id: "c-find", label: "Tìm và thay", icon: "search",
               cmd: "cmd_findReplace" },
@@ -194,6 +198,100 @@ var hMailComposeRibbon = {
           ? controller.isCommandEnabled(button.dataset.cmd) : true;
         button.toggleAttribute("disabled", !enabled);
       } catch (e) {}
+    }
+    // Nút Chèn chữ ký chỉ có ích khi thư chưa có chữ ký và identity có
+    // chữ ký để chèn.
+    try {
+      const sig = doc.querySelector(
+        `#${this.ID} .hmail-ribbon-button[data-id="c-signature"]`);
+      if (sig) {
+        sig.hidden = this.hasSignature(win) || !this.signatureHtml(win);
+      }
+    } catch (e) {}
+  },
+
+  // ------------------------------------------------------------ chữ ký
+
+  /** Thân thư đã có khối chữ ký (Thunderbird bọc trong .moz-signature) chưa? */
+  hasSignature(win) {
+    try {
+      const body = win.GetCurrentEditor?.()?.document?.body;
+      return !!body?.querySelector(".moz-signature");
+    } catch (e) {
+      return false;
+    }
+  },
+
+  /** HTML chữ ký của identity đang gửi (chữ ký chữ trơn được bọc lại). */
+  signatureHtml(win) {
+    try {
+      const identity = win.gCurrentIdentity ||
+        win.getCurrentIdentity?.() || null;
+      const text = String(identity?.htmlSigText || "").trim();
+      if (!text) {
+        return "";
+      }
+      if (identity.htmlSigFormat) {
+        return text;
+      }
+      return text.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/\r?\n/g, "<br>");
+    } catch (e) {
+      return "";
+    }
+  },
+
+  /**
+   * Chèn chữ ký của identity đang gửi vào cuối thư (trước phần trích dẫn
+   * nếu có), bọc đúng khối .moz-signature như Thunderbird làm — bấm lần
+   * nữa không chèn đôi.
+   */
+  insertSignature(win) {
+    try {
+      const editor = win.GetCurrentEditor?.();
+      const doc = editor?.document;
+      if (!doc?.body) {
+        return;
+      }
+      if (this.hasSignature(win)) {
+        return;
+      }
+      const html = this.signatureHtml(win);
+      if (!html) {
+        Services.prompt.alert(win, "Chèn chữ ký",
+          "Tài khoản đang gửi chưa có chữ ký. Tạo trong Cài đặt tài khoản " +
+          "▸ Tạo chữ ký trực quan…");
+        return;
+      }
+      const wrapper = doc.createElement("div");
+      wrapper.className = "moz-signature";
+      // Nội dung chữ ký là của chính người dùng — nhưng vẫn parse tách
+      // biệt rồi mới ghép, không nhét chuỗi thẳng vào thân thư.
+      const parsed = new win.DOMParser().parseFromString(
+        "-- <br>" + html, "text/html");
+      for (const node of Array.from(parsed.body.childNodes)) {
+        wrapper.appendChild(doc.importNode(node, true));
+      }
+      const body = doc.body;
+      // Trước phần trích dẫn thư gốc (nếu là trả lời/chuyển tiếp) để chữ ký
+      // đi liền nội dung mình viết, đúng chỗ Thunderbird tự đặt.
+      const quote = body.querySelector(
+        ".moz-cite-prefix, blockquote[type='cite'], .moz-forward-container");
+      editor.beginTransaction?.();
+      try {
+        if (quote) {
+          body.insertBefore(doc.createElement("br"), quote);
+          body.insertBefore(wrapper, quote);
+        } else {
+          body.appendChild(doc.createElement("br"));
+          body.appendChild(wrapper);
+        }
+      } finally {
+        editor.endTransaction?.();
+      }
+      win.setTimeout(() => this.updateState(win, win.document), 50);
+    } catch (e) {
+      Cu.reportError("hMail insert signature failed: " + e);
     }
   },
 };
