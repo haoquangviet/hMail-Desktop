@@ -475,6 +475,55 @@ Object.assign(hMailAI, {
 });
 
 // ---------------------------------------------------------------------------
+// Tự kiểm ĐẦU-CUỐI với model thật (pref hmail.debug.aitest = "run"): không
+// mở thư nào, hỏi "hôm nay có thư gì" qua đúng đường ask() của panel — model
+// PHẢI gọi search_messages. Ghi lại: có gọi tool không, tool nào, và 200 ký
+// tự đầu câu trả lời.
+(function hMailAiToolSelfTest() {
+  let mode = "";
+  try {
+    mode = Services.prefs.getCharPref("hmail.debug.aitest", "");
+  } catch (e) {}
+  if (mode !== "run") {
+    return;
+  }
+  Services.prefs.setCharPref("hmail.debug.aitest", "running");
+  const report = text => {
+    try {
+      Services.prefs.setCharPref("hmail.debug.aitest",
+                                 String(text).slice(0, 900));
+      Services.prefs.savePrefFile(null);
+    } catch (e) {}
+  };
+  setTimeout(async () => {
+    try {
+      const win = Services.wm.getMostRecentWindow("mail:3pane");
+      const called = [];
+      const origRun = hMailAI.runTool.bind(hMailAI);
+      hMailAI.runTool = async (w, name, args) => {
+        called.push(name + "(" + JSON.stringify(args || {}).slice(0, 60) + ")");
+        return origRun(w, name, args);
+      };
+      const turns = [{
+        role: "user",
+        text: "Bạn là trợ lý trong ứng dụng thư hMail Desktop. Hiện KHÔNG " +
+              "có thư nào đang mở, nhưng bạn có công cụ tra cứu hộp thư: " +
+              "search_messages, read_message, open_message, compose_new. " +
+              "Người dùng hỏi về thư thì GỌI search_messages trước.",
+      }, { role: "user", text: "hôm nay có thư gì cần chú ý không" }];
+      const reply = await hMailAI.ask(turns, { win, allowActions: true,
+                                               onAction: () => {} });
+      hMailAI.runTool = origRun;
+      report((called.length ? "ok" : "err-no-tool") +
+             " tools=" + JSON.stringify(called) +
+             " reply=" + String(reply).replace(/\s+/g, " ").slice(0, 200));
+    } catch (e) {
+      report("err: " + (e.message || e));
+    }
+  }, 15000);
+})();
+
+// ---------------------------------------------------------------------------
 // Tự kiểm search_messages (pref hmail.debug.searchtest = "run"): chạy đúng
 // tool trong app thật với hộp thư thật, ghi số liệu từng tài khoản (đi
 // ngược được không, duyệt bao nhiêu, giữ bao nhiêu) vào pref.

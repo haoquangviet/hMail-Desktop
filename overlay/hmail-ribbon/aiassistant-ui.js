@@ -450,7 +450,9 @@ Object.assign(hMailAI, {
   notify(win, text, busy = false) {
     const status = win.document.getElementById("hmail-ai-status");
     if (status) {
-      status.textContent = text;
+      // Khi bận, bong bóng "Đang suy nghĩ…" trong log đã nói rồi — dòng
+      // trạng thái lặp lại y hệt ngay dưới là hai lần cùng một câu.
+      status.textContent = busy ? "" : text;
     }
     const panel = win.document.getElementById(this.PANEL_ID);
     if (panel) {
@@ -1002,9 +1004,15 @@ Object.assign(hMailAI, {
       } else {
         turns.push({
           role: "user",
-          text: "Bạn là trợ lý trong ứng dụng thư hMail Desktop. Trả lời " +
-                "ngắn gọn bằng tiếng Việt có dấu đầy đủ, đúng chính tả; " +
-                "không viết tiếng Việt không dấu.",
+          text: "Bạn là trợ lý trong ứng dụng thư hMail Desktop. Hiện KHÔNG " +
+                "có thư nào đang mở, nhưng bạn có công cụ tra cứu hộp thư: " +
+                "search_messages (tìm thư mọi tài khoản theo từ khoá/ngày/" +
+                "chưa đọc), read_message (đọc nội dung một thư), " +
+                "open_message (mở thư lên màn hình), compose_new (soạn thư " +
+                "mới). Người dùng hỏi về thư, việc cần làm, thư mới… thì GỌI " +
+                "search_messages trước rồi read_message các thư đáng chú ý " +
+                "— tuyệt đối không tự bịa \"không có dữ liệu\" khi chưa gọi " +
+                "công cụ. Trả lời ngắn gọn bằng tiếng Việt có dấu đầy đủ.",
         });
         for (const t of this.looseTurns || []) {
           turns.push(t);
@@ -1014,9 +1022,11 @@ Object.assign(hMailAI, {
 
       const reply = await this.ask(turns, {
         win,
-        // Actions operate on the open message; with none open there is
-        // nothing for them to act on.
-        allowActions: !!hdr,
+        // Luôn đưa công cụ cho model: nhóm hộp thư (tìm/đọc/mở thư, soạn
+        // thư mới) chạy được khi CHƯA mở thư nào — chặn ở đây là model
+        // không hề biết mình tra được hộp thư, đành bịa "không có dữ liệu".
+        // Các hành động cần thư hiện tại tự từ chối trong runTool.
+        allowActions: true,
         onAction: line => this.addTurn(win, "action", line),
       });
       if (hdr) {
