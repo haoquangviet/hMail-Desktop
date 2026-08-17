@@ -1513,6 +1513,42 @@ select.hmail-ai-field,
     text-align: center;
 }
 
+/* Lựa chọn trợ lý gợi ý: hàng nút viên thuốc dưới câu trả lời. */
+.hmail-ai-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.hmail-ai-choice {
+    appearance: none;
+    -moz-appearance: none;
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--hmail-accent, #0F6CBD) 45%, transparent);
+    background-color: Canvas;
+    color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 90%, CanvasText);
+    font: inherit;
+    font-size: 0.86em;
+    cursor: pointer;
+}
+
+.hmail-ai-choice:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 12%, Canvas);
+}
+
+.hmail-ai-choice:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.hmail-ai-choice.picked {
+    background-color: var(--hmail-accent, #0F6CBD);
+    color: #ffffff;
+    opacity: 1;
+}
+
 /* Dòng tiến độ việc hàng loạt trong panel: chữ trái, nút Dừng phải. */
 .hmail-ai-bulk-row {
     display: flex;

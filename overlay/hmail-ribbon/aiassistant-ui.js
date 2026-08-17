@@ -789,12 +789,41 @@ Object.assign(hMailAI, {
       head.appendChild(badge);
     }
 
+    // Trợ lý gợi ý các lựa chọn bằng khối "[[chọn: A | B | C]]" ở cuối —
+    // tách ra thành NÚT bấm sẵn, bấm là gửi luôn, khỏi gõ lại.
+    let body = text;
+    let choices = [];
+    if (role === "assistant") {
+      const m = /\[\[\s*ch[oọ]n\s*:\s*([^\]]+)\]\]\s*$/i.exec(String(text));
+      if (m) {
+        choices = m[1].split("|").map(s => s.trim()).filter(Boolean)
+          .slice(0, 6);
+        body = String(text).slice(0, m.index).trim();
+      }
+    }
     turn.append(
       head,
       role === "assistant"
-        ? this.renderMarkdown(doc, text)
+        ? this.renderMarkdown(doc, body)
         : this.el(doc, "div", "hmail-ai-text", text)
     );
+    if (choices.length) {
+      const row = this.el(doc, "div", "hmail-ai-choices");
+      for (const choice of choices) {
+        const b = this.el(doc, "button", "hmail-ai-choice", choice);
+        b.type = "button";
+        b.addEventListener("click", () => {
+          // Một lần chọn là xong: khoá cả hàng để khỏi bấm đúp.
+          for (const other of row.querySelectorAll("button")) {
+            other.disabled = true;
+          }
+          b.classList.add("picked");
+          this.send(win, choice);
+        });
+        row.appendChild(b);
+      }
+      turn.appendChild(row);
+    }
     log.appendChild(turn);
     this.scrollToEnd(win, log);
     return turn;

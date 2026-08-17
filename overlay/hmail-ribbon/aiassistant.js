@@ -74,6 +74,12 @@ var hMailAI = {
     "hình thu lại đúng nhóm thư, người dùng nhìn thấy; báo số lượng và hỏi " +
     "xác nhận; rồi act_on_filtered để làm một lần cho tất cả. KHÔNG bao giờ " +
     "bảo người dùng \"tự thao tác thủ công\" — bạn làm được.\n" +
+    "- Khi bạn hỏi người dùng chọn giữa vài hướng xử lý, KẾT THÚC câu trả " +
+    "lời bằng đúng một dòng dạng [[chọn: Lựa chọn 1 | Lựa chọn 2 | Lựa " +
+    "chọn 3]] (tối đa 5 mục, mỗi mục là một câu lệnh ngắn người dùng có " +
+    "thể gửi nguyên văn, ví dụ [[chọn: Chuyển 524 thư vào Thùng rác | " +
+    "Đánh dấu đã đọc | Chuyển sang thư mục khác | Thôi]]) — hMail vẽ chúng " +
+    "thành nút bấm sẵn. Không dùng khối này khi không có lựa chọn thật.\n" +
     "- \"Từ giờ / tự động / mỗi khi thư của X đến thì…\" = tạo BỘ LỌC lâu " +
     "dài bằng create_filter (điều kiện người gửi/tiêu đề/người nhận chứa; " +
     "hành động chuyển thư mục/gắn nhãn/đánh dấu đọc/xoá/gắn cờ). Khác với " +

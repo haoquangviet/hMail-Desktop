@@ -307,8 +307,19 @@ Object.assign(hMailAI, {
     }
   },
 
+  /**
+   * Nhường main thread một nhịp — mọi vòng quét dài (hàng nghìn hdr) phải
+   * gọi định kỳ, không thì UI đứng hình suốt lúc AI "làm việc ở nền".
+   */
+  breathe() {
+    return new Promise(resolve => {
+      const win = Services.wm.getMostRecentWindow("mail:3pane");
+      (win || globalThis).setTimeout(resolve, 0);
+    });
+  },
+
   /** Mọi hdr đang hiển thị trong view (đúng những gì người dùng thấy). */
-  visibleHeaders(a3) {
+  async visibleHeaders(a3) {
     const view = a3?.gDBView;
     const out = [];
     if (!view) {
@@ -322,6 +333,9 @@ Object.assign(hMailAI, {
           out.push(hdr);
         }
       } catch (e) {}
+      if (i % 400 === 399) {
+        await this.breathe();
+      }
     }
     return out;
   },
@@ -581,6 +595,11 @@ Object.assign(hMailAI, {
                 if (reverse && checked > 20000) {
                   break;
                 }
+                // Quét hàng nghìn hdr là việc dài trên main thread — nhả
+                // ra định kỳ để người dùng vẫn cuộn, bấm, đọc thư được.
+                if (checked % 500 === 0) {
+                  await this.breathe();
+                }
                 if (msg.dateInSeconds < cutoff) {
                   if (reverse) {
                     break;
@@ -751,19 +770,26 @@ Object.assign(hMailAI, {
             };
             win.setTimeout(poll, 300);
           });
-          const shown = this.visibleHeaders(a3);
-          const sample = shown.slice(0, 5).map(h =>
-            `${h.mime2DecodedAuthor || ""} | ${h.mime2DecodedSubject || ""}`);
+          // Chỉ cần SỐ và vài mẫu — không quét cả danh sách.
+          const count = a3.gDBView?.rowCount ?? 0;
+          const sample = [];
+          for (let i = 0; i < Math.min(5, count); i++) {
+            try {
+              const h = a3.gDBView.getMsgHdrAt(i);
+              sample.push(`${h.mime2DecodedAuthor || ""} | ` +
+                          `${h.mime2DecodedSubject || ""}`);
+            } catch (e) {}
+          }
           return { ok: true,
                    done: query
-                     ? `đã lọc "${query}" — ${shown.length} thư đang hiển thị`
+                     ? `đã lọc "${query}" — ${count} thư đang hiển thị`
                      : "đã bỏ lọc",
-                   count: shown.length, sample };
+                   count, sample };
         }
 
         case "act_on_filtered": {
           const a3 = this.about3Pane(win);
-          const hdrs = this.visibleHeaders(a3);
+          const hdrs = await this.visibleHeaders(a3);
           if (!hdrs.length) {
             return { ok: false, error: "Danh sách đang trống — lọc trước đã." };
           }
@@ -1303,13 +1329,31 @@ Object.assign(hMailAI, {
               "có thư nào đang mở, nhưng bạn có công cụ tra cứu hộp thư: " +
               "search_messages, read_message, open_message, compose_new. " +
               "Người dùng hỏi về thư thì GỌI search_messages trước.",
-      }, { role: "user", text: "hôm nay có thư gì cần chú ý không" }];
+      }, { role: "user", text: "lọc các thư của onesign trong hộp này rồi " +
+                               "hỏi tôi muốn xử lý chúng thế nào" }];
+      const t0 = Date.now();
+      // Đo UI có bị đứng không: một tick 50ms phải chạy đều trong lúc AI
+      // làm việc; đếm số tick bị trễ quá 400ms.
+      let ticks = 0, stalls = 0, lastTick = Date.now();
+      const tickTimer = win.setInterval(() => {
+        const now = Date.now();
+        if (now - lastTick > 400) {
+          stalls++;
+        }
+        lastTick = now;
+        ticks++;
+      }, 50);
       const reply = await hMailAI.ask(turns, { win, allowActions: true,
                                                onAction: () => {} });
+      win.clearInterval(tickTimer);
       hMailAI.runTool = origRun;
+      const hasChoices = /\[\[\s*ch[oọ]n\s*:/i.test(String(reply));
       report((called.length ? "ok" : "err-no-tool") +
              " tools=" + JSON.stringify(called) +
-             " reply=" + String(reply).replace(/\s+/g, " ").slice(0, 200));
+             " choices=" + hasChoices +
+             " ms=" + (Date.now() - t0) + " ticks=" + ticks +
+             " stalls>400ms=" + stalls +
+             " reply=" + String(reply).replace(/\s+/g, " ").slice(-220));
     } catch (e) {
       report("err: " + (e.message || e));
     }
