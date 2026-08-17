@@ -839,7 +839,8 @@ var hMailInsight = {
 
     let raw = "";
     try {
-      raw = await this.raw(hdr);
+      // hdr giả cho tự kiểm mang sẵn raw — không cần stream.
+      raw = hdr?._hmailRaw ?? await this.raw(hdr);
     } catch (e) {
       return out;
     }
@@ -869,6 +870,67 @@ var hMailInsight = {
       note("warn",
         `Trả lời thư này sẽ đi tới ${replyTo} (khác tên miền người gửi ` +
         `${fromDomain}).`);
+    }
+
+    // --- mạo danh THƯƠNG HIỆU CỦA NGƯỜI NHẬN ---------------------------------
+    // "Hoaviet - IT Support <b.s.jung@hyinstel.com>" gửi tới hoaviet.vn:
+    // tên hiển thị mượn tên công ty của chính người nhận (hoặc miền/địa
+    // chỉ của họ xuất hiện trong thân thư như "tài khoản hoaviet@hoaviet.vn
+    // của bạn"), nhưng gửi từ một miền lạ hoàn toàn. Người nhận nào cũng
+    // tin "IT của công ty mình" — chiêu phổ biến nhất của phishing nội bộ.
+    const myAddresses = new Set();
+    try {
+      for (const identity of MailServices.accounts.allIdentities) {
+        const a = this.address(identity.email);
+        if (a) {
+          myAddresses.add(a);
+        }
+      }
+    } catch (e) {}
+    const recipients = `${hdr?.mime2DecodedRecipients || ""} ${hdr?.ccList || ""}`
+      .toLowerCase();
+    const myDomains = new Set();
+    for (const a of myAddresses) {
+      const d = this.domain(a);
+      if (d && recipients.includes(a)) {
+        myDomains.add(d);
+      }
+    }
+    if (!myDomains.size) {
+      // Không khớp identity nào thì lấy miền của người nhận đầu tiên.
+      const d = this.domain(this.address(hdr?.mime2DecodedRecipients || ""));
+      if (d) {
+        myDomains.add(d);
+      }
+    }
+    for (const mine of myDomains) {
+      if (!fromDomain || fromDomain === mine || fromDomain.endsWith("." + mine)) {
+        continue;
+      }
+      // Cả miền và "tên gốc" (hoaviet trong hoaviet.vn) — bọn lừa đảo ghi
+      // "Hoaviet - IT Support" chứ không ghi "hoaviet.vn".
+      const stem = mine.split(".")[0];
+      const shownLower = shown.toLowerCase().replace(/[\s._-]+/g, "");
+      const stemHit = stem.length >= 4 && shownLower.includes(stem);
+      const domainHit = shown.toLowerCase().includes(mine);
+      if (stemHit || domainHit) {
+        note("danger",
+          `Tên hiển thị "${shown}" mượn tên công ty của bạn (${mine}) nhưng ` +
+          `thư gửi từ ${fromDomain} — một tên miền không liên quan. Bộ phận ` +
+          "IT/hệ thống của công ty không gửi thư từ miền lạ; đây là dấu " +
+          "hiệu mạo danh nội bộ điển hình.");
+        out.facts.brandSpoof = { mine, fromDomain };
+        break;
+      }
+      // Thân thư gọi tên miền/địa chỉ của người nhận + yêu cầu mật khẩu
+      // (xét ở khối nội dung bên dưới) — cũng là mạo danh.
+      if (text.includes(mine) && /m[ậa]t kh[ẩa]u|password|passcode/.test(text)) {
+        note("danger",
+          `Thư nhắc tới ${mine} và mật khẩu của bạn nhưng gửi từ ${fromDomain}` +
+          " — không phải hệ thống của công ty bạn.");
+        out.facts.brandSpoof = { mine, fromDomain };
+        break;
+      }
     }
 
     // --- tên miền nhìn giống ---------------------------------------------
@@ -1001,6 +1063,40 @@ var hMailInsight = {
           `với người gửi bằng số điện thoại bạn đã biết, đừng dùng số ghi ` +
           `trong thư.`);
       }
+    }
+
+    // --- câu cá mật khẩu (credential phishing) ------------------------------
+    // Kịch bản: "mật khẩu sắp hết hạn / tài khoản bị khoá / xác minh ngay"
+    // + một nút/liên kết để "cập nhật". Ngân hàng, Microsoft, IT công ty
+    // thật không bao giờ đòi mật khẩu qua thư. Chỉ cần dấu hiệu nội dung
+    // là đã đáng cảnh báo; gửi từ miền lạ hoặc kèm mạo danh công ty thì
+    // là nguy hiểm.
+    const credWords = [
+      "mật khẩu", "mat khau", "password", "passcode",
+      "hết hạn", "het han", "expire", "expiry", "expired",
+      "cập nhật mật khẩu", "đổi mật khẩu", "reset password", "update password",
+      "xác minh tài khoản", "xac minh tai khoan", "verify your account",
+      "verify account", "confirm your account", "tài khoản sẽ bị khoá",
+      "tai khoan se bi khoa", "account will be suspended", "will be locked",
+      "đăng nhập lại", "sign in again", "re-login", "unusual sign-in",
+      "hộp thư đầy", "mailbox full", "quota exceeded", "storage limit",
+    ];
+    const credHits = credWords.filter(w => text.includes(w));
+    const hasCta = /(https?:\/\/[^\s"'<>]+)/i.test(raw) ||
+      /c[ậa]p nh[ậa]t|x[áa]c minh|verify|update|sign in|đăng nhập|login/
+        .test(text);
+    if (credHits.length >= 2 && hasCta) {
+      const spoofed = !!out.facts.brandSpoof;
+      const authWeak = !dkim || dkim === "none" || dmarc === "none" || !dmarc;
+      note(spoofed || authWeak ? "danger" : "warn",
+        "Thư có kịch bản CÂU CÁ MẬT KHẨU điển hình: nhắc \"" +
+        credHits.slice(0, 3).join("\", \"") + "\" kèm lời giục bấm liên kết " +
+        "để cập nhật/xác minh. Không tổ chức nào (ngân hàng, Microsoft, bộ " +
+        "phận IT) đòi mật khẩu qua thư. Đừng bấm nút trong thư — nếu nghi " +
+        "ngờ, tự mở trang dịch vụ bằng địa chỉ bạn vẫn dùng." +
+        (spoofed ? " Kết hợp với việc mạo danh công ty của bạn ở trên, gần " +
+                   "như chắc chắn đây là thư lừa đảo." : ""));
+      out.facts.credentialPhish = { hits: credHits.slice(0, 5) };
     }
 
     // --- liên kết và tệp đính kèm -----------------------------------------
@@ -1841,3 +1937,56 @@ var hMailInsight = {
     return [...found].slice(0, 5);
   },
 };
+
+// ---------------------------------------------------------------------------
+// Tự kiểm bộ soi (pref hmail.debug.insighttest = "run"): phân tích một thư
+// mô phỏng đúng ca mạo danh IT công ty (tên hiển thị mượn tên người nhận,
+// gửi từ miền lạ, kịch bản hết hạn mật khẩu) — phải ra ít nhất hai cảnh
+// báo mức danger; kèm một thư lành để chắc không báo nhầm.
+(function hMailInsightSelfTest() {
+  let mode = "";
+  try {
+    mode = Services.prefs.getCharPref("hmail.debug.insighttest", "");
+  } catch (e) {}
+  if (mode !== "run") {
+    return;
+  }
+  const report = text => {
+    try {
+      Services.prefs.setCharPref("hmail.debug.insighttest",
+                                 String(text).slice(0, 900));
+      Services.prefs.savePrefFile(null);
+    } catch (e) {}
+  };
+  setTimeout(async () => {
+    try {
+      const mk = (from, to, subject, body) => ({
+        mime2DecodedAuthor: from, mime2DecodedRecipients: to, ccList: "",
+        mime2DecodedSubject: subject, author: from, messageId: "t@t",
+        folder: null, messageKey: 1,
+        _hmailRaw: `From: ${from}\r\nTo: ${to}\r\nSubject: ${subject}\r\n` +
+          "Authentication-Results: mx; spf=pass smtp.mailfrom=hyinstel.com\r\n" +
+          "Content-Type: text/plain; charset=utf-8\r\n\r\n" + body,
+      });
+      const bad = mk("Hoaviet - IT Support <b.s.jung_690@hyinstel.com>",
+        "hoaviet@hoaviet.vn", "Hoaviet - Thông báo hết hạn mật khẩu (21/08/2026)",
+        "Kính gửi Quý khách hàng,\nVì lý do bảo mật, mật khẩu tài khoản Hoaviet " +
+        "của bạn hoaviet@hoaviet.vn sẽ hết hạn vào ngày 21 tháng 8 năm 2026.\n" +
+        "Để tránh gián đoạn dịch vụ, vui lòng cập nhật mật khẩu trước ngày hết " +
+        "hạn.\nCập nhật mật khẩu: https://hyinstel.com/x/reset\n");
+      const good = mk("Nguyen Van A <a@partner.com>", "hoaviet@hoaviet.vn",
+        "Báo giá tháng 8", "Chào anh, gửi anh báo giá đính kèm. Cảm ơn.");
+      const r1 = await hMailInsight.analyze(bad);
+      const r2 = await hMailInsight.analyze(good);
+      const d1 = r1.findings.filter(f => f.level === "danger").map(f => f.text.slice(0, 70));
+      const d2 = r2.findings.filter(f => f.level === "danger").length;
+      report(JSON.stringify({ badLevel: r1.level, badDangers: d1.length,
+                              brandSpoof: !!r1.facts.brandSpoof,
+                              credPhish: !!r1.facts.credentialPhish,
+                              goodLevel: r2.level, goodDangers: d2,
+                              sample: d1 }));
+    } catch (e) {
+      report("err: " + (e.message || e) + " @ " + String(e.stack || "").split("\n")[0]);
+    }
+  }, 15000);
+})();

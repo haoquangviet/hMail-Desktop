@@ -224,6 +224,24 @@ Object.assign(hMailAI, {
       },
     },
     {
+      name: "test_filters",
+      description: "Chẩn đoán vì sao BỘ LỌC THƯ không chạy với thư đang " +
+                   "xem: duyệt mọi bộ lọc của tài khoản, cho biết bộ nào " +
+                   "khớp/không khớp thư này, điều kiện nào trượt và lỗi " +
+                   "cấu hình thường gặp (toán tử 'là' thay vì 'chứa', chọn " +
+                   "'khớp tất cả' thay vì 'bất kỳ', bộ lọc đang tắt, không " +
+                   "bật khi nhận thư mới). Dùng khi người dùng than 'rule " +
+                   "không hoạt động'.",
+      parameters: {
+        type: "object",
+        properties: {
+          name_contains: { type: "string",
+                           description: "Chỉ kiểm các bộ lọc có tên chứa " +
+                                        "chuỗi này; bỏ trống = tất cả" },
+        },
+      },
+    },
+    {
       name: "compose_new",
       description: "Mở cửa sổ soạn THƯ MỚI (không phải trả lời) tới một " +
                    "người nhận với tiêu đề và nội dung soạn sẵn. Dùng khi " +
@@ -266,6 +284,150 @@ Object.assign(hMailAI, {
   MAILBOX_TOOLS: new Set(["compose_new", "search_messages", "read_message",
                           "open_message", "filter_messages",
                           "act_on_filtered", "create_filter"]),
+
+  /**
+   * Chẩn đoán bộ lọc với một thư: chạy MailServices.filters.matchHdr
+   * (đúng bộ máy so khớp thật) cho từng bộ lọc, đồng thời soi cấu hình để
+   * gọi tên lỗi bằng tiếng người — user viết rule sai kiểu gì cũng có lời
+   * giải thích thay vì "không chạy".
+   */
+  async diagnoseFilters(win, hdr, nameContains = "") {
+    const server = hdr.folder.server;
+    const list = server.getFilterList(this.msgWindowOf(win));
+    const want = String(nameContains || "").toLowerCase();
+    const OP = Ci.nsMsgSearchOp;
+    const ATTR = Ci.nsMsgSearchAttrib;
+    const opName = op => ({
+      [OP.Contains]: "chứa", [OP.DoesntContain]: "không chứa",
+      [OP.Is]: "là", [OP.Isnt]: "không là",
+      [OP.BeginsWith]: "bắt đầu bằng", [OP.EndsWith]: "kết thúc bằng",
+      [OP.IsBefore]: "trước", [OP.IsAfter]: "sau",
+      [OP.IsInAB]: "trong sổ địa chỉ", [OP.IsntInAB]: "không trong sổ",
+    })[op] || `op${op}`;
+    const attrName = a => ({
+      [ATTR.Subject]: "Chủ đề", [ATTR.Sender]: "Từ", [ATTR.To]: "Đến",
+      [ATTR.CC]: "Cc", [ATTR.ToOrCC]: "Đến hoặc Cc",
+      [ATTR.AllAddresses]: "Người gửi, người nhận, Cc hoặc Bcc",
+      [ATTR.Body]: "Nội dung", [ATTR.Date]: "Ngày", [ATTR.Priority]: "Ưu tiên",
+      [ATTR.MsgStatus]: "Trạng thái", [ATTR.Keywords]: "Nhãn",
+      [ATTR.Size]: "Kích thước", [ATTR.AgeInDays]: "Số ngày tuổi",
+      [ATTR.HasAttachmentStatus]: "Đính kèm",
+    })[a] || `thuộc tính ${a}`;
+    const fromValue = hdr.mime2DecodedAuthor || "";
+    const subjectValue = hdr.mime2DecodedSubject || "";
+    const fieldValue = a => a === ATTR.Subject ? subjectValue
+      : a === ATTR.Sender ? fromValue
+      : a === ATTR.To || a === ATTR.ToOrCC || a === ATTR.AllAddresses
+        ? `${hdr.mime2DecodedRecipients || ""} ${hdr.ccList || ""}` : null;
+
+    const results = [];
+    for (let i = 0; i < list.filterCount; i++) {
+      const f = list.getFilterAt(i);
+      if (want && !f.filterName.toLowerCase().includes(want)) {
+        continue;
+      }
+      const item = { name: f.filterName, enabled: f.enabled,
+                     matches: false, terms: [], warnings: [] };
+      // Cờ áp dụng.
+      const type = f.filterType;
+      if (!f.enabled) {
+        item.warnings.push("bộ lọc đang TẮT");
+      }
+      if (!(type & Ci.nsMsgFilterType.Incoming) &&
+          !(type & Ci.nsMsgFilterType.InboxRule)) {
+        item.warnings.push("không bật 'Nhận thư mới' — chỉ chạy khi bấm " +
+                           "thủ công");
+      }
+      // So khớp thật.
+      try {
+        item.matches = MailServices.filters.matchHdr(
+          f, hdr, hdr.folder, hdr.folder.msgDatabase, "");
+      } catch (e) {
+        item.warnings.push("không chạy được so khớp: " + (e.message || e));
+      }
+      // Soi từng điều kiện.
+      const terms = f.searchTerms;
+      let anyAnd = false, anyOr = false;
+      for (const t of terms) {
+        const v = t.value;
+        const str = t.attrib === ATTR.Date ? "" : (v.str || "");
+        const actual = fieldValue(t.attrib);
+        let hit = null;
+        if (actual !== null && str) {
+          const a = actual.toLowerCase();
+          const s = str.toLowerCase();
+          hit = t.op === OP.Contains ? a.includes(s)
+            : t.op === OP.DoesntContain ? !a.includes(s)
+            : t.op === OP.Is ? a.trim() === s.trim()
+            : t.op === OP.Isnt ? a.trim() !== s.trim()
+            : t.op === OP.BeginsWith ? a.startsWith(s)
+            : t.op === OP.EndsWith ? a.endsWith(s) : null;
+        }
+        item.terms.push({
+          rule: `${attrName(t.attrib)} ${opName(t.op)} "${str}"`,
+          and: t.booleanAnd, hit,
+          actual: actual === null ? undefined : actual.slice(0, 120),
+        });
+        if (t.booleanAnd) {
+          anyAnd = true;
+        } else {
+          anyOr = true;
+        }
+        // Lỗi kinh điển: "là" với chuỗi ngắn trên Từ/Chủ đề — gần như
+        // không bao giờ bằng đúng cả trường.
+        if (t.op === OP.Is && (t.attrib === ATTR.Sender ||
+            t.attrib === ATTR.Subject || t.attrib === ATTR.Body) &&
+            actual !== null && !actual.trim().toLowerCase().includes(
+              str.trim().toLowerCase())) {
+          // không chứa luôn thì là lỗi khác; bỏ qua
+        } else if (t.op === OP.Is && (t.attrib === ATTR.Sender ||
+                   t.attrib === ATTR.Subject || t.attrib === ATTR.Body)) {
+          item.warnings.push(`điều kiện "${attrName(t.attrib)} LÀ '${str}'"` +
+            " đòi hỏi bằng ĐÚNG toàn bộ trường — với Từ/Chủ đề/Nội dung " +
+            "gần như không bao giờ đúng; nên đổi thành 'chứa'");
+        }
+      }
+      if (anyAnd && terms.length > 1 && !item.matches) {
+        const hits = item.terms.filter(t => t.hit === true).length;
+        if (hits > 0 && hits < item.terms.length) {
+          item.warnings.push("đang chọn 'Phù hợp TẤT CẢ' (mọi điều kiện " +
+            `phải đúng cùng lúc) mà chỉ ${hits}/${item.terms.length} điều ` +
+            "kiện đúng với thư này — muốn 'thư nào có MỘT trong các dấu " +
+            "hiệu' thì chọn 'Phù hợp BẤT KỲ'");
+        }
+      }
+      // Hành động.
+      item.actions = [];
+      for (let k = 0; k < f.actionCount; k++) {
+        const act = f.getActionAt(k);
+        const A = Ci.nsMsgFilterAction;
+        item.actions.push(
+          act.type === A.MoveToFolder ? "chuyển tới " +
+            (MailServices.folderLookup.getFolderForURL(act.targetFolderUri)
+              ?.prettyName || act.targetFolderUri)
+          : act.type === A.CopyToFolder ? "sao chép tới thư mục"
+          : act.type === A.AddTag ? "gắn nhãn " + act.strValue
+          : act.type === A.MarkRead ? "đánh dấu đã đọc"
+          : act.type === A.Delete ? "xoá"
+          : act.type === A.MarkFlagged ? "gắn cờ"
+          : act.type === A.JunkScore ? "chấm điểm rác"
+          : `hành động ${act.type}`);
+      }
+      results.push(item);
+    }
+    const matched = results.filter(r => r.matches && r.enabled);
+    return {
+      ok: true,
+      message: { from: fromValue, subject: subjectValue },
+      total_filters: results.length,
+      matched: matched.map(r => r.name),
+      filters: results,
+      hint: matched.length ? "" :
+        "Không bộ lọc nào khớp thư này. Xem warnings từng bộ lọc: hầu hết " +
+        "là do toán tử 'là' (cần 'chứa') hoặc chọn 'khớp tất cả' thay vì " +
+        "'bất kỳ'.",
+    };
+  },
 
   /** msgWindow của 3-pane (getFilterList/applyFilters cần một cái). */
   msgWindowOf(win) {
@@ -1157,6 +1319,10 @@ Object.assign(hMailAI, {
           return { ok: true,
                    done: `đã tạo bộ lọc "${args.name}" (${condText} → ` +
                          `${actLabel})${applied}; xem ở Công cụ ▸ Bộ lọc thư` };
+        }
+
+        case "test_filters": {
+          return this.diagnoseFilters(win, hdr, args.name_contains);
         }
 
         case "compose_new": {

@@ -614,6 +614,21 @@ Object.assign(hMailAI, {
 
     card.appendChild(el("div", "hmail-ai-insight-head", "Đọc nhanh tại chỗ"));
 
+    // Cảnh báo nguy hiểm lên ĐẦU, trước cả tóm tắt: người đọc phải thấy
+    // "đây là thư lừa đảo" trước khi thấy nội dung được tóm gọn mượt mà.
+    const dangers = result.findings.filter(f => f.level === "danger");
+    if (dangers.length) {
+      const alert = el("div", "hmail-ai-danger-box");
+      alert.appendChild(el("div", "hmail-ai-danger-title",
+        "⚠ Dấu hiệu lừa đảo / mạo danh — đừng bấm liên kết, đừng trả lời"));
+      const list = el("ul", "hmail-ai-findings");
+      for (const f of dangers) {
+        list.appendChild(el("li", "hmail-ai-finding danger", f.text));
+      }
+      alert.appendChild(list);
+      card.appendChild(alert);
+    }
+
     // A bounce answers a different question from an ordinary message, so it
     // gets its own block at the top: why it came back and what to do.
     if (result.bounce) {
@@ -671,18 +686,22 @@ Object.assign(hMailAI, {
       card.appendChild(chips);
     }
 
-    if (result.findings.length) {
+    const rest = result.findings.filter(f => f.level !== "danger");
+    if (rest.length) {
       const list = el("ul", "hmail-ai-findings");
-      for (const finding of result.findings) {
+      for (const finding of rest) {
         list.appendChild(el("li", `hmail-ai-finding ${finding.level}`,
                             finding.text));
       }
       card.appendChild(list);
     }
 
-    const contacts = (result.contacts && result.contacts.length)
-      ? result.contacts
-      : (result.contact ? [result.contact] : []);
+    // Thư bị đánh nguy hiểm thì KHÔNG mời lưu người gửi vào danh bạ —
+    // lưu kẻ mạo danh vào sổ là biến cảnh báo lần sau thành "người quen".
+    const contacts = dangers.length ? []
+      : (result.contacts && result.contacts.length)
+        ? result.contacts
+        : (result.contact ? [result.contact] : []);
     contacts.forEach((c, i) => {
       const block = this.contactBlock(win, doc, c, i === 0);
       if (block) {

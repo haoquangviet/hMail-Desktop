@@ -409,6 +409,79 @@ var hMailMsg = {
 };
 
 // ---------------------------------------------------------------------------
+// "Kiểm tra bộ lọc với thư này": menu chuột phải trên thư trong danh sách —
+// chạy chẩn đoán bộ lọc (cùng bộ máy so khớp thật) và mở kết quả trong
+// panel hMail AI, nói rõ bộ lọc nào khớp, điều kiện nào trượt và vì sao.
+(function hMailFilterCheck() {
+  const win = window;
+  const attach = doc => {
+    try {
+      const menu = doc?.getElementById("mailContext");
+      if (!menu || menu.dataset.hmailFilterCheck) {
+        return;
+      }
+      menu.dataset.hmailFilterCheck = "1";
+      const item = doc.createXULElement("menuitem");
+      item.id = "hmail-check-filters";
+      item.setAttribute("label", "Kiểm tra bộ lọc với thư này…");
+      item.addEventListener("command", async () => {
+        try {
+          const ai = win.hMailAI;
+          const hdr = ai?.selectedMessage?.(win);
+          if (!ai || !hdr) {
+            return;
+          }
+          ai.togglePanel?.(win, true);
+          const res = await ai.diagnoseFilters(win, hdr, "");
+          const lines = [`**Thư:** ${res.message.from} — ${res.message.subject}`,
+                         `**Bộ lọc của tài khoản:** ${res.total_filters}`];
+          if (!res.filters.length) {
+            lines.push("Tài khoản này chưa có bộ lọc nào.");
+          }
+          for (const f of res.filters) {
+            lines.push(`\n**${f.matches ? "✅" : "❌"} ${f.name}**` +
+              (f.enabled ? "" : " (đang tắt)") +
+              (f.actions?.length ? ` → ${f.actions.join(", ")}` : ""));
+            for (const t of f.terms) {
+              lines.push(`- ${t.hit === true ? "✔" : t.hit === false ? "✘" : "•"} ` +
+                `${t.rule}` + (t.actual !== undefined && t.hit === false
+                  ? ` — thực tế: "${t.actual}"` : ""));
+            }
+            for (const w of f.warnings) {
+              lines.push(`- ⚠ ${w}`);
+            }
+          }
+          if (res.hint) {
+            lines.push(`\n${res.hint}`);
+          }
+          ai.addTurn?.(win, "assistant", lines.join("\n"));
+        } catch (e) {
+          Cu.reportError("hMail filter check failed: " + e);
+        }
+      });
+      const anchor = doc.getElementById("mailContext-markMenu") ||
+                     doc.getElementById("mailContext-tags");
+      if (anchor) {
+        anchor.after(item);
+      } else {
+        menu.appendChild(item);
+      }
+      menu.addEventListener("popupshowing", () => {
+        item.hidden = !win.hMailAI?.selectedMessage?.(win);
+      });
+    } catch (e) {}
+  };
+  try {
+    win.setInterval(() => {
+      const tabmail = win.document.getElementById("tabmail");
+      attach(tabmail?.currentAbout3Pane?.document);
+    }, 1500);
+  } catch (e) {
+    Cu.reportError("hMail filter-check init failed: " + e);
+  }
+})();
+
+// ---------------------------------------------------------------------------
 // "Mở liên kết trong tab hMail": menu chuột phải trên liên kết trong thư
 // hiện chỉ có "Mở liên kết trong trình duyệt" — thêm lựa chọn mở ngay
 // trong một tab của hMail (contentTab của Thunderbird, cùng cơ chế trang

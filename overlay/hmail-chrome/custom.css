@@ -1513,6 +1513,21 @@ select.hmail-ai-field,
     text-align: center;
 }
 
+/* Hộp cảnh báo nguy hiểm đầu thẻ Đọc nhanh: đỏ, đậm, không nhầm được. */
+.hmail-ai-danger-box {
+    margin: 6px 0 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, #D93025 55%, transparent);
+    background-color: color-mix(in srgb, #D93025 10%, Canvas);
+}
+
+.hmail-ai-danger-title {
+    font-weight: 700;
+    color: color-mix(in srgb, #D93025 80%, CanvasText);
+    margin-bottom: 6px;
+}
+
 /* Lựa chọn trợ lý gợi ý: hàng nút viên thuốc dưới câu trả lời. */
 .hmail-ai-choices {
     display: flex;
