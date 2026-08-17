@@ -173,6 +173,50 @@ var hMailDateFilter = {
     }
   },
 
+  /**
+   * Thanh lọc gốc tìm lại gần như NGAY sau mỗi ký tự (deferredUpdateSearch
+   * là setTimeout không độ trễ, ô nhập chỉ đợi 250 ms): gõ "ovhcloud" trên
+   * thư mục trăm nghìn thư là tám lần quét chồng nhau, app đứng hình. Bọc
+   * lại với độ trễ theo cỡ thư mục — chờ người dùng gõ xong mới tìm.
+   */
+  tameSearchDelay(a3) {
+    const bar = a3.quickFilterBar;
+    if (!bar || bar._hmailDebounced || typeof bar.updateSearch !== "function") {
+      return;
+    }
+    bar._hmailDebounced = true;
+    const original = bar.updateSearch.bind(bar);
+    let timer = null;
+    let lastTerms = "";
+    bar.deferredUpdateSearch = function () {
+      const count = a3.gFolder?.getTotalMessages?.(false) || 0;
+      // 250 ms cho thư mục nhỏ, tới 900 ms cho hộp trăm nghìn thư.
+      const delay = count < 5000 ? 250 : count < 30000 ? 500 :
+                    count < 100000 ? 700 : 900;
+      a3.clearTimeout(timer);
+      timer = a3.setTimeout(() => {
+        // Từ khoá không đổi (ví dụ chỉ nháy chuột) thì đừng quét lại.
+        let terms = "";
+        try {
+          terms = JSON.stringify(bar.filterer?.filterValues || {});
+        } catch (e) {}
+        if (terms === lastTerms) {
+          return;
+        }
+        lastTerms = terms;
+        original();
+      }, delay);
+    };
+    // Gọi thẳng updateSearch (đổi thư mục, bấm nút) thì ghi nhớ trạng thái
+    // để lần gõ sau so sánh đúng.
+    bar.updateSearch = function (...args) {
+      try {
+        lastTerms = JSON.stringify(bar.filterer?.filterValues || {});
+      } catch (e) {}
+      return original(...args);
+    };
+  },
+
   /** Cắm nhóm "Thời gian" vào popup của nút bộ lọc + chip trên thanh. */
   attachMenu(win, a3) {
     const doc = a3.document;
@@ -180,6 +224,7 @@ var hMailDateFilter = {
     if (!bar) {
       return;
     }
+    this.tameSearchDelay(a3);
     // Chip hiển thị bộ lọc đang áp, ngay cạnh nhãn số kết quả.
     if (!doc.getElementById("hmail-date-chip")) {
       const host = doc.getElementById("qfb-results-label")?.parentElement ||

@@ -2602,6 +2602,133 @@ select.hmail-ai-field,
    editor phải hiện Y HỆT thứ sẽ lưu và hiện trong thư — ép ở đây là editor
    "nói dối", ảnh méo trong thư mà nhìn trong editor vẫn đẹp. */
 
+/* --- tab Chi phí AI --- */
+
+.hmail-aicost-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.hmail-aicost-bar input[type="search"] {
+    flex: 1 1 200px;
+}
+
+.hmail-aicost-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
+}
+
+.hmail-aicost-card {
+    padding: 12px 14px;
+    border-radius: 10px;
+    background-color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 8%, Canvas);
+}
+
+.hmail-aicost-card-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.hmail-aicost-card-label {
+    font-size: 0.85rem;
+    opacity: 0.75;
+}
+
+.hmail-aicost-card-sub {
+    font-size: 0.78rem;
+    opacity: 0.6;
+    margin-top: 2px;
+}
+
+.hmail-aicost-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.hmail-aicost-section-title {
+    font-weight: 600;
+    margin-top: 6px;
+}
+
+.hmail-aicost-row {
+    display: grid;
+    grid-template-columns: minmax(140px, 1fr) 2fr auto auto;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.86rem;
+}
+
+.hmail-aicost-row-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.hmail-aicost-barwrap {
+    height: 8px;
+    border-radius: 999px;
+    background-color: color-mix(in srgb, CanvasText 8%, Canvas);
+    overflow: hidden;
+}
+
+.hmail-aicost-barfill {
+    height: 100%;
+    background-color: var(--hmail-accent, #0F6CBD);
+}
+
+.hmail-aicost-row-num {
+    opacity: 0.7;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.hmail-aicost-row-cost {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    min-width: 5em;
+    text-align: end;
+}
+
+.hmail-aicost-table {
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    width: 100%;
+}
+
+.hmail-aicost-table th,
+.hmail-aicost-table td {
+    padding: 4px 8px;
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 10%, transparent);
+    text-align: start;
+    vertical-align: top;
+}
+
+.hmail-aicost-table th {
+    font-weight: 600;
+    opacity: 0.75;
+    position: sticky;
+    top: 0;
+    background-color: Canvas;
+}
+
+.hmail-aicost-table td.num {
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.hmail-aicost-subject {
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* --- tab xem bên trong tệp nén --- */
 
 .hmail-zip-wrap {

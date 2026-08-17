@@ -366,6 +366,9 @@ var hMailComposeAI = {
 
     this.notify(win, "Đang suy nghĩ…", true);
     try {
+      hMailAI.usageContext = { feature: "Soạn thư: " +
+                                        (action.label || action.id),
+                               subject: this.subject(win) || "" };
       let reply = await hMailAI.ask([{
         role: "user",
         text: `${action.prompt}\n\n---\n${context}`,

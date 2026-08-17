@@ -92,11 +92,13 @@ Object.assign(hMailAI, {
     },
     {
       name: "search_messages",
-      description: "Tìm thư trong Hộp thư đến của MỌI tài khoản: theo từ " +
-                   "khoá (người gửi/tiêu đề), số ngày gần đây, có thể chỉ " +
-                   "lấy thư chưa đọc. Trả về danh sách {id, from, subject, " +
-                   "date, unread, folder}. Dùng khi người dùng hỏi về thư " +
-                   "từ, việc cần làm, thư mới… mà chưa mở thư nào.",
+      description: "Tìm thư theo từ khoá (người gửi/tiêu đề), số ngày gần " +
+                   "đây, có thể chỉ lấy thư chưa đọc. MẶC ĐỊNH tìm trong " +
+                   "THƯ MỤC ĐANG MỞ trên màn hình (người dùng đang đứng ở " +
+                   "hộp thư nào thì tìm ở đó); scope='account' = cả tài " +
+                   "khoản đang mở; scope='all' = Hộp thư đến của mọi tài " +
+                   "khoản — chỉ dùng khi người dùng nói rõ 'tất cả tài " +
+                   "khoản'. Trả về {id, from, subject, date, unread, folder}.",
       parameters: {
         type: "object",
         properties: {
@@ -108,6 +110,10 @@ Object.assign(hMailAI, {
           unread_only: { type: "boolean",
                          description: "true = chỉ thư chưa đọc" },
           limit: { type: "number", description: "Tối đa bao nhiêu thư (mặc định 20)" },
+          scope: { type: "string", enum: ["folder", "account", "all"],
+                   description: "folder (mặc định) = thư mục đang mở; " +
+                                "account = mọi thư mục của tài khoản đang " +
+                                "mở; all = Hộp thư đến của mọi tài khoản" },
         },
       },
     },
@@ -285,7 +291,10 @@ Object.assign(hMailAI, {
       }
       return null;
     }
+    // Không nêu tài khoản: thư đang xem → thư mục đang mở → mặc định.
     return fallbackHdr?.folder?.server ||
+      this.about3Pane(Services.wm.getMostRecentWindow("mail:3pane"))
+        ?.gFolder?.server ||
       MailServices.accounts.defaultAccount?.incomingServer || null;
   },
 
@@ -520,18 +529,43 @@ Object.assign(hMailAI, {
           const cutoff = Date.now() / 1000 - days * 86400;
           const found = [];
           const stats = [];
-          for (const server of MailServices.accounts.allServers) {
-            // Một tài khoản hỏng không được kéo sập cả cuộc tìm — lỗi ở
-            // đâu ghi lại ở đó rồi đi tiếp.
-            try {
+          // Phạm vi: mặc định là THƯ MỤC ĐANG MỞ — người dùng đứng ở hộp
+          // thư nào thì AI làm việc ở đó, không tràn sang tài khoản khác.
+          const scope = String(args.scope || "folder");
+          const openFolder = this.about3Pane(win)?.gFolder || null;
+          let targets = [];
+          if (scope === "all" || !openFolder) {
+            for (const server of MailServices.accounts.allServers) {
               if (!["imap", "pop3", "none"].includes(server.type)) {
                 continue;
               }
               const inbox = server.rootFolder
                 ?.getFolderWithFlags?.(Ci.nsMsgFolderFlags.Inbox);
+              if (inbox) {
+                targets.push(inbox);
+              }
+            }
+          } else if (scope === "account") {
+            const root = openFolder.server.rootFolder;
+            const skip = Ci.nsMsgFolderFlags.Trash | Ci.nsMsgFolderFlags.Junk |
+                         Ci.nsMsgFolderFlags.Drafts | Ci.nsMsgFolderFlags.Templates;
+            for (const f of root.descendants) {
+              if (!f.isServer && !(f.flags & skip)) {
+                targets.push(f);
+              }
+            }
+          } else {
+            targets = [openFolder];
+          }
+          for (const folderT of targets) {
+            const server = folderT.server;
+            // Một thư mục hỏng không được kéo sập cả cuộc tìm — lỗi ở
+            // đâu ghi lại ở đó rồi đi tiếp.
+            try {
+              const inbox = folderT;
               const db = inbox?.msgDatabase;
               if (!db) {
-                stats.push({ server: server.prettyName, error: "no-inbox-db" });
+                stats.push({ server: server.prettyName, error: "no-db" });
                 continue;
               }
               // Đi từ thư mới nhất lùi về; quá mốc thời gian là dừng —
@@ -569,10 +603,12 @@ Object.assign(hMailAI, {
                   ts: msg.dateInSeconds,
                   date: new Date(msg.dateInSeconds * 1000).toLocaleString(),
                   unread: !msg.isRead,
-                  folder: `${server.prettyName}`,
+                  folder: `${server.prettyName}` +
+                    (scope === "account" ? ` / ${inbox.prettyName}` : ""),
                 });
               }
-              stats.push({ server: server.prettyName, reverse, checked, kept });
+              stats.push({ server: server.prettyName, folder: inbox.prettyName,
+                           reverse, checked, kept });
             } catch (e) {
               stats.push({ server: server?.prettyName || "?",
                            error: String(e.message || e) });
@@ -581,7 +617,12 @@ Object.assign(hMailAI, {
           found.sort((a, b) => b.ts - a.ts);
           const items = found.slice(0, limit).map(({ ts, ...rest }) => rest);
           const out = { ok: true, count: items.length,
-                        total_matched: found.length, items };
+                        total_matched: found.length, items,
+                        scope: scope === "all" || !openFolder ? "all"
+                          : scope === "account"
+                            ? `tài khoản ${openFolder.server.prettyName}`
+                            : `thư mục ${openFolder.prettyName} của ` +
+                              openFolder.server.prettyName };
           if (args.debug) {
             out.stats = stats;
           }
@@ -1301,7 +1342,7 @@ Object.assign(hMailAI, {
                                         { days: 3, limit: 5, debug: true });
       report(JSON.stringify({
         ok: res.ok, count: res.count, total: res.total_matched,
-        error: res.error || null,
+        scope: res.scope, error: res.error || null,
         first: res.items?.[0]
           ? `${res.items[0].from} | ${res.items[0].subject}` : null,
         stats: res.stats,

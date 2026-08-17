@@ -293,6 +293,62 @@ var hMailAI = {
     try {
       Services.prefs.setCharPref("hmail.ai.usage", JSON.stringify(all));
     } catch (e) {}
+    // Nhật ký từng lượt gọi — trang Chi phí AI đọc lại toàn bộ lịch sử.
+    this.appendUsageLog({ in: input, out: output });
+  },
+
+  USAGE_LOG: "hmail-ai-usage.jsonl",
+
+  usageLogPath() {
+    const file = Services.dirsvc.get("ProfD", Ci.nsIFile);
+    file.append(this.USAGE_LOG);
+    return file.path;
+  },
+
+  /**
+   * Ghi một dòng JSON vào nhật ký chi phí: thời điểm, dịch vụ, model,
+   * token vào/ra, chi phí ước tính, tính năng đang dùng và tiêu đề thư
+   * (nếu có). Ghi nối tiếp — không đọc lại file, hộp thư dùng lâu năm vẫn
+   * nhẹ. Bối cảnh (feature/subject) do nơi gọi đặt qua this.usageContext
+   * trước khi ask().
+   */
+  appendUsageLog(counters) {
+    try {
+      const id = this.service();
+      const def = this.serviceDef(id);
+      const line = JSON.stringify({
+        t: Date.now(),
+        service: id,
+        label: def.label,
+        model: this.svcPref("model", def.model || "", id),
+        in: counters.in,
+        out: counters.out,
+        cost: this.cost(counters, id),
+        feature: this.usageContext?.feature || "chat",
+        subject: String(this.usageContext?.subject || "").slice(0, 120),
+      }) + "\n";
+      IOUtils.writeUTF8(this.usageLogPath(), line, { mode: "append" })
+        .catch(() => {});
+    } catch (e) {}
+  },
+
+  /** Đọc toàn bộ nhật ký (mới nhất trước); dòng hỏng bị bỏ qua. */
+  async readUsageLog() {
+    try {
+      const text = await IOUtils.readUTF8(this.usageLogPath());
+      const out = [];
+      for (const line of text.split("\n")) {
+        if (!line.trim()) {
+          continue;
+        }
+        try {
+          out.push(JSON.parse(line));
+        } catch (e) {}
+      }
+      return out.reverse();
+    } catch (e) {
+      return [];
+    }
   },
 
   clearUsage() {

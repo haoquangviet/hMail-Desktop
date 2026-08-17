@@ -367,6 +367,8 @@ Object.assign(hMailAI, {
 
     menu.appendChild(el("div", "hmail-ai-menu-sep"));
     item("⚙", "Cài đặt trợ lý…", () => this.showSettings(win));
+    item("$", "Chi phí AI — tổng và lịch sử…",
+         () => win.hMailAICost?.openTab(win));
 
     container.appendChild(menu);
     anchor.setAttribute("aria-expanded", "true");
@@ -920,6 +922,8 @@ Object.assign(hMailAI, {
     try {
       const text = await this.messageText(hdr);
       const turns = [{ role: "user", text: `${prompt.text}\n\n---\n${text}` }];
+      this.usageContext = { feature: prompt.label,
+                            subject: hdr.mime2DecodedSubject || "" };
       const reply = await this.ask(turns);
 
       await this.remember(hdr, "user", prompt.label);
@@ -1002,10 +1006,25 @@ Object.assign(hMailAI, {
           turns.push({ role: t.role, text: t.text });
         }
       } else {
+        // Người dùng đang đứng ở hộp thư nào — model phải biết để làm
+        // việc trong đó, không tràn sang tài khoản khác.
+        let where = "";
+        try {
+          const f = win.document.getElementById("tabmail")
+            ?.currentAbout3Pane?.gFolder;
+          if (f && !f.isServer) {
+            where = `Người dùng đang mở thư mục "${f.prettyName}" của tài ` +
+              `khoản ${f.server.prettyName} — mọi việc tìm/lọc/dọn mặc định ` +
+              "làm TRONG hộp thư này (search_messages scope mặc định = " +
+              "folder); chỉ mở rộng sang tài khoản khác khi người dùng nói " +
+              "rõ. ";
+          }
+        } catch (e) {}
         turns.push({
           role: "user",
-          text: "Bạn là trợ lý trong ứng dụng thư hMail Desktop. Hiện KHÔNG " +
-                "có thư nào đang mở, nhưng bạn có công cụ tra cứu hộp thư: " +
+          text: "Bạn là trợ lý trong ứng dụng thư hMail Desktop. " + where +
+                "Hiện KHÔNG có thư nào đang mở, nhưng bạn có công cụ tra " +
+                "cứu hộp thư: " +
                 "search_messages (tìm thư mọi tài khoản theo từ khoá/ngày/" +
                 "chưa đọc), read_message (đọc nội dung một thư), " +
                 "open_message (mở thư lên màn hình), compose_new (soạn thư " +
@@ -1020,6 +1039,8 @@ Object.assign(hMailAI, {
       }
       turns.push({ role: "user", text });
 
+      this.usageContext = { feature: hdr ? "chat-thư" : "chat-hộp thư",
+                            subject: hdr?.mime2DecodedSubject || "" };
       const reply = await this.ask(turns, {
         win,
         // Luôn đưa công cụ cho model: nhóm hộp thư (tìm/đọc/mở thư, soạn
@@ -1202,6 +1223,9 @@ Object.assign(hMailAI, {
                  el("span", "hmail-ai-usage-num", ""),
                  el("span", "hmail-ai-usage-cost", money(total)));
       spend.appendChild(sum);
+      const openCost = el("button", "hmail-ai-btn", "Xem toàn bộ lịch sử chi phí…");
+      openCost.addEventListener("click", () => win.hMailAICost?.openTab(win));
+      spend.appendChild(openCost);
       spend.appendChild(el("div", "hmail-ai-hint",
         "Số token do chính nhà cung cấp báo về sau mỗi lượt gọi. Chi phí là " +
         "ước tính theo đơn giá ở trên — hãy đối chiếu với hoá đơn thật, vì " +
