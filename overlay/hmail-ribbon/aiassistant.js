@@ -80,6 +80,10 @@ var hMailAI = {
     "thể gửi nguyên văn, ví dụ [[chọn: Chuyển 524 thư vào Thùng rác | " +
     "Đánh dấu đã đọc | Chuyển sang thư mục khác | Thôi]]) — hMail vẽ chúng " +
     "thành nút bấm sẵn. Không dùng khối này khi không có lựa chọn thật.\n" +
+    "- \"Nhắc tôi…\", \"nhắc lại hằng ngày\", \"đừng để tôi quên\", \"theo " +
+    "dõi việc này\" = set_reminder (lời nhắc có báo thức trong Lịch, lặp " +
+    "hằng ngày/tuần được). KHÔNG dùng bộ lọc thư hay gắn cờ thay cho lời " +
+    "nhắc — bộ lọc chỉ sắp xếp thư đến, không nhắc ai cả.\n" +
     "- \"Từ giờ / tự động / mỗi khi thư của X đến thì…\" = tạo BỘ LỌC lâu " +
     "dài bằng create_filter (điều kiện người gửi/tiêu đề/người nhận chứa; " +
     "hành động chuyển thư mục/gắn nhãn/đánh dấu đọc/xoá/gắn cờ). Khác với " +

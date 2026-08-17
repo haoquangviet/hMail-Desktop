@@ -224,6 +224,33 @@ Object.assign(hMailAI, {
       },
     },
     {
+      name: "set_reminder",
+      description: "Đặt LỜI NHẮC / việc cần làm cho người dùng về thư đang " +
+                   "xem (hoặc việc bất kỳ): tạo mục trong Lịch/Việc cần làm " +
+                   "của hMail kèm báo thức, có thể LẶP HẰNG NGÀY tới hạn " +
+                   "(ví dụ hoá đơn quá hạn: nhắc mỗi ngày cho tới khi thanh " +
+                   "toán). Dùng khi người dùng nói 'nhắc tôi', 'nhắc lại', " +
+                   "'đừng để tôi quên', 'theo dõi việc này'. KHÔNG dùng bộ " +
+                   "lọc thư cho việc nhắc nhở.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Tiêu đề lời nhắc, ngắn gọn" },
+          when: { type: "string",
+                  description: "Thời điểm nhắc đầu tiên: 'tomorrow 09:00', " +
+                               "'2026-08-20 08:30', 'in 2 hours', 'today 17:00'; " +
+                               "bỏ trống = 9h sáng mai" },
+          repeat: { type: "string", enum: ["none", "daily", "weekly"],
+                    description: "Lặp lại; mặc định none" },
+          until: { type: "string",
+                   description: "Ngày kết thúc lặp (YYYY-MM-DD); bỏ trống = " +
+                                "lặp 30 lần" },
+          notes: { type: "string", description: "Ghi chú thêm" },
+        },
+        required: ["title"],
+      },
+    },
+    {
       name: "test_filters",
       description: "Chẩn đoán vì sao BỘ LỌC THƯ không chạy với thư đang " +
                    "xem: duyệt mọi bộ lọc của tài khoản, cho biết bộ nào " +
@@ -283,7 +310,8 @@ Object.assign(hMailAI, {
   /** Các hành động cấp HỘP THƯ — chạy được khi chưa mở thư nào. */
   MAILBOX_TOOLS: new Set(["compose_new", "search_messages", "read_message",
                           "open_message", "filter_messages",
-                          "act_on_filtered", "create_filter"]),
+                          "act_on_filtered", "create_filter",
+                          "set_reminder"]),
 
   /**
    * Chẩn đoán bộ lọc với một thư: chạy MailServices.filters.matchHdr
@@ -427,6 +455,140 @@ Object.assign(hMailAI, {
         "là do toán tử 'là' (cần 'chứa') hoặc chọn 'khớp tất cả' thay vì " +
         "'bất kỳ'.",
     };
+  },
+
+  /** Đổi mô tả thời điểm sang Date; hiểu vài dạng thường gặp, sai thì null. */
+  parseWhen(text) {
+    const t = String(text || "").trim().toLowerCase();
+    const now = new Date();
+    const at = (d, h = 9, m = 0) => { d.setHours(h, m, 0, 0); return d; };
+    if (!t) {
+      const d = new Date(now); d.setDate(d.getDate() + 1); return at(d);
+    }
+    let m;
+    if ((m = /^(?:in|sau)\s+(\d+)\s*(h|hour|giờ|gio|m|min|phút|phut|d|day|ngày|ngay)/.exec(t))) {
+      const n = +m[1], u = m[2][0];
+      const d = new Date(now);
+      if (u === "h" || u === "g") d.setHours(d.getHours() + n);
+      else if (u === "m" || u === "p") d.setMinutes(d.getMinutes() + n);
+      else d.setDate(d.getDate() + n);
+      return d;
+    }
+    const hm = /(\d{1,2})[:h](\d{2})?/.exec(t);
+    const h = hm ? +hm[1] : 9, mi = hm && hm[2] ? +hm[2] : 0;
+    if ((m = /(\d{4})-(\d{2})-(\d{2})/.exec(t))) {
+      return at(new Date(+m[1], +m[2] - 1, +m[3]), h, mi);
+    }
+    if ((m = /(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?/.exec(t))) {
+      return at(new Date(m[3] ? +m[3] : now.getFullYear(), +m[2] - 1, +m[1]), h, mi);
+    }
+    if (/tomorrow|ngày mai|ngay mai|mai\b/.test(t)) {
+      const d = new Date(now); d.setDate(d.getDate() + 1); return at(d, h, mi);
+    }
+    if (/today|hôm nay|hom nay|nay\b/.test(t)) {
+      const d = at(new Date(now), h, mi);
+      if (d <= now) d.setDate(d.getDate() + 1);
+      return d;
+    }
+    if (hm) {
+      const d = at(new Date(now), h, mi);
+      if (d <= now) d.setDate(d.getDate() + 1);
+      return d;
+    }
+    return null;
+  },
+
+  /**
+   * Tạo lời nhắc thật trong lịch: một sự kiện 15 phút có báo thức lúc bắt
+   * đầu, lặp theo yêu cầu, ghi chú kèm liên kết mở lại thư. Ghi vào lịch
+   * đầu tiên ghi được (ưu tiên lịch cục bộ) — hMail có sẵn lịch cục bộ
+   * "Home"; người dùng thấy ở tab Lịch và nhận thông báo như mọi sự kiện.
+   */
+  async createReminder(win, hdr, args) {
+    const when = this.parseWhen(args.when);
+    if (!when) {
+      return { ok: false,
+               error: "Không hiểu thời điểm \"" + args.when + "\" — dùng dạng " +
+                      "'ngày mai 9:00', '2026-08-20 08:30', 'sau 2 giờ'." };
+    }
+    const { cal } = ChromeUtils.importESModule(
+      "resource:///modules/calendar/calUtils.sys.mjs");
+    const { CalEvent } = ChromeUtils.importESModule(
+      "resource:///modules/CalEvent.sys.mjs");
+    const { CalAlarm } = ChromeUtils.importESModule(
+      "resource:///modules/CalAlarm.sys.mjs");
+    const { CalRecurrenceRule } = ChromeUtils.importESModule(
+      "resource:///modules/CalRecurrenceRule.sys.mjs");
+    const { CalRecurrenceInfo } = ChromeUtils.importESModule(
+      "resource:///modules/CalRecurrenceInfo.sys.mjs");
+    const calendars = cal.manager.getCalendars()
+      .filter(c => !c.readOnly && !c.getProperty("disabled"));
+    // Thứ tự: lịch được người dùng chọn cho lời nhắc (pref) → lịch mặc
+    // định của Thunderbird → lịch cục bộ → lịch đầu tiên.
+    let preferred = "";
+    try {
+      preferred = Services.prefs.getCharPref("hmail.ai.reminderCalendar", "");
+    } catch (e) {}
+    let defaultId = "";
+    try {
+      defaultId = Services.prefs.getCharPref("calendar.default.calendar", "");
+    } catch (e) {}
+    const calendar = calendars.find(c => preferred && c.id === preferred) ||
+      calendars.find(c => defaultId && c.id === defaultId) ||
+      calendars.find(c => c.type === "storage") || calendars[0];
+    if (!calendar) {
+      return { ok: false, error: "Không có lịch nào ghi được để đặt lời nhắc." };
+    }
+    const title = String(args.title || "").trim() || "Lời nhắc từ hMail";
+    const repeat = String(args.repeat || "none");
+    const item = new CalEvent();
+    item.title = title;
+    const start = cal.dtz.jsDateToDateTime(when, cal.dtz.defaultTimezone);
+    const end = start.clone();
+    end.addDuration(cal.createDuration("PT15M"));
+    item.startDate = start;
+    item.endDate = end;
+    let notes = String(args.notes || "").trim();
+    if (hdr) {
+      notes += (notes ? "\n\n" : "") +
+        "Thư liên quan: " + (hdr.mime2DecodedSubject || "") +
+        " — từ " + (hdr.mime2DecodedAuthor || "") + "\n" +
+        "Mở thư: hmail://message/" +
+        encodeURIComponent(hdr.messageId || "");
+    }
+    if (notes) {
+      item.setProperty("DESCRIPTION", notes);
+    }
+    // Báo thức đúng lúc bắt đầu.
+    const alarm = new CalAlarm();
+    alarm.action = "DISPLAY";
+    alarm.related = Ci.calIAlarm.ALARM_RELATED_START;
+    alarm.offset = cal.createDuration("PT0M");
+    item.addAlarm(alarm);
+    // Lặp.
+    let repeatText = "";
+    if (repeat === "daily" || repeat === "weekly") {
+      const rule = new CalRecurrenceRule();
+      rule.type = repeat === "daily" ? "DAILY" : "WEEKLY";
+      const untilM = /(\d{4})-(\d{2})-(\d{2})/.exec(String(args.until || ""));
+      if (untilM) {
+        const u = new Date(+untilM[1], +untilM[2] - 1, +untilM[3], 23, 59, 0, 0);
+        rule.untilDate = cal.dtz.jsDateToDateTime(u, cal.dtz.defaultTimezone);
+        repeatText = (repeat === "daily" ? " mỗi ngày" : " mỗi tuần") +
+          " tới " + untilM[3] + "/" + untilM[2] + "/" + untilM[1];
+      } else {
+        rule.count = 30;
+        repeatText = (repeat === "daily" ? " mỗi ngày" : " mỗi tuần") +
+          " (30 lần)";
+      }
+      item.recurrenceInfo = new CalRecurrenceInfo(item);
+      item.recurrenceInfo.appendRecurrenceItem(rule);
+    }
+    await calendar.addItem(item);
+    const whenText = when.toLocaleString("vi-VN");
+    return { ok: true,
+             done: `đã đặt lời nhắc "${title}" lúc ${whenText}${repeatText} ` +
+                   `trong lịch "${calendar.name}" — có báo thức, xem ở tab Lịch` };
   },
 
   /** msgWindow của 3-pane (getFilterList/applyFilters cần một cái). */
@@ -1303,15 +1465,13 @@ Object.assign(hMailAI, {
             try {
               const inbox = server.rootFolder
                 .getFolderWithFlags(Ci.nsMsgFolderFlags.Inbox);
-              const one = server.getFilterList(this.msgWindowOf(win));
-              // Chạy riêng bộ lọc vừa tạo lên Hộp thư đến hiện có.
+              // Chạy riêng bộ lọc vừa tạo lên Hộp thư đến hiện có — đúng
+              // chữ ký Thunderbird dùng trong hộp thoại Bộ lọc thư.
               const tmp = MailServices.filters.getTempFilterList(inbox);
               tmp.insertFilterAt(0, filter);
-              MailServices.filters.applyFilters(
-                Ci.nsMsgFilterType.Manual, tmp, inbox, this.msgWindowOf(win),
-                null);
+              MailServices.filters.applyFiltersToFolders(
+                tmp, [inbox], this.msgWindowOf(win));
               applied = " và đã chạy lên Hộp thư đến";
-              void one;
             } catch (e) {
               applied = " (chạy ngay không thành công: " + (e.message || e) + ")";
             }
@@ -1319,6 +1479,10 @@ Object.assign(hMailAI, {
           return { ok: true,
                    done: `đã tạo bộ lọc "${args.name}" (${condText} → ` +
                          `${actLabel})${applied}; xem ở Công cụ ▸ Bộ lọc thư` };
+        }
+
+        case "set_reminder": {
+          return this.createReminder(win, hdr, args);
         }
 
         case "test_filters": {
@@ -1380,54 +1544,38 @@ Object.assign(hMailAI, {
     };
     mark("start");
     try {
-      // Ba ca: thư nội bộ hợp lệ (phải ok), mạo danh IT (danger),
-      // ngân hàng giả (danger).
-      const mk = (from, to, subject, body) => ({
-        mime2DecodedAuthor: from, mime2DecodedRecipients: to, ccList: "",
-        mime2DecodedSubject: subject, author: from, messageId: "t@t",
-        folder: null, messageKey: 1,
-        _hmailRaw: "From: " + from + "\r\nTo: " + to + "\r\nSubject: " +
-          subject + "\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + body,
+      // Lời nhắc thật: tạo trong lịch, kiểm tra tồn tại + báo thức + lặp,
+      // rồi xoá để không để lại rác.
+      const win = Services.wm.getMostRecentWindow("mail:3pane");
+      const res = await hMailAI.runTool(win, "set_reminder", {
+        title: "hMail selftest reminder", when: "tomorrow 09:00",
+        repeat: "daily", until: "2026-08-25", notes: "tự kiểm",
       });
-      const legit = mk("hOne System <one@haoquangviet.com>", "duy@haoquangviet.com",
-        "[One | Hào Quang Việt] Công việc chưa có ai nhận",
-        "Công việc chưa có ai nhận: \"Hỗ trợ cấu hình AI trên Nextcloud và báo " +
-        "giá\" đã tạo 624h. Xem chi tiết: https://hcrm.hqv.biz/task/1\n\n" +
-        "Một phần tầng 19, Indochina Park Tower. Đây là email tự động.\n" +
-        "Người nhận phải có trách nhiệm bảo mật thông tin. Confidential.\n" +
-        "Số tài khoản 84.287779-6009 chuyển khoản.");
-      const fake = mk("Hoaviet - IT Support <b.s.jung_690@hyinstel.com>",
-        "hoaviet@hoaviet.vn", "Hoaviet - Thông báo hết hạn mật khẩu",
-        "mật khẩu tài khoản của bạn sẽ hết hạn, vui lòng cập nhật mật khẩu: " +
-        "https://hyinstel.com/r\r\n");
-      const bank = mk("Vietcombank <no-reply@vcb-alerts.top>",
-        "quyet@haoquangviet.com", "Giao dịch bất thường",
-        "xác minh tại https://vcb-alerts.top/verify");
-      const whmcsReal = mk("OneSign Security Services <noreply@onesign.global>",
-        "liam@onesign.global", "WHMCS Domain Synchronisation Cron Report",
-        "Domain Synchronisation Cron Report. Active Domain Syncs " +
-        "https://my.onesign.global/admin/ This notification was " +
-        "automatically generated by WHMCS");
-      const whmcsFake = mk("WHMCS Billing <billing@whmcs-notice.top>",
-        "liam@onesign.global", "Invoice overdue",
-        "Your invoice is overdue, pay now https://whmcs-notice.top/pay");
-      const dangers = r => r.findings.filter(f => f.level === "danger")
-        .map(f => f.text.slice(0, 60));
-      mark("legit");
-      const r1 = await hMailInsight.analyze(legit);
-      mark("fake");
-      const r2 = await hMailInsight.analyze(fake);
-      mark("bank");
-      const r3 = await hMailInsight.analyze(bank);
-      const r4 = await hMailInsight.analyze(whmcsReal);
-      const r5 = await hMailInsight.analyze(whmcsFake);
-      mark("done");
-      out += " whmcsReal=" + r4.level + "/" + dangers(r4).length +
-        " whmcsFake=" + r5.level + "/" + dangers(r5).length +
-        " legit=" + r1.level + "/" + dangers(r1).length +
-        " fake=" + r2.level + "/" + dangers(r2).length +
-        " bank=" + r3.level + "/" + dangers(r3).length +
-        " legitDangers=" + JSON.stringify(dangers(r1));
+      out += " reminder=" + (res.ok ? "ok" : "ERR:" + res.error);
+      if (res.ok) {
+        const { cal } = ChromeUtils.importESModule(
+          "resource:///modules/calendar/calUtils.sys.mjs");
+        let found = null;
+        for (const c of cal.manager.getCalendars()) {
+          try {
+            const items = await c.getItemsAsArray(
+              Ci.calICalendar.ITEM_FILTER_TYPE_EVENT |
+              Ci.calICalendar.ITEM_FILTER_COMPLETED_ALL, 0, null, null);
+            found = items.find(i => i.title === "hMail selftest reminder");
+            if (found) {
+              out += " inCal=" + c.name + " alarms=" + found.getAlarms().length +
+                " recur=" + (found.recurrenceInfo ? "yes" : "no");
+              await c.deleteItem(found);
+              out += " cleaned=yes";
+              break;
+            }
+          } catch (e) {}
+        }
+        if (!found) {
+          out += " inCal=NOT-FOUND";
+        }
+      }
+      out += " done=" + res.done;
     } catch (e) {
       out += " analyze=ERR " + (e.message || e) + " @" +
              String(e.stack || "").split("\n")[0].slice(-80);
