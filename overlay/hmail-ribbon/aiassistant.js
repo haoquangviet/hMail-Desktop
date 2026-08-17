@@ -333,9 +333,37 @@ var hMailAI = {
         feature: this.usageContext?.feature || "chat",
         subject: String(this.usageContext?.subject || "").slice(0, 120),
       }) + "\n";
-      IOUtils.writeUTF8(this.usageLogPath(), line, { mode: "append" })
-        .catch(() => {});
-    } catch (e) {}
+      // Nối tiếp bằng hàng đợi promise: hai lượt gọi liền nhau không giẫm
+      // lên nhau. IOUtils.writeUTF8 mode "append" ở bản Gecko này không
+      // ghi được (file không hề được tạo) — dùng write byte với mode
+      // append của IOUtils.write, có kiểm tra lỗi ra pref để không mù.
+      const bytes = new TextEncoder().encode(line);
+      this._usageQueue = (this._usageQueue || Promise.resolve()).then(() =>
+        IOUtils.write(this.usageLogPath(), bytes, { mode: "append" })
+      ).catch(async e => {
+        try {
+          // Rơi về đọc-nối-ghi khi mode append không được hỗ trợ.
+          let old = new Uint8Array(0);
+          try {
+            old = await IOUtils.read(this.usageLogPath());
+          } catch (e2) {}
+          const merged = new Uint8Array(old.length + bytes.length);
+          merged.set(old, 0);
+          merged.set(bytes, old.length);
+          await IOUtils.write(this.usageLogPath(), merged);
+        } catch (e3) {
+          try {
+            Services.prefs.setCharPref("hmail.debug.usagelog",
+                                       "err: " + (e3.message || e3));
+          } catch (e4) {}
+        }
+      });
+    } catch (e) {
+      try {
+        Services.prefs.setCharPref("hmail.debug.usagelog",
+                                   "err-sync: " + (e.message || e));
+      } catch (e2) {}
+    }
   },
 
   /** Đọc toàn bộ nhật ký (mới nhất trước); dòng hỏng bị bỏ qua. */

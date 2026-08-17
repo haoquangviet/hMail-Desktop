@@ -369,6 +369,16 @@ Object.assign(hMailAI, {
     item("⚙", "Cài đặt trợ lý…", () => this.showSettings(win));
     item("$", "Chi phí AI — tổng và lịch sử…",
          () => win.hMailAICost?.openTab(win));
+    item("↺", "Bắt đầu cuộc trò chuyện mới", async () => {
+      const hdr = this.selectedMessage(win);
+      if (hdr) {
+        await this.forget(hdr);
+      } else {
+        this.looseTurns = [];
+        await this.saveLooseTurns();
+      }
+      this.restore(win);
+    });
 
     container.appendChild(menu);
     anchor.setAttribute("aria-expanded", "true");
@@ -848,6 +858,33 @@ Object.assign(hMailAI, {
     return turn;
   },
 
+  MAILBOX_KEY: "__mailbox__",
+
+  async saveLooseTurns() {
+    try {
+      const history = await this.loadHistory();
+      history[this.MAILBOX_KEY] = {
+        subject: "Trao đổi về hộp thư", updated: Date.now(),
+        turns: (this.looseTurns || []).map(t => ({ ...t, at: Date.now() })),
+      };
+      await this.saveHistory();
+    } catch (e) {}
+  },
+
+  async loadLooseTurns() {
+    if (this.looseTurns) {
+      return;
+    }
+    try {
+      const history = await this.loadHistory();
+      this.looseTurns = (history[this.MAILBOX_KEY]?.turns || [])
+        .map(t => ({ role: t.role, text: t.text, service: t.service }))
+        .slice(-12);
+    } catch (e) {
+      this.looseTurns = [];
+    }
+  },
+
   /** Repaint the panel with whatever was already said about this message. */
   async restore(win) {
     const doc = win.document;
@@ -865,6 +902,17 @@ Object.assign(hMailAI, {
 
     const hdr = this.selectedMessage(win);
     if (!hdr) {
+      await this.loadLooseTurns();
+      // Đang trao đổi về HỘP THƯ (không gắn thư nào) mà bấm ra vùng trống
+      // của danh sách: giữ nguyên cuộc trò chuyện, đừng thay bằng màn
+      // chào — người dùng đang làm việc dở.
+      if (this.looseTurns?.length) {
+        for (const t of this.looseTurns) {
+          this.addTurn(win, t.role, t.text, t.service || null);
+        }
+        this.notify(win, `${this.looseTurns.length} lượt trao đổi về hộp thư`);
+        return;
+      }
       this.notify(win, "Chưa chọn thư nào.");
       this.showWelcome(win, log);
       return;
@@ -1104,7 +1152,11 @@ Object.assign(hMailAI, {
       } else {
         this.looseTurns = (this.looseTurns || []).concat(
           { role: "user", text },
-          { role: "assistant", text: reply }).slice(-12);
+          { role: "assistant", text: reply, service: this.service() })
+          .slice(-12);
+        // Trao đổi về hộp thư cũng phải sống qua khởi động lại — ghi vào
+        // lịch sử chung dưới khoá riêng, đọc lại lúc mở panel.
+        this.saveLooseTurns();
       }
       this.addTurn(win, "assistant", reply);
       this.notify(win, "");
@@ -1394,6 +1446,40 @@ Object.assign(hMailAI, {
       "Mỗi lần chạy tự động là một lượt gọi có tính phí tới nhà cung cấp AI, " +
       "và nội dung thư sẽ được gửi đi. Hãy chọn phạm vi hẹp nhất đủ dùng."));
 
+    // --- chống mạo danh --------------------------------------------------
+    // Tên thương hiệu cho từng miền của người dùng: bộ soi tự lấy tên gốc
+    // của miền (hoaviet ← hoaviet.vn), nhưng tên ngắn/tên tiếng Việt có
+    // dấu ("HQV", "Hào Quang Việt") thì phải khai để bắt kẻ mượn tên.
+    form.appendChild(el("div", "hmail-ai-section", "Chống mạo danh"));
+    form.appendChild(el("div", "hmail-ai-hint",
+      "Tên gọi khác của công ty bạn cho từng tên miền (cách nhau bằng dấu " +
+      "phẩy). Thư gửi từ miền lạ mà tên hiển thị mượn các tên này sẽ bị " +
+      "cảnh báo mạo danh nội bộ. Tên gốc của miền (ví dụ \"hoaviet\") đã " +
+      "được nhận diện sẵn."));
+    const brandInputs = new Map();
+    {
+      const domains = new Set();
+      try {
+        for (const identity of MailServices.accounts.allIdentities) {
+          const d = String(identity.email || "").split("@")[1]?.toLowerCase();
+          if (d) {
+            domains.add(d);
+          }
+        }
+      } catch (e) {}
+      for (const d of domains) {
+        form.appendChild(el("label", "hmail-ai-label", d));
+        const input = el("input", "hmail-ai-field");
+        input.type = "text";
+        input.placeholder = "ví dụ: Hào Quang Việt, HQV Software";
+        try {
+          input.value = Services.prefs.getStringPref("hmail.brand." + d, "");
+        } catch (e) {}
+        form.appendChild(input);
+        brandInputs.set(d, input);
+      }
+    }
+
     // --- appearance -----------------------------------------------------
     // Every control here previews live, so the choice is judged on the panel
     // itself rather than on a swatch.
@@ -1495,6 +1581,14 @@ Object.assign(hMailAI, {
         Services.prefs.setCharPref("hmail.ai.fontSize", size.value);
         Services.prefs.setCharPref("hmail.ai.accent", color.value);
         Services.prefs.setCharPref("hmail.ai.theme", theme.value);
+        for (const [d, input] of brandInputs) {
+          const v = input.value.trim();
+          if (v) {
+            Services.prefs.setStringPref("hmail.brand." + d, v);
+          } else if (Services.prefs.prefHasUserValue("hmail.brand." + d)) {
+            Services.prefs.clearUserPref("hmail.brand." + d);
+          }
+        }
         this.applyLook(win);
         this.notify(win, "Đã lưu cài đặt.");
         this.restore(win);

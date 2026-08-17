@@ -1360,6 +1360,46 @@ Object.assign(hMailAI, {
 });
 
 // ---------------------------------------------------------------------------
+// Đầu dò nạp module (pref hmail.debug.loadprobe = "run"): báo hMailInsight
+// có tồn tại không, và thử nạp lại mailinsight.js để bắt đúng SyntaxError.
+(function hMailLoadProbe() {
+  let mode = "";
+  try {
+    mode = Services.prefs.getCharPref("hmail.debug.loadprobe", "");
+  } catch (e) {}
+  if (mode !== "run") {
+    return;
+  }
+  setTimeout(async () => {
+    let out = "hMailInsight=" + (typeof hMailInsight);
+    try {
+      // Chạy thẳng bộ soi với thư mô phỏng Hoaviet để bắt lỗi runtime.
+      const fake = {
+        mime2DecodedAuthor: "Hoaviet - IT Support <b.s.jung_690@hyinstel.com>",
+        mime2DecodedRecipients: "hoaviet@hoaviet.vn", ccList: "",
+        mime2DecodedSubject: "Hoaviet - Thông báo hết hạn mật khẩu",
+        author: "x", messageId: "t@t", folder: null, messageKey: 1,
+        _hmailRaw: "From: Hoaviet - IT Support <b.s.jung_690@hyinstel.com>\r\n" +
+          "To: hoaviet@hoaviet.vn\r\nSubject: Hoaviet - Thông báo hết hạn mật " +
+          "khẩu\r\nContent-Type: text/plain\r\n\r\nmật khẩu tài khoản của bạn " +
+          "sẽ hết hạn, vui lòng cập nhật mật khẩu: https://hyinstel.com/r\r\n",
+      };
+      const r = await hMailInsight.analyze(fake);
+      out += " analyze=ok level=" + r.level + " dangers=" +
+        r.findings.filter(f => f.level === "danger").length +
+        " brand=" + !!r.facts.brandSpoof + " cred=" + !!r.facts.credentialPhish;
+    } catch (e) {
+      out += " analyze=ERR " + (e.message || e) + " @" +
+             String(e.stack || "").split("\n")[0].slice(-80);
+    }
+    try {
+      Services.prefs.setCharPref("hmail.debug.loadprobe", out.slice(0, 600));
+      Services.prefs.savePrefFile(null);
+    } catch (e) {}
+  }, 12000);
+})();
+
+// ---------------------------------------------------------------------------
 // Tự kiểm create_filter (pref hmail.debug.rulestest = "run"): tạo một bộ lọc
 // thật (điều kiện + hành động gắn nhãn) trên tài khoản mặc định — hộp xác
 // nhận được bấm hộ — kiểm tra nó nằm trong danh sách bộ lọc, rồi XOÁ NGAY

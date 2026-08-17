@@ -1536,32 +1536,39 @@ select.hmail-ai-field,
     margin-top: 8px;
 }
 
+/* Document chrome gán style toolkit (margin, viền xám, nền xám) cho mọi
+   <button> — phải !important như các nút khác của panel. */
 .hmail-ai-choice {
-    appearance: none;
-    -moz-appearance: none;
-    padding: 5px 12px;
-    border-radius: 999px;
-    border: 1px solid color-mix(in srgb, var(--hmail-accent, #0F6CBD) 45%, transparent);
-    background-color: Canvas;
-    color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 90%, CanvasText);
-    font: inherit;
-    font-size: 0.86em;
-    cursor: pointer;
+    appearance: none !important;
+    -moz-appearance: none !important;
+    margin: 0 !important;
+    padding: 5px 12px !important;
+    min-height: 0 !important;
+    border-radius: 999px !important;
+    border: 1px solid color-mix(in srgb, var(--hmail-accent, #0F6CBD) 45%, transparent) !important;
+    background-color: Canvas !important;
+    color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 90%, CanvasText) !important;
+    font: inherit !important;
+    font-size: 0.86em !important;
+    line-height: 1.3 !important;
+    cursor: pointer !important;
+    box-shadow: none !important;
 }
 
 .hmail-ai-choice:hover:not(:disabled) {
-    background-color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 12%, Canvas);
+    background-color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 12%, Canvas) !important;
 }
 
 .hmail-ai-choice:disabled {
-    opacity: 0.5;
-    cursor: default;
+    opacity: 0.5 !important;
+    cursor: default !important;
 }
 
 .hmail-ai-choice.picked {
-    background-color: var(--hmail-accent, #0F6CBD);
-    color: #ffffff;
-    opacity: 1;
+    background-color: var(--hmail-accent, #0F6CBD) !important;
+    border-color: var(--hmail-accent, #0F6CBD) !important;
+    color: #ffffff !important;
+    opacity: 1 !important;
 }
 
 /* Dòng tiến độ việc hàng loạt trong panel: chữ trái, nút Dừng phải. */
@@ -3709,6 +3716,36 @@ select.hmail-ai-field,
 .hmail-spam-row .hmail-spam-btn {
     font-size: 0.78rem;
     padding: 3px 8px;
+}
+
+/* Huy hiệu trạng thái cho dòng tracker (thư đã đi qua, không còn để xem):
+   to rõ, có màu theo kết quả — thay chỗ nút Xem/Nhận thư. */
+.hmail-spam-state {
+    display: inline-block;
+    min-width: 6.5em;
+    text-align: center;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    background-color: color-mix(in srgb, CanvasText 8%, Canvas);
+    color: color-mix(in srgb, CanvasText 70%, Canvas);
+}
+
+.hmail-spam-state[data-status="delivered"] {
+    background-color: color-mix(in srgb, #2E7D32 14%, Canvas);
+    color: color-mix(in srgb, #2E7D32 85%, CanvasText);
+}
+
+.hmail-spam-state[data-status="rejected"],
+.hmail-spam-state[data-status="bounced"] {
+    background-color: color-mix(in srgb, #D93025 12%, Canvas);
+    color: color-mix(in srgb, #D93025 80%, CanvasText);
+}
+
+.hmail-spam-state[data-status="deferred"] {
+    background-color: color-mix(in srgb, #C8781A 14%, Canvas);
+    color: color-mix(in srgb, #C8781A 85%, CanvasText);
 }
 
 /* Thanh phân trang dưới cùng. */

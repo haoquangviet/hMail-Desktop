@@ -1215,22 +1215,37 @@ var hMailSpam = {
       );
       const subject = el("div", "hmail-spam-subject",
         item.subject || "(không tiêu đề)");
+      // Trạng thái đã có huy hiệu riêng bên phải — dòng meta không lặp lại.
       const meta = el("div", "hmail-spam-meta",
         `${item.receiver || ""} · ${Math.round((item.bytes || 0) / 1024)} KB` +
-        (item.spamlevel != null ? ` · điểm ${item.spamlevel}` : "") +
-        ` · ${this.statusLabel(item.status)}`);
+        (item.spamlevel != null && item.status === "quarantined"
+          ? ` · điểm ${item.spamlevel}` : ""));
       main.append(head, subject, meta);
 
       const actions = el("div", "hmail-spam-actions");
-      const view = el("button", "hmail-spam-btn", "Xem");
-      view.addEventListener("click", () => this.preview(win, email, item, row));
-      actions.appendChild(view);
-
-      // Only genuinely held mail can be released; tracker rows have no body.
+      // Chỉ thư ĐANG GIỮ mới còn nội dung trên máy chủ lọc để xem/nhận.
+      // Dòng tracker (đã nhận, bị từ chối, trả lại…) chỉ là dấu vết — thư
+      // đã đi qua rồi: hiện huy hiệu trạng thái to rõ thay cho nút Xem
+      // vốn chỉ trả về lỗi.
       if (item.status === "quarantined") {
+        const view = el("button", "hmail-spam-btn", "Xem");
+        view.addEventListener("click", () => this.preview(win, email, item, row));
+        actions.appendChild(view);
         const release = el("button", "hmail-spam-btn primary", "Nhận thư");
         release.addEventListener("click", () => this.release(win, email, item, row));
         actions.appendChild(release);
+      } else {
+        const badge = el("span", "hmail-spam-state");
+        badge.dataset.status = item.status || "other";
+        badge.textContent = this.statusLabel(item.status);
+        badge.title = item.status === "delivered"
+          ? "Thư đã được chuyển vào hộp thư của bạn — không còn trên máy chủ lọc"
+          : item.status === "rejected"
+            ? "Máy chủ đã từ chối nhận thư này ngay lúc gửi"
+            : item.status === "bounced"
+              ? "Thư bị trả lại người gửi"
+              : "Trạng thái do máy chủ lọc ghi nhận";
+        actions.appendChild(badge);
       }
 
       // Người gửi hợp pháp bị giữ oan: một nút đưa thẳng vào danh sách
@@ -1951,6 +1966,19 @@ var hMailSpam = {
       if (!button("Tin cậy")) {
         throw new Error("dòng thư bị giữ không có nút Tin cậy");
       }
+      // Dòng tracker (đã nhận…) phải hiện huy hiệu, KHÔNG có nút Xem.
+      steps.push("huy-hieu-tracker");
+      await waitFor(() => {
+        const rows = [...doc.querySelectorAll("#hmail-spam-list .hmail-spam-row")];
+        const delivered = rows.find(r => r.dataset.status === "delivered");
+        if (!delivered) {
+          return false;
+        }
+        const hasBadge = !!delivered.querySelector(".hmail-spam-state");
+        const hasView = [...delivered.querySelectorAll("button")]
+          .some(b => b.textContent === "Xem" || b.textContent === "Nhận thư");
+        return hasBadge && !hasView;
+      });
 
       steps.push("phan-trang");
       await waitFor(() => !doc.getElementById("hmail-spam-pager").hidden);

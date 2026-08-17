@@ -903,6 +903,23 @@ var hMailInsight = {
         myDomains.add(d);
       }
     }
+    // Tên thương hiệu người dùng tự khai cho tài khoản (pref
+    // hmail.brand.<domain>), để bắt cả tên ngắn ("hqv") hay tên tiếng Việt
+    // có dấu ("Hào Quang Việt") mà tên miền không nói lên được.
+    const brandNames = mine => {
+      const out = [];
+      try {
+        const raw = Services.prefs.getStringPref("hmail.brand." + mine, "");
+        for (const s of raw.split(/[|;,]/)) {
+          const v = s.trim().toLowerCase();
+          if (v.length >= 3) {
+            out.push(v);
+          }
+        }
+      } catch (e) {}
+      return out;
+    };
+    const fold = this.fold;
     for (const mine of myDomains) {
       if (!fromDomain || fromDomain === mine || fromDomain.endsWith("." + mine)) {
         continue;
@@ -910,10 +927,11 @@ var hMailInsight = {
       // Cả miền và "tên gốc" (hoaviet trong hoaviet.vn) — bọn lừa đảo ghi
       // "Hoaviet - IT Support" chứ không ghi "hoaviet.vn".
       const stem = mine.split(".")[0];
-      const shownLower = shown.toLowerCase().replace(/[\s._-]+/g, "");
+      const shownLower = fold(shown);
       const stemHit = stem.length >= 4 && shownLower.includes(stem);
       const domainHit = shown.toLowerCase().includes(mine);
-      if (stemHit || domainHit) {
+      const brandHit = brandNames(mine).find(b => shownLower.includes(fold(b)));
+      if (stemHit || domainHit || brandHit) {
         note("danger",
           `Tên hiển thị "${shown}" mượn tên công ty của bạn (${mine}) nhưng ` +
           `thư gửi từ ${fromDomain} — một tên miền không liên quan. Bộ phận ` +
@@ -1065,6 +1083,52 @@ var hMailInsight = {
       }
     }
 
+    // --- mạo danh THƯƠNG HIỆU LỚN ------------------------------------------
+    // "Vietcombank <no-reply@vcb-alerts.top>", "Microsoft account team
+    // <security@ms-verify.info>": tên hiển thị hoặc chủ đề nêu một thương
+    // hiệu hay bị giả, nhưng miền gửi không thuộc miền chính chủ.
+    const brandFrom = fromDomain || "";
+    const brandText = fold(shown) + " " + fold(hdr?.mime2DecodedSubject || "");
+    for (const [brand, domains] of this.BRANDS) {
+      const key = fold(brand);
+      if (!brandText.includes(key)) {
+        continue;
+      }
+      const legit = domains.some(d => brandFrom === d ||
+                                       brandFrom.endsWith("." + d));
+      if (!legit && brandFrom) {
+        note("danger",
+          `Thư xưng danh "${brand}" nhưng gửi từ ${brandFrom} — không phải ` +
+          `tên miền chính thức (${domains.slice(0, 2).join(", ")}). Thương ` +
+          "hiệu lớn không gửi thông báo từ miền lạ.");
+        out.facts.brandSpoof = out.facts.brandSpoof ||
+          { brand, fromDomain: brandFrom };
+        break;
+      }
+    }
+
+    // --- liên kết trỏ đi nơi khác miền gửi ---------------------------------
+    // Thư từ hyinstel.com mà nút "Cập nhật" trỏ tới miền thứ ba (hay ngược
+    // lại: xưng công ty A, gửi từ B, link tới C). Một mình chưa đủ kết tội
+    // (dịch vụ gửi thư hợp pháp hay dùng link tracking) — nhưng cộng với
+    // các dấu hiệu trên thì là chuỗi hoàn chỉnh của phishing.
+    const linkHosts = new Set();
+    for (const m of raw.matchAll(/https?:\/\/([a-z0-9.-]+\.[a-z]{2,})/gi)) {
+      const host = m[1].toLowerCase().replace(/^www\./, "");
+      linkHosts.add(host.split(".").slice(-2).join("."));
+    }
+    const fromBase = fromDomain ? fromDomain.split(".").slice(-2).join(".") : "";
+    const foreignLinks = [...linkHosts].filter(h => h && h !== fromBase &&
+      !/^(google|microsoft|apple|facebook|linkedin|zalo|youtube)\.(com|me)$/.test(h));
+    out.facts.linkHosts = foreignLinks.slice(0, 5);
+    if (foreignLinks.length && (out.facts.brandSpoof ||
+        out.findings.some(f => f.level === "danger"))) {
+      note("danger",
+        `Liên kết trong thư trỏ tới ${foreignLinks.slice(0, 2).join(", ")} — ` +
+        `không cùng tên miền người gửi (${fromDomain}). Bấm vào là rơi vào ` +
+        "trang của kẻ mạo danh.");
+    }
+
     // --- câu cá mật khẩu (credential phishing) ------------------------------
     // Kịch bản: "mật khẩu sắp hết hạn / tài khoản bị khoá / xác minh ngay"
     // + một nút/liên kết để "cập nhật". Ngân hàng, Microsoft, IT công ty
@@ -1171,6 +1235,96 @@ var hMailInsight = {
     }
     return out;
   },
+
+  /** Chuẩn hoá để so tên: bỏ dấu, bỏ khoảng trắng/gạch, chữ thường. */
+  fold(s) {
+    // Dải dấu kết hợp viết bằng mã escape — ký tự combining trần trong
+    // nguồn làm parser đọc sai regex.
+    return String(s || "").toLowerCase().normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d")
+      .replace(/[\s._\-|]+/g, "");
+  },
+
+  /**
+   * Thương hiệu hay bị mạo danh tại Việt Nam và miền chính chủ của họ. Tên
+   * hiển thị/chủ đề nêu thương hiệu mà miền gửi không nằm trong danh sách
+   * → mạo danh. Danh sách này KHÔNG phải để chặn miền lạ nói chung — chỉ
+   * kích hoạt khi thư tự xưng là thương hiệu đó.
+   */
+  BRANDS: [
+    ["Microsoft", ["microsoft.com", "microsoftonline.com", "office.com", "office365.com", "outlook.com", "live.com", "azure.com", "windows.com"]],
+    ["Office 365", ["microsoft.com", "microsoftonline.com", "office.com", "office365.com"]],
+    ["Google", ["google.com", "gmail.com", "googlemail.com", "youtube.com", "accounts.google.com"]],
+    ["Apple", ["apple.com", "icloud.com", "me.com"]],
+    ["Facebook", ["facebook.com", "facebookmail.com", "fb.com", "meta.com"]],
+    ["Zalo", ["zalo.me", "zaloapp.com", "vng.com.vn"]],
+    ["Vietcombank", ["vietcombank.com.vn"]],
+    ["Techcombank", ["techcombank.com.vn", "techcombank.com"]],
+    ["VietinBank", ["vietinbank.vn"]],
+    ["BIDV", ["bidv.com.vn"]],
+    ["Agribank", ["agribank.com.vn"]],
+    ["MB Bank", ["mbbank.com.vn"]],
+    ["MBBank", ["mbbank.com.vn"]],
+    ["ACB", ["acb.com.vn"]],
+    ["Sacombank", ["sacombank.com.vn"]],
+    ["VPBank", ["vpbank.com.vn"]],
+    ["TPBank", ["tpb.vn", "tpbank.com.vn"]],
+    ["HDBank", ["hdbank.com.vn"]],
+    ["VIB", ["vib.com.vn"]],
+    ["SHB", ["shb.com.vn"]],
+    ["Momo", ["momo.vn"]],
+    ["ZaloPay", ["zalopay.vn"]],
+    ["VNPay", ["vnpay.vn"]],
+    ["ViettelPay", ["viettelmoney.vn", "viettel.vn"]],
+    ["Viettel", ["viettel.vn", "viettel.com.vn", "viettelmoney.vn"]],
+    ["VNPT", ["vnpt.vn", "vnpt.com.vn"]],
+    ["FPT", ["fpt.vn", "fpt.com.vn", "fpt.com", "fptcloud.com", "fptplay.vn"]],
+    ["EVN", ["evn.com.vn", "evnhcmc.vn", "evnhanoi.vn", "cskh.evn.com.vn"]],
+    ["Vietnam Post", ["vnpost.vn"]],
+    ["VNPost", ["vnpost.vn"]],
+    ["Giao Hàng Nhanh", ["ghn.vn"]],
+    ["Giao Hàng Tiết Kiệm", ["ghtk.vn"]],
+    ["Shopee", ["shopee.vn", "shopee.com", "shopeemail.com"]],
+    ["Lazada", ["lazada.vn", "lazada.com"]],
+    ["Tiki", ["tiki.vn"]],
+    ["Grab", ["grab.com", "grabtaxi.com"]],
+    ["Vietnam Airlines", ["vietnamairlines.com"]],
+    ["Vietjet", ["vietjetair.com"]],
+    ["Bamboo Airways", ["bambooairways.com"]],
+    ["Netflix", ["netflix.com"]],
+    ["PayPal", ["paypal.com"]],
+    ["Amazon", ["amazon.com", "amazon.co.jp", "amazonses.com"]],
+    ["DHL", ["dhl.com", "dhl.de"]],
+    ["FedEx", ["fedex.com"]],
+    ["UPS", ["ups.com"]],
+    ["Bảo hiểm xã hội", ["baohiemxahoi.gov.vn", "vss.gov.vn"]],
+    ["Tổng cục Thuế", ["gdt.gov.vn", "thuedientu.gdt.gov.vn"]],
+    ["Cục Thuế", ["gdt.gov.vn"]],
+    ["Công an", ["bocongan.gov.vn", "canhsat.gov.vn"]],
+    ["GlobalSign", ["globalsign.com"]],
+    ["Sectigo", ["sectigo.com"]],
+    ["SSL.com", ["ssl.com"]],
+    ["GoDaddy", ["godaddy.com", "secureserver.net"]],
+    ["Namecheap", ["namecheap.com"]],
+    ["cPanel", ["cpanel.net"]],
+    ["Plesk", ["plesk.com"]],
+    ["Cloudflare", ["cloudflare.com"]],
+    ["WHMCS", ["whmcs.com"]],
+    ["Mắt Bão", ["matbao.net", "matbao.vn"]],
+    ["PA Việt Nam", ["pavietnam.vn"]],
+    ["Nhân Hòa", ["nhanhoa.com"]],
+    ["iNET", ["inet.vn"]],
+    ["Tenten", ["tenten.vn"]],
+    ["BKAV", ["bkav.com.vn"]],
+    ["Kaspersky", ["kaspersky.com"]],
+    ["Adobe", ["adobe.com"]],
+    ["Dropbox", ["dropbox.com", "dropboxmail.com"]],
+    ["DocuSign", ["docusign.com", "docusign.net"]],
+    ["LinkedIn", ["linkedin.com"]],
+    ["Zoom", ["zoom.us"]],
+    ["Telegram", ["telegram.org"]],
+    ["WhatsApp", ["whatsapp.com"]],
+  ],
 
   /**
    * Diễn giải chuỗi "bằng chứng" của bộ lọc thành tiếng người:
@@ -1976,15 +2130,27 @@ var hMailInsight = {
         "hạn.\nCập nhật mật khẩu: https://hyinstel.com/x/reset\n");
       const good = mk("Nguyen Van A <a@partner.com>", "hoaviet@hoaviet.vn",
         "Báo giá tháng 8", "Chào anh, gửi anh báo giá đính kèm. Cảm ơn.");
+      const bank = mk("Vietcombank <no-reply@vcb-alerts.top>",
+        "quyet@haoquangviet.com", "Thông báo giao dịch",
+        "Tài khoản của quý khách có giao dịch bất thường, xác minh tại " +
+        "https://vcb-alerts.top/verify");
+      const bankOk = mk("Vietcombank <no-reply@vietcombank.com.vn>",
+        "quyet@haoquangviet.com", "Thông báo giao dịch",
+        "Tài khoản của quý khách vừa phát sinh giao dịch 210.000 VND.");
       const r1 = await hMailInsight.analyze(bad);
       const r2 = await hMailInsight.analyze(good);
-      const d1 = r1.findings.filter(f => f.level === "danger").map(f => f.text.slice(0, 70));
-      const d2 = r2.findings.filter(f => f.level === "danger").length;
-      report(JSON.stringify({ badLevel: r1.level, badDangers: d1.length,
-                              brandSpoof: !!r1.facts.brandSpoof,
-                              credPhish: !!r1.facts.credentialPhish,
-                              goodLevel: r2.level, goodDangers: d2,
-                              sample: d1 }));
+      const r3 = await hMailInsight.analyze(bank);
+      const r4 = await hMailInsight.analyze(bankOk);
+      const dangers = r => r.findings.filter(f => f.level === "danger").length;
+      report(JSON.stringify({
+        hoavietFake: { level: r1.level, dangers: dangers(r1),
+                       brandSpoof: !!r1.facts.brandSpoof,
+                       credPhish: !!r1.facts.credentialPhish },
+        plainGood: { level: r2.level, dangers: dangers(r2) },
+        vcbFake: { level: r3.level, dangers: dangers(r3),
+                   links: r3.facts.linkHosts },
+        vcbReal: { level: r4.level, dangers: dangers(r4) },
+      }));
     } catch (e) {
       report("err: " + (e.message || e) + " @ " + String(e.stack || "").split("\n")[0]);
     }
