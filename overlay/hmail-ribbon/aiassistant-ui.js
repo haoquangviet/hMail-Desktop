@@ -622,7 +622,32 @@ Object.assign(hMailAI, {
     const card = el("div", `hmail-ai-insight ${result.level}`);
     card.id = "hmail-ai-insight";
 
-    card.appendChild(el("div", "hmail-ai-insight-head", "Đọc nhanh tại chỗ"));
+    const head = el("div", "hmail-ai-insight-head", "Đọc nhanh tại chỗ");
+    // Bỏ chọn thư ngay từ panel: bỏ chọn trong danh sách → panel về chế độ
+    // trò chuyện về hộp thư (không cần bấm ra vùng trống, vốn không phải ai
+    // cũng biết).
+    const deselect = el("button", "hmail-ai-deselect", "✕ Bỏ chọn thư");
+    deselect.type = "button";
+    deselect.title = "Bỏ chọn thư đang xem — trợ lý chuyển sang làm việc với " +
+                     "cả hộp thư";
+    deselect.addEventListener("click", () => {
+      try {
+        const tabmail = doc.getElementById("tabmail");
+        const a3 = tabmail?.currentAbout3Pane;
+        if (a3?.gDBView) {
+          a3.threadTree?.selectedIndices && (a3.threadTree.selectedIndices = []);
+          a3.gDBView.selection?.clearSelection?.();
+        }
+        // Thư mở trong tab riêng thì đóng tab đó.
+        const cur = tabmail?.currentTabInfo;
+        if (cur && cur.mode?.name === "mailMessageTab") {
+          tabmail.closeTab(cur);
+        }
+      } catch (e) {}
+      win.setTimeout(() => this.restore(win), 150);
+    });
+    head.appendChild(deselect);
+    card.appendChild(head);
 
     // Cảnh báo nguy hiểm lên ĐẦU, trước cả tóm tắt: người đọc phải thấy
     // "đây là thư lừa đảo" trước khi thấy nội dung được tóm gọn mượt mà.

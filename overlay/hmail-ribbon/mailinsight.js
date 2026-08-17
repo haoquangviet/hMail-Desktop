@@ -1095,19 +1095,59 @@ var hMailInsight = {
     // <security@ms-verify.info>": tên hiển thị hoặc chủ đề nêu một thương
     // hiệu hay bị giả, nhưng miền gửi không thuộc miền chính chủ.
     const brandFrom = fromDomain || "";
-    const brandText = fold(shown) + " " + fold(hdr?.mime2DecodedSubject || "");
+    // Chỉ soi TÊN HIỂN THỊ (nơi kẻ giả xưng danh) — không soi chủ đề: thư
+    // "WHMCS Domain Report" từ máy chủ của bạn nhắc tên phần mềm là chuyện
+    // thường. Và không kết tội miền nhà (tài khoản của bạn) hay thư mà
+    // DKIM/DMARC pass đúng miền gửi — đó là thư thật của miền đó.
+    const brandText = fold(shown);
+    const homeSet = new Set();
+    try {
+      for (const identity of MailServices.accounts.allIdentities) {
+        const d = this.domain(this.address(identity.email));
+        if (d) {
+          homeSet.add(d);
+        }
+      }
+    } catch (e) {}
+    const authEarly = this.authResults(headers);
+    const brandBase = brandFrom.split(".").slice(-2).join(".");
+    const authPass = authEarly.dkim === "pass" || authEarly.dmarc === "pass";
+    // Authentication-Results ghi "header.d=<miền ký>" / "header.i=@<miền>":
+    // miền ký phải trùng miền gửi thì mới coi là thư thật của miền đó.
+    const signedDomains = [...String(authEarly.raw)
+      .matchAll(/header\.[di]=@?([a-z0-9.-]+)/g)].map(m => m[1]);
+    const senderVerified = homeSet.has(brandFrom) ||
+      (authPass && signedDomains.some(d => d === brandFrom ||
+        d.endsWith("." + brandBase) || d === brandBase));
     for (const [brand, domains] of this.BRANDS) {
       const key = fold(brand);
       if (!brandText.includes(key)) {
         continue;
       }
-      const legit = domains.some(d => brandFrom === d ||
-                                       brandFrom.endsWith("." + d));
+      const selfHosted = domains.includes("*");
+      const legit = !selfHosted && domains.some(d => brandFrom === d ||
+                                                brandFrom.endsWith("." + d));
+      // Phần mềm tự vận hành: người gửi đã xác thực → hoàn toàn bình thường,
+      // không cả ghi chú.
+      if (selfHosted && senderVerified) {
+        break;
+      }
+      if (!legit && brandFrom && senderVerified) {
+        // Miền thật của người gửi đã được xác nhận: chỉ ghi chú, không báo.
+        note("info",
+          `Thư nhắc tới "${brand}" nhưng gửi từ ${brandFrom} (miền đã xác ` +
+          "thực) — có thể là thông báo tự động từ hệ thống của bạn.");
+        break;
+      }
       if (!legit && brandFrom) {
-        note("danger",
-          `Thư xưng danh "${brand}" nhưng gửi từ ${brandFrom} — không phải ` +
-          `tên miền chính thức (${domains.slice(0, 2).join(", ")}). Thương ` +
-          "hiệu lớn không gửi thông báo từ miền lạ.");
+        note("danger", selfHosted
+          ? `Tên hiển thị xưng "${brand}" nhưng thư gửi từ ${brandFrom} — ` +
+            "miền này không xác thực được (không DKIM/DMARC của chính nó, " +
+            "không phải máy chủ của bạn). Thông báo hệ thống thật đến từ " +
+            "máy chủ bạn quản lý; kẻ giả hay mượn tên phần mềm quen thuộc."
+          : `Thư xưng danh "${brand}" nhưng gửi từ ${brandFrom} — không phải ` +
+            `tên miền chính thức (${domains.slice(0, 2).join(", ")}). Thương ` +
+            "hiệu lớn không gửi thông báo từ miền lạ.");
         out.facts.brandSpoof = out.facts.brandSpoof ||
           { brand, fromDomain: brandFrom };
         break;
@@ -1326,15 +1366,21 @@ var hMailInsight = {
     ["Tổng cục Thuế", ["gdt.gov.vn", "thuedientu.gdt.gov.vn"]],
     ["Cục Thuế", ["gdt.gov.vn"]],
     ["Công an", ["bocongan.gov.vn", "canhsat.gov.vn"]],
+    // Phần mềm TỰ VẬN HÀNH trên máy chủ người dùng: miền gửi hợp lệ là bất
+    // kỳ miền nào — nhưng from name xưng danh chúng từ miền KHÔNG xác thực
+    // (không DKIM/DMARC pass đúng miền, không miền nhà) vẫn là mạo danh
+    // ("WHMCS Billing <billing@whmcs-notice.top>"). Đánh dấu bằng "*".
+    ["cPanel", ["*"]],
+    ["Plesk", ["*"]],
+    ["WHMCS", ["*"]],
+    ["WordPress", ["*"]],
+    ["Nextcloud", ["*"]],
+    ["Cloudflare", ["cloudflare.com"]],
     ["GlobalSign", ["globalsign.com"]],
     ["Sectigo", ["sectigo.com"]],
     ["SSL.com", ["ssl.com"]],
     ["GoDaddy", ["godaddy.com", "secureserver.net"]],
     ["Namecheap", ["namecheap.com"]],
-    ["cPanel", ["cpanel.net"]],
-    ["Plesk", ["plesk.com"]],
-    ["Cloudflare", ["cloudflare.com"]],
-    ["WHMCS", ["whmcs.com"]],
     ["Mắt Bão", ["matbao.net", "matbao.vn"]],
     ["PA Việt Nam", ["pavietnam.vn"]],
     ["Nhân Hòa", ["nhanhoa.com"]],

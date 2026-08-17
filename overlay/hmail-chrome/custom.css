@@ -3350,6 +3350,37 @@ select.hmail-ai-field,
     color: #B45309;
 }
 
+/* Đầu thẻ Đọc nhanh: tiêu đề trái, nút Bỏ chọn thư phải. */
+.hmail-ai-insight-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.hmail-ai-deselect {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    margin: 0 !important;
+    padding: 2px 9px !important;
+    min-height: 0 !important;
+    border-radius: 999px !important;
+    border: 1px solid color-mix(in srgb, CanvasText 18%, transparent) !important;
+    background-color: Canvas !important;
+    color: inherit !important;
+    font: inherit !important;
+    font-size: 0.78em !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    box-shadow: none !important;
+    opacity: 0.8;
+}
+
+.hmail-ai-deselect:hover {
+    background-color: color-mix(in srgb, CanvasText 6%, Canvas) !important;
+    opacity: 1;
+}
+
 .hmail-ai-insight.danger .hmail-ai-insight-head {
     color: #B42318;
 }
