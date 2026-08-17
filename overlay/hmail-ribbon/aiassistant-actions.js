@@ -1372,22 +1372,50 @@ Object.assign(hMailAI, {
   }
   setTimeout(async () => {
     let out = "hMailInsight=" + (typeof hMailInsight);
+    const mark = step => {
+      try {
+        Services.prefs.setCharPref("hmail.debug.loadprobe", "step:" + step);
+        Services.prefs.savePrefFile(null);
+      } catch (e) {}
+    };
+    mark("start");
     try {
-      // Chạy thẳng bộ soi với thư mô phỏng Hoaviet để bắt lỗi runtime.
-      const fake = {
-        mime2DecodedAuthor: "Hoaviet - IT Support <b.s.jung_690@hyinstel.com>",
-        mime2DecodedRecipients: "hoaviet@hoaviet.vn", ccList: "",
-        mime2DecodedSubject: "Hoaviet - Thông báo hết hạn mật khẩu",
-        author: "x", messageId: "t@t", folder: null, messageKey: 1,
-        _hmailRaw: "From: Hoaviet - IT Support <b.s.jung_690@hyinstel.com>\r\n" +
-          "To: hoaviet@hoaviet.vn\r\nSubject: Hoaviet - Thông báo hết hạn mật " +
-          "khẩu\r\nContent-Type: text/plain\r\n\r\nmật khẩu tài khoản của bạn " +
-          "sẽ hết hạn, vui lòng cập nhật mật khẩu: https://hyinstel.com/r\r\n",
-      };
-      const r = await hMailInsight.analyze(fake);
-      out += " analyze=ok level=" + r.level + " dangers=" +
-        r.findings.filter(f => f.level === "danger").length +
-        " brand=" + !!r.facts.brandSpoof + " cred=" + !!r.facts.credentialPhish;
+      // Ba ca: thư nội bộ hợp lệ (phải ok), mạo danh IT (danger),
+      // ngân hàng giả (danger).
+      const mk = (from, to, subject, body) => ({
+        mime2DecodedAuthor: from, mime2DecodedRecipients: to, ccList: "",
+        mime2DecodedSubject: subject, author: from, messageId: "t@t",
+        folder: null, messageKey: 1,
+        _hmailRaw: "From: " + from + "\r\nTo: " + to + "\r\nSubject: " +
+          subject + "\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + body,
+      });
+      const legit = mk("hOne System <one@haoquangviet.com>", "duy@haoquangviet.com",
+        "[One | Hào Quang Việt] Công việc chưa có ai nhận",
+        "Công việc chưa có ai nhận: \"Hỗ trợ cấu hình AI trên Nextcloud và báo " +
+        "giá\" đã tạo 624h. Xem chi tiết: https://hcrm.hqv.biz/task/1\n\n" +
+        "Một phần tầng 19, Indochina Park Tower. Đây là email tự động.\n" +
+        "Người nhận phải có trách nhiệm bảo mật thông tin. Confidential.\n" +
+        "Số tài khoản 84.287779-6009 chuyển khoản.");
+      const fake = mk("Hoaviet - IT Support <b.s.jung_690@hyinstel.com>",
+        "hoaviet@hoaviet.vn", "Hoaviet - Thông báo hết hạn mật khẩu",
+        "mật khẩu tài khoản của bạn sẽ hết hạn, vui lòng cập nhật mật khẩu: " +
+        "https://hyinstel.com/r\r\n");
+      const bank = mk("Vietcombank <no-reply@vcb-alerts.top>",
+        "quyet@haoquangviet.com", "Giao dịch bất thường",
+        "xác minh tại https://vcb-alerts.top/verify");
+      const dangers = r => r.findings.filter(f => f.level === "danger")
+        .map(f => f.text.slice(0, 60));
+      mark("legit");
+      const r1 = await hMailInsight.analyze(legit);
+      mark("fake");
+      const r2 = await hMailInsight.analyze(fake);
+      mark("bank");
+      const r3 = await hMailInsight.analyze(bank);
+      mark("done");
+      out += " legit=" + r1.level + "/" + dangers(r1).length +
+        " fake=" + r2.level + "/" + dangers(r2).length +
+        " bank=" + r3.level + "/" + dangers(r3).length +
+        " legitDangers=" + JSON.stringify(dangers(r1));
     } catch (e) {
       out += " analyze=ERR " + (e.message || e) + " @" +
              String(e.stack || "").split("\n")[0].slice(-80);

@@ -30,12 +30,15 @@ var hMailInsight = {
   ],
 
   /** Phrases that turn a payment mail into the classic redirection attempt. */
+  // Chỉ những cụm nói về ĐỔI TÀI KHOẢN NHẬN TIỀN — dấu hiệu thật của lừa
+  // chuyển khoản. Từ giục giã chung (gấp, khẩn, urgent) đã có luật "áp lực
+  // khẩn cấp" riêng; "confidential" là chữ trong disclaimer chân thư của
+  // mọi công ty — từng làm thư nội bộ hợp lệ bị dán nhãn lừa đảo.
   MONEY_RED_FLAGS: [
-    "thay đổi tài khoản", "đổi số tài khoản", "tài khoản mới",
-    "cập nhật thông tin thanh toán", "gấp", "khẩn", "ngay hôm nay",
+    "thay đổi tài khoản", "đổi số tài khoản", "số tài khoản mới",
+    "tài khoản ngân hàng mới", "cập nhật thông tin thanh toán",
     "changed our bank", "new bank account", "updated bank details",
-    "change of account", "as soon as possible", "urgent", "asap",
-    "kindly process", "confidential",
+    "change of account", "new beneficiary", "kindly process the payment",
   ],
 
   /**
@@ -1060,7 +1063,11 @@ var hMailInsight = {
 
     // --- tiền bạc ---------------------------------------------------------
     const moneyHits = this.MONEY_WORDS.filter(w => text.includes(w));
-    const redFlags = this.MONEY_RED_FLAGS.filter(w => text.includes(w));
+    // Bỏ khối disclaimer/chữ ký khỏi vùng soi red flag: dòng "confidential",
+    // "bảo mật thông tin" ở chân thư là câu chữ pháp lý, không phải nội dung.
+    const bodyForFlags = text
+      .split(/\n--\s*\n|disclaimer|this e-?mail (?:and any attachments )?(?:is|are) confidential|thư này (?:và mọi tệp đính kèm )?(?:là|có tính) bảo mật|người nhận phải có trách nhiệm bảo mật/i)[0];
+    const redFlags = this.MONEY_RED_FLAGS.filter(w => bodyForFlags.includes(w));
     const accountNumbers = (body.match(/\b\d[\d\s.-]{8,20}\d\b/g) || [])
       .map(s => s.trim()).slice(0, 3);
     const iban = /\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b/.exec(body)?.[0];
@@ -1118,11 +1125,24 @@ var hMailInsight = {
       linkHosts.add(host.split(".").slice(-2).join("."));
     }
     const fromBase = fromDomain ? fromDomain.split(".").slice(-2).join(".") : "";
+    // Miền của MỌI tài khoản trong hMail là "miền nhà": công ty có nhiều
+    // miền (haoquangviet.com, hqv.biz, hcrm.hq…) thì thư nội bộ trỏ qua lại
+    // giữa chúng là bình thường, không phải mạo danh.
+    const homeBases = new Set();
+    try {
+      for (const identity of MailServices.accounts.allIdentities) {
+        const d = this.domain(this.address(identity.email));
+        if (d) {
+          homeBases.add(d.split(".").slice(-2).join("."));
+        }
+      }
+    } catch (e) {}
+    const fromIsHome = homeBases.has(fromBase);
     const foreignLinks = [...linkHosts].filter(h => h && h !== fromBase &&
+      !homeBases.has(h) &&
       !/^(google|microsoft|apple|facebook|linkedin|zalo|youtube)\.(com|me)$/.test(h));
     out.facts.linkHosts = foreignLinks.slice(0, 5);
-    if (foreignLinks.length && (out.facts.brandSpoof ||
-        out.findings.some(f => f.level === "danger"))) {
+    if (foreignLinks.length && !fromIsHome && out.facts.brandSpoof) {
       note("danger",
         `Liên kết trong thư trỏ tới ${foreignLinks.slice(0, 2).join(", ")} — ` +
         `không cùng tên miền người gửi (${fromDomain}). Bấm vào là rơi vào ` +
@@ -1213,7 +1233,12 @@ var hMailInsight = {
     // các mẫu rủi ro, bắt được cách diễn đạt mới mà regex bỏ sót. Chỉ chạy khi
     // AI-trên-máy đã bật; lỗi/không bật thì bỏ qua, không ảnh hưởng heuristic.
     try {
-      const sem = await this.semanticRisk(text);
+      // Embedding trên máy có thể treo (mô hình đang tải/đang bận) — không
+      // để banner an ninh phụ thuộc vào nó: quá 4 giây là bỏ qua lớp này.
+      const sem = await Promise.race([
+        this.semanticRisk(text).catch(() => null),
+        new Promise(resolve => setTimeout(() => resolve(null), 4000)),
+      ]);
       if (sem) {
         out.facts.semantic = { category: sem.category, score: sem.score };
         note(sem.level, `${sem.message} (phân tích ngữ nghĩa trên máy, ` +
