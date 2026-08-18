@@ -1325,7 +1325,47 @@ var hMailAI = {
       case "NOT_FOUND":
         return `mô hình "${this.model()}" không còn khả dụng`;
       default:
-        return e?.message || "lỗi không xác định";
+        return this.humanizeApiError(e);
     }
+  },
+
+  /**
+   * Lỗi API còn sót lại (400/429/500 với thông điệp kỹ thuật của nhà cung
+   * cấp) dịch thành câu tiếng người; chi tiết kỹ thuật thu về một dòng
+   * ngắn ở cuối để người dùng gửi kèm khi báo lỗi.
+   */
+  humanizeApiError(e) {
+    const status = e?.status;
+    const raw = String(e?.message || "").trim();
+    const short = raw.replace(/\s+/g, " ").slice(0, 140);
+    let text;
+    if (status === 400) {
+      text = "máy chủ AI từ chối yêu cầu (định dạng dữ liệu gửi lên không " +
+             "hợp lệ) — thử lại; nếu lặp lại, đổi mô hình hoặc nhà cung cấp " +
+             "trong Cài đặt trợ lý";
+    } else if (status === 401 || status === 403) {
+      text = "không được phép dùng dịch vụ AI này — kiểm tra API key hoặc " +
+             "tài khoản trong Cài đặt trợ lý";
+    } else if (status === 404) {
+      text = "mô hình hoặc địa chỉ dịch vụ không tồn tại — kiểm tra endpoint " +
+             "và tên mô hình trong Cài đặt trợ lý";
+    } else if (status === 429) {
+      text = "dịch vụ AI đang quá tải hoặc bạn đã dùng hết hạn mức — chờ " +
+             "một lát rồi thử lại";
+    } else if (status >= 500) {
+      text = "máy chủ AI đang gặp sự cố tạm thời — thử lại sau ít phút";
+    } else if (/timeout|timed out|hết thời gian/i.test(raw)) {
+      text = "máy chủ AI phản hồi quá lâu — thử lại";
+    } else if (!raw) {
+      text = "lỗi không xác định khi gọi dịch vụ AI";
+    } else if (/^[A-Za-zÀ-ỹ][^{}\[\]]{0,120}$/.test(raw) &&
+               !/tools\[|function_declarations|properties|Invalid value/i.test(raw)) {
+      // Thông điệp đã là câu ngắn dễ hiểu (nhiều chỗ trong hMail ném lỗi
+      // tiếng Việt) — giữ nguyên.
+      return raw;
+    } else {
+      text = "dịch vụ AI báo lỗi";
+    }
+    return text + (short ? ` (chi tiết: ${short})` : "");
   },
 };

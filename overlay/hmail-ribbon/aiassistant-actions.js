@@ -292,7 +292,19 @@ Object.assign(hMailAI, {
   NEEDS_CONFIRM: new Set(["move_to_folder", "mark_junk", "archive_message"]),
 
   toolDeclarations() {
-    return [{ functionDeclarations: this.TOOLS }];
+    // Gemini API chuẩn từ chối "parameters" có properties RỖNG (Map trống →
+    // "Cannot bind a list to map for field 'properties'"); Google bỏ qua
+    // nhưng máy chủ Gemini-compat (hMail AI services) thì không. Tool
+    // không tham số → bỏ hẳn "parameters"; có tham số → giữ nguyên.
+    const decls = this.TOOLS.map(t => {
+      const props = t.parameters?.properties || {};
+      if (!Object.keys(props).length) {
+        const { parameters, ...rest } = t;
+        return rest;
+      }
+      return t;
+    });
+    return [{ functionDeclarations: decls }];
   },
 
   confirm(win, title, message) {
@@ -1723,8 +1735,7 @@ Object.assign(hMailAI, {
               "có thư nào đang mở, nhưng bạn có công cụ tra cứu hộp thư: " +
               "search_messages, read_message, open_message, compose_new. " +
               "Người dùng hỏi về thư thì GỌI search_messages trước.",
-      }, { role: "user", text: "lọc các thư của onesign trong hộp này rồi " +
-                               "hỏi tôi muốn xử lý chúng thế nào" }];
+      }, { role: "user", text: "tìm kiếm tất cả các thư dạng root@" }];
       const t0 = Date.now();
       // Đo UI có bị đứng không: một tick 50ms phải chạy đều trong lúc AI
       // làm việc; đếm số tick bị trễ quá 400ms.
@@ -1749,7 +1760,7 @@ Object.assign(hMailAI, {
              " stalls>400ms=" + stalls +
              " reply=" + String(reply).replace(/\s+/g, " ").slice(-220));
     } catch (e) {
-      report("err: " + (e.message || e));
+      report("err: " + hMailAI.explain(e));
     }
   }, 15000);
 })();
