@@ -115,7 +115,8 @@ Object.assign(hMailAI, {
               const map = [];
               for (const server of MailServices.accounts.allServers) {
                 if (["imap", "pop3"].includes(server.type)) {
-                  map.push(server.username + " -> " + this.mailAiEndpoint(server));
+                  const base = await this.discoverMailAi(server);
+                  map.push(server.username + " -> " + (base || "(chưa bật)"));
                 }
               }
               // Gọi thật với scope = tài khoản pref hmail.ai.selftestScope

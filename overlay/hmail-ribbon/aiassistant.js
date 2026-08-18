@@ -172,8 +172,10 @@ var hMailAI = {
     // tài khoản (https://<mail-host>/ai/v1), đăng nhập bằng chính email +
     // mật khẩu hộp thư. Ô endpoint để trống = tự suy từ tài khoản; điền
     // vào chỉ khi máy chủ AI đứng riêng.
-    { id: "hqv", label: "hMail AI services (HQV)", provider: "openai",
-      endpoint: "", model: "hmail-default",
+    // Máy chủ nói giao thức Gemini v1beta (GET /ai trả compat:
+    // "gemini-v1beta"), nhận Basic auth bằng email + mật khẩu hộp thư.
+    { id: "hqv", label: "hMail AI services (HQV)", provider: "gemini",
+      endpoint: "", model: "",
       key: false, auth: "email", priceIn: 0, priceOut: 0, actions: true,
       tested: true, where: "máy chủ thư của chính tài khoản (mail.<miền>/ai)" },
     { id: "gemini", label: "Google Gemini", provider: "gemini",
@@ -334,7 +336,7 @@ var hMailAI = {
         t: Date.now(),
         service: id,
         label: def.label,
-        model: this.svcPref("model", def.model || "", id),
+        model: this._lastAiModel || this.svcPref("model", def.model || "", id),
         in: counters.in,
         out: counters.out,
         cost: this.cost(counters, id),
@@ -522,7 +524,83 @@ var hMailAI = {
     if (!host) {
       return "";
     }
-    return `https://${host}/ai/v1`;
+    // Máy chủ công bố GET https://<host>/ai (JSON công khai, không cần
+    // đăng nhập): base_url + api_version — đọc từ đó thay vì đoán đường
+    // dẫn; đã đọc rồi thì dùng cache theo host.
+    const known = this._mailAiDiscovery?.[host];
+    if (known) {
+      return known;
+    }
+    return `https://${host}/ai/v1beta`;
+  },
+
+  /**
+   * Đọc tài liệu khám phá của máy chủ thư: GET https://<host>/ai. Trả về
+   * base endpoint Gemini-compat (base_url + "/" + api_version) và cache;
+   * máy chủ không có tài liệu này (404/không JSON/enabled=false) → null =
+   * chưa bật dịch vụ.
+   */
+  async discoverMailAi(server) {
+    const host = String(server?.hostName || "").trim();
+    if (!host) {
+      return null;
+    }
+    this._mailAiDiscovery = this._mailAiDiscovery || {};
+    if (host in this._mailAiDiscovery) {
+      return this._mailAiDiscovery[host];
+    }
+    let result = null;
+    for (const path of ["/ai", "/.well-known/hmail-ai"]) {
+      try {
+        const res = await fetch(`https://${host}${path}`, {
+          method: "GET", headers: { Accept: "application/json" },
+        });
+        if (!res.ok) {
+          continue;
+        }
+        const doc = await res.json();
+        if (doc?.service === "hmail-ai" && doc.enabled !== false) {
+          const base = String(doc.base_url || `https://${host}/ai`)
+            .replace(/\/+$/, "");
+          const ver = String(doc.api_version || "v1beta").replace(/^\/+/, "");
+          result = `${base}/${ver}`;
+          break;
+        }
+      } catch (e) {}
+    }
+    this._mailAiDiscovery[host] = result;
+    return result;
+  },
+
+  /**
+   * Model của dịch vụ theo tài khoản: hỏi máy chủ /v1beta/models một lần
+   * (cache theo host), lấy model đầu tiên hỗ trợ generateContent; người
+   * dùng đặt model trong Cài đặt thì dùng cái đó.
+   */
+  async mailAiModel(base, authHeader) {
+    const custom = String(this.svcPref("model", "", "hqv") || "").trim();
+    if (custom) {
+      return custom;
+    }
+    this._mailAiModels = this._mailAiModels || {};
+    if (this._mailAiModels[base]) {
+      return this._mailAiModels[base];
+    }
+    try {
+      const body = await this.fetchJSON(`${base}/models`, {
+        method: "GET", headers: { Authorization: authHeader },
+      });
+      const list = body?.models || [];
+      const pick = list.find(m =>
+        (m.supportedGenerationMethods || []).includes("generateContent")) ||
+        list[0];
+      const name = String(pick?.name || "").replace(/^models\//, "");
+      if (name) {
+        this._mailAiModels[base] = name;
+        return name;
+      }
+    } catch (e) {}
+    return "gemini-2.5-flash";
   },
 
   /**
@@ -971,8 +1049,39 @@ var hMailAI = {
   },
 
   async callGemini(contents, tools, key) {
-    const url = `${this.endpoint()}/models/${this.model()}:generateContent` +
-                `?key=${encodeURIComponent(key)}`;
+    let base = this.endpoint().replace(/\/+$/, "");
+    let model = this.model();
+    const headers = { "Content-Type": "application/json" };
+    let url;
+    if (this.serviceDef().auth === "email") {
+      // hMail AI services: máy chủ thư của tài khoản đang làm việc, Basic
+      // auth bằng email + mật khẩu hộp thư — không key, không query ?key=.
+      const cred = this.mailCredentials(this.usageContext?.scope || null);
+      const auth = "Basic " + btoa(
+        unescape(encodeURIComponent(cred.email + ":" + cred.password)));
+      this._lastAiAccount = cred.email;
+      const custom = String(this.svcPref("endpoint", "", "hqv") || "").trim();
+      if (custom && !/aiservices\.hqv\.biz/i.test(custom)) {
+        base = custom.replace(/\/+$/, "");
+      } else {
+        // Hỏi máy chủ nó có bật dịch vụ không — trước khi gửi bất cứ gì.
+        base = await this.discoverMailAi(cred.server);
+        if (!base) {
+          throw Object.assign(
+            new Error("máy chủ thư của tài khoản " + cred.email +
+                      " chưa bật dịch vụ hMail AI"),
+            { code: "no_ai_service", status: 404, email: cred.email });
+        }
+      }
+      headers.Authorization = auth;
+      model = await this.mailAiModel(base, auth);
+      this._lastAiModel = model;
+      url = `${base}/models/${model}:generateContent`;
+    } else {
+      this._lastAiModel = model;
+      url = `${base}/models/${model}:generateContent` +
+            `?key=${encodeURIComponent(key)}`;
+    }
     const payload = { contents };
     if (this.SYSTEM_PROMPT) {
       payload.systemInstruction = { parts: [{ text: this.SYSTEM_PROMPT }] };
@@ -980,10 +1089,10 @@ var hMailAI = {
     if (tools) {
       payload.tools = tools;
     }
-    this.debugLog("gemini", this.model(), payload);
+    this.debugLog("gemini", model, payload);
     const body = await this.fetchJSON(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(payload),
     });
     const used = body?.usageMetadata || {};
