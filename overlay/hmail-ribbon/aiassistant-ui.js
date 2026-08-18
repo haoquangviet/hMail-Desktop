@@ -1279,6 +1279,36 @@ Object.assign(hMailAI, {
     // hMail AI services đăng nhập bằng chính hộp thư: chỗ của API key trở
     // thành lựa chọn "tài khoản thư nào" — mật khẩu dùng lại của hộp thư,
     // không nhập gì thêm.
+    // Phạm vi (chỉ cho hMail AI services): theo tài khoản đang làm việc,
+    // hay một tài khoản HQV lo cho tất cả hộp thư (kể cả Gmail…).
+    const scopeLabel = el("label", "hmail-ai-label", "Phạm vi đăng nhập");
+    const scopeBox = el("div", "hmail-ai-scope");
+    const scopeInputs = {};
+    for (const [value, label, note] of [
+      ["context", "Theo tài khoản đang làm việc",
+       "Mỗi hộp thư dùng máy chủ AI của chính nó (thư đang xem, hộp thư " +
+       "đang mở, tài khoản đang soạn)."],
+      ["all", "Dùng một tài khoản cho tất cả tài khoản email",
+       "Chọn một hộp thư HQV bên dưới — mọi thư của mọi tài khoản trong " +
+       "hMail (kể cả Gmail, máy chủ ngoài) đều dùng AI của hộp thư đó."],
+    ]) {
+      const row = el("label", "hmail-ai-scope-row");
+      const radio = el("input");
+      radio.type = "radio";
+      radio.name = "hmail-ai-scope";
+      radio.value = value;
+      scopeInputs[value] = radio;
+      const text = el("span", "hmail-ai-scope-text");
+      text.append(el("span", "hmail-ai-scope-title", label),
+                  el("span", "hmail-ai-scope-note", note));
+      row.append(radio, text);
+      scopeBox.appendChild(row);
+    }
+    scopeLabel.hidden = true;
+    scopeBox.hidden = true;
+    form.appendChild(scopeLabel);
+    form.appendChild(scopeBox);
+
     const accountLabel = el("label", "hmail-ai-label",
                             "Đăng nhập bằng tài khoản thư");
     const account = el("select", "hmail-ai-field");
@@ -1286,6 +1316,15 @@ Object.assign(hMailAI, {
     account.hidden = true;
     form.appendChild(accountLabel);
     form.appendChild(account);
+    const syncScopeUI = () => {
+      const all = scopeInputs.all?.checked;
+      accountLabel.textContent = all
+        ? "Tài khoản dùng cho tất cả"
+        : "Tài khoản dự phòng (khi không có thư/hộp thư nào đang mở)";
+    };
+    for (const r of Object.values(scopeInputs)) {
+      r.addEventListener("change", syncScopeUI);
+    }
 
     const hint = el("div", "hmail-ai-hint", "");
     form.appendChild(hint);
@@ -1412,6 +1451,12 @@ Object.assign(hMailAI, {
       key.hidden = emailAuth;
       accountLabel.hidden = !emailAuth;
       account.hidden = !emailAuth;
+      scopeLabel.hidden = !emailAuth;
+      scopeBox.hidden = !emailAuth;
+      if (emailAuth) {
+        const cur = this.svcPref("scope", "context", id);
+        (scopeInputs[cur] || scopeInputs.context).checked = true;
+      }
       if (emailAuth) {
         account.textContent = "";
         const seen = new Set();
@@ -1435,8 +1480,7 @@ Object.assign(hMailAI, {
 
       if (emailAuth) {
         endpoint.placeholder = "tự theo tài khoản: https://mail.<miền>/ai/v1";
-        accountLabel.textContent = "Tài khoản dự phòng (khi không có thư/hộp " +
-          "thư nào đang mở)";
+        syncScopeUI();
       } else {
         endpoint.placeholder = "";
         accountLabel.textContent = "Đăng nhập bằng tài khoản";
@@ -1640,6 +1684,10 @@ Object.assign(hMailAI, {
       }
       if (!account.hidden && account.value) {
         this.setSvcPref("account", account.value, id);
+      }
+      if (!scopeBox.hidden) {
+        this.setSvcPref("scope", scopeInputs.all?.checked ? "all" : "context",
+                        id);
       }
     };
 

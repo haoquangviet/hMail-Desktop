@@ -556,6 +556,13 @@ var hMailAI = {
    */
   mailCredentials(context = null) {
     const wanted = this.svcPref("account", "", "hqv");
+    // Chế độ "một tài khoản cho tất cả": người dùng có một hộp thư HQV và
+    // vài hộp thư ngoài (Gmail…) muốn AI của hộp thư HQV lo hết — bỏ qua
+    // ngữ cảnh, luôn đăng nhập bằng tài khoản đã chọn.
+    const forAll = this.svcPref("scope", "context", "hqv") === "all";
+    if (forAll) {
+      context = null;
+    }
     const candidates = [];
     for (const server of MailServices.accounts.allServers) {
       if (!["imap", "pop3"].includes(server.type)) {

@@ -1513,6 +1513,49 @@ select.hmail-ai-field,
     text-align: center;
 }
 
+/* Phạm vi đăng nhập hMail AI services: hai lựa chọn dạng thẻ. */
+.hmail-ai-scope {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.hmail-ai-scope-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, CanvasText 14%, transparent);
+    cursor: pointer;
+}
+
+.hmail-ai-scope-row:has(input:checked) {
+    border-color: color-mix(in srgb, var(--hmail-ai-accent, #0F6CBD) 60%, transparent);
+    background-color: color-mix(in srgb, var(--hmail-ai-accent, #0F6CBD) 7%, Canvas);
+}
+
+.hmail-ai-scope-row input {
+    margin: 3px 0 0 !important;
+}
+
+.hmail-ai-scope-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.hmail-ai-scope-title {
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.hmail-ai-scope-note {
+    font-size: 0.8em;
+    opacity: 0.7;
+}
+
 /* Hộp cảnh báo nguy hiểm đầu thẻ Đọc nhanh: đỏ, đậm, không nhầm được. */
 .hmail-ai-danger-box {
     margin: 6px 0 10px;
