@@ -366,9 +366,18 @@ var hMailComposeAI = {
 
     this.notify(win, "Đang suy nghĩ…", true);
     try {
+      // Tài khoản đang gửi (identity của composer) quyết định máy chủ AI.
+      let composeServer = null;
+      try {
+        const identity = win.gCurrentIdentity || win.getCurrentIdentity?.();
+        const account = identity && MailServices.accounts.accounts.find(a =>
+          a.identities.some(i => i.key === identity.key));
+        composeServer = account?.incomingServer || null;
+      } catch (e) {}
       hMailAI.usageContext = { feature: "Soạn thư: " +
                                         (action.label || action.id),
-                               subject: this.subject(win) || "" };
+                               subject: this.subject(win) || "",
+                               scope: { server: composeServer } };
       let reply = await hMailAI.ask([{
         role: "user",
         text: `${action.prompt}\n\n---\n${context}`,

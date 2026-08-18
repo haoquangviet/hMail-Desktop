@@ -108,12 +108,45 @@ Object.assign(hMailAI, {
       try {
         if (Services.prefs.getCharPref("hmail.ai.selftest", "") === "run") {
           Services.prefs.setCharPref("hmail.ai.selftest", "running");
-          win.setTimeout(() => {
-            this.ask([{ role: "user", text: "Trả lời đúng một từ: OK" }])
-              .then(reply => Services.prefs.setCharPref(
-                "hmail.ai.selftest", "ok: " + String(reply).slice(0, 80)))
-              .catch(e => Services.prefs.setCharPref(
-                "hmail.ai.selftest", "err: " + this.explain(e)));
+          win.setTimeout(async () => {
+            try {
+              // Bản đồ endpoint suy ra theo từng tài khoản (không cần mạng)
+              // — chứng minh mỗi hộp thư gọi đúng máy chủ thư của nó.
+              const map = [];
+              for (const server of MailServices.accounts.allServers) {
+                if (["imap", "pop3"].includes(server.type)) {
+                  map.push(server.username + " -> " + this.mailAiEndpoint(server));
+                }
+              }
+              // Gọi thật với scope = tài khoản pref hmail.ai.selftestScope
+              // (username), để mock/máy chủ thấy đúng email.
+              let scope = null;
+              const want = Services.prefs.getCharPref("hmail.ai.selftestScope", "");
+              if (want) {
+                const srv = MailServices.accounts.allServers.find(
+                  x => String(x.username).toLowerCase() === want.toLowerCase());
+                scope = srv ? { server: srv } : null;
+              }
+              this.usageContext = { feature: "selftest", subject: "", scope };
+              const reply = await this.ask(
+                [{ role: "user", text: "Trả lời đúng một từ: OK" }]);
+              Services.prefs.setCharPref("hmail.ai.selftest",
+                "ok: " + String(reply).slice(0, 40) + " | as=" +
+                (this._lastAiAccount || "?") + " | map=" + map.join(" ; "));
+            } catch (e) {
+              const map = [];
+              try {
+                for (const server of MailServices.accounts.allServers) {
+                  if (["imap", "pop3"].includes(server.type)) {
+                    map.push(server.username + " -> " +
+                             this.mailAiEndpoint(server));
+                  }
+                }
+              } catch (e2) {}
+              Services.prefs.setCharPref("hmail.ai.selftest",
+                "err: " + this.explain(e) + " | map=" + map.join(" ; "));
+            }
+            Services.prefs.savePrefFile(null);
           }, 12000);
         }
       } catch (e) {}
@@ -1044,7 +1077,8 @@ Object.assign(hMailAI, {
       const text = await this.messageText(hdr);
       const turns = [{ role: "user", text: `${prompt.text}\n\n---\n${text}` }];
       this.usageContext = { feature: prompt.label,
-                            subject: hdr.mime2DecodedSubject || "" };
+                            subject: hdr.mime2DecodedSubject || "",
+                            scope: { hdr } };
       const reply = await this.ask(turns);
 
       await this.remember(hdr, "user", prompt.label);
@@ -1160,8 +1194,14 @@ Object.assign(hMailAI, {
       }
       turns.push({ role: "user", text });
 
+      // scope: server của thư đang xem, không thì của thư mục đang mở — dịch
+      // vụ AI-trên-máy-chủ-thư dùng nó để đăng nhập đúng tài khoản.
+      const scopeServer = hdr?.folder?.server ||
+        win.document.getElementById("tabmail")?.currentAbout3Pane?.gFolder
+          ?.server || null;
       this.usageContext = { feature: hdr ? "chat-thư" : "chat-hộp thư",
-                            subject: hdr?.mime2DecodedSubject || "" };
+                            subject: hdr?.mime2DecodedSubject || "",
+                            scope: { server: scopeServer } };
       const reply = await this.ask(turns, {
         win,
         // Luôn đưa công cụ cho model: nhóm hộp thư (tìm/đọc/mở thư, soạn
@@ -1393,11 +1433,22 @@ Object.assign(hMailAI, {
         }
       }
 
+      if (emailAuth) {
+        endpoint.placeholder = "tự theo tài khoản: https://mail.<miền>/ai/v1";
+        accountLabel.textContent = "Tài khoản dự phòng (khi không có thư/hộp " +
+          "thư nào đang mở)";
+      } else {
+        endpoint.placeholder = "";
+        accountLabel.textContent = "Đăng nhập bằng tài khoản";
+      }
       hint.textContent = emailAuth
-        ? "Dịch vụ demo do HQV Software vận hành. Đăng nhập bằng chính tài " +
-          "khoản thư của bạn (mật khẩu đã lưu trong hMail) — không cần tạo " +
-          "API key. Có hạn mức dùng thử; muốn dùng lâu dài, liên hệ HQV để " +
-          "đặt mua."
+        ? "Dịch vụ AI chạy ngay trên MÁY CHỦ THƯ HQV của từng tài khoản " +
+          "(mail.<miền>/ai), đăng nhập bằng chính email + mật khẩu hộp thư " +
+          "đã lưu — không cần API key. Trợ lý tự dùng tài khoản của thư/hộp " +
+          "thư đang mở; tài khoản dự phòng chỉ dùng khi không có ngữ cảnh. " +
+          "Chỉ hộp thư trên máy chủ HQV dùng được — tài khoản khác (Gmail, " +
+          "máy chủ ngoài) sẽ báo \"chưa bật dịch vụ\": chọn nhà cung cấp " +
+          "khác cho chúng. Để trống endpoint trừ khi máy chủ AI đứng riêng."
         : def.key
         ? "Dịch vụ này cần API key và tính phí theo lượng dùng. Với Gemini " +
           "hoặc OpenAI, nên chọn tên model có đuôi -latest hoặc -mini để " +

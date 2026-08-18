@@ -168,10 +168,14 @@ var hMailAI = {
     // key). Đứng đầu mảng nên cũng là fallback của serviceDef() và là mặc
     // định cho bản cài mới (hmail.cfg). HQV trả tiền hạ tầng — hạn mức do
     // máy chủ quyết, client chỉ cần thuật lại lỗi 429 cho tử tế.
+    // Endpoint KHÔNG cố định: dịch vụ chạy ngay trên máy chủ thư của từng
+    // tài khoản (https://<mail-host>/ai/v1), đăng nhập bằng chính email +
+    // mật khẩu hộp thư. Ô endpoint để trống = tự suy từ tài khoản; điền
+    // vào chỉ khi máy chủ AI đứng riêng.
     { id: "hqv", label: "hMail AI services (HQV)", provider: "openai",
-      endpoint: "https://aiservices.hqv.biz/v1", model: "hmail-default",
+      endpoint: "", model: "hmail-default",
       key: false, auth: "email", priceIn: 0, priceOut: 0, actions: true,
-      tested: true, where: "máy chủ HQV Software (Việt Nam)" },
+      tested: true, where: "máy chủ thư của chính tài khoản (mail.<miền>/ai)" },
     { id: "gemini", label: "Google Gemini", provider: "gemini",
       endpoint: "https://generativelanguage.googleapis.com/v1beta",
       model: "gemini-flash-latest", key: true, priceIn: 0.30, priceOut: 2.50,
@@ -497,6 +501,31 @@ var hMailAI = {
    * cả, mỗi request đọc lại một lần.
    */
   /**
+   * Endpoint AI của một tài khoản: dịch vụ chạy trên chính máy chủ thư —
+   * https://<hostName IMAP/POP>/ai/v1. Người dùng điền endpoint riêng trong
+   * Cài đặt thì dùng cái đó cho mọi tài khoản.
+   */
+  mailAiEndpoint(server) {
+    let custom = String(this.svcPref("endpoint", "", "hqv") || "").trim();
+    // Hồ sơ cũ còn lưu endpoint mặc định đời trước (máy chủ AI chung) —
+    // đó không phải lựa chọn của người dùng, xoá để tự suy theo tài khoản.
+    if (/^https?:\/\/aiservices\.hqv\.biz(\/v1)?\/?$/i.test(custom)) {
+      try {
+        Services.prefs.clearUserPref("hmail.ai.svc.hqv.endpoint");
+      } catch (e) {}
+      custom = "";
+    }
+    if (custom) {
+      return custom.replace(/\/+$/, "");
+    }
+    const host = String(server?.hostName || "").trim();
+    if (!host) {
+      return "";
+    }
+    return `https://${host}/ai/v1`;
+  },
+
+  /**
    * Mật khẩu đã lưu của một incoming server. server.password chỉ là cache
    * trong phiên — app mới mở thì rỗng dù người dùng đã "Ghi nhớ mật khẩu";
    * bản lưu thật nằm trong login manager dưới origin imap://host (POP3:
@@ -519,7 +548,13 @@ var hMailAI = {
     }
   },
 
-  mailCredentials() {
+  /**
+   * Tài khoản dùng để đăng nhập dịch vụ AI-trên-máy-chủ-thư. Ưu tiên theo
+   * NGỮ CẢNH ĐANG LÀM VIỆC (thư đang mở / hộp thư đang mở) — mỗi máy chủ
+   * chỉ xác thực được tài khoản của nó; rồi tới tài khoản người dùng chỉ
+   * định; rồi tài khoản mặc định có mật khẩu.
+   */
+  mailCredentials(context = null) {
     const wanted = this.svcPref("account", "", "hqv");
     const candidates = [];
     for (const server of MailServices.accounts.allServers) {
@@ -538,13 +573,30 @@ var hMailAI = {
       });
     }
 
+    // Ngữ cảnh: server của thư/thư mục đang mở — đúng máy chủ đang giữ
+    // hộp thư này, và là máy chủ duy nhất xác thực được nó.
+    const ctxServer = context?.server ||
+      context?.folder?.server || context?.hdr?.folder?.server || null;
+    if (ctxServer) {
+      const picked = candidates.find(c => c.server === ctxServer);
+      if (picked) {
+        const password = this.serverPassword(picked.server);
+        if (password) {
+          return { email: picked.email, password, server: picked.server };
+        }
+        throw Object.assign(
+          new Error("tài khoản " + picked.email + " chưa lưu mật khẩu"),
+          { code: "no_mail_pass", email: picked.email });
+      }
+    }
+
     // Người dùng chỉ định tài khoản nào thì đúng tài khoản đó, kể cả khi nó
     // chưa lưu mật khẩu — báo lỗi rõ còn hơn lặng lẽ dùng hộp thư khác.
     if (wanted) {
       const picked = candidates.find(c => c.matches(wanted.toLowerCase()));
       const password = picked ? this.serverPassword(picked.server) : "";
       if (password) {
-        return { email: wanted.toLowerCase(), password };
+        return { email: wanted.toLowerCase(), password, server: picked.server };
       }
       throw Object.assign(
         new Error("tài khoản " + wanted + " chưa lưu mật khẩu"),
@@ -559,7 +611,8 @@ var hMailAI = {
                    candidates.find(usable);
     if (chosen) {
       return { email: chosen.email,
-               password: this.serverPassword(chosen.server) };
+               password: this.serverPassword(chosen.server),
+               server: chosen.server };
     }
     throw Object.assign(
       new Error("chưa có tài khoản thư nào lưu mật khẩu"),
@@ -1010,17 +1063,26 @@ var hMailAI = {
     }
 
     const headers = { "Content-Type": "application/json" };
+    let base = this.endpoint().replace(/\/+$/, "");
     if (this.serviceDef().auth === "email") {
       // hMail AI services: đăng nhập bằng chính hộp thư — Basic auth,
-      // đọc mật khẩu đã lưu ngay lúc gọi, không giữ lại ở đâu.
-      const cred = this.mailCredentials();
+      // đọc mật khẩu đã lưu ngay lúc gọi, không giữ lại ở đâu. Endpoint
+      // là máy chủ thư của đúng tài khoản đang làm việc.
+      const cred = this.mailCredentials(this.usageContext?.scope || null);
       headers.Authorization = "Basic " + btoa(
         unescape(encodeURIComponent(cred.email + ":" + cred.password)));
+      base = this.mailAiEndpoint(cred.server) || base;
+      if (!base) {
+        throw Object.assign(
+          new Error("không xác định được máy chủ AI của tài khoản " + cred.email),
+          { code: "no_ai_endpoint", email: cred.email });
+      }
+      this._lastAiAccount = cred.email;
     } else if (key) {
       headers.Authorization = `Bearer ${key}`;
     }
     const body = await this.fetchJSON(
-      `${this.endpoint().replace(/\/+$/, "")}/chat/completions`,
+      `${base}/chat/completions`,
       { method: "POST", headers, body: JSON.stringify(payload) });
 
     const used = body?.usage || {};
@@ -1107,6 +1169,23 @@ var hMailAI = {
   },
 
   explain(e) {
+        // hMail AI services (đăng nhập bằng hộp thư): lỗi HTTP phải được đọc
+    // theo NGỮ CẢNH tài khoản trước khi rơi vào các mã chung của provider.
+    if (this.serviceDef().auth === "email") {
+      const who = this._lastAiAccount ? ` (${this._lastAiAccount})` : "";
+      if (e?.status === 401 || e?.status === 403) {
+        return "máy chủ thư không chấp nhận đăng nhập AI của tài khoản" + who +
+               " — kiểm tra mật khẩu hộp thư, hoặc tài khoản chưa được mở " +
+               "dịch vụ AI";
+      }
+      if (e?.status === 404 || e?.code === "network" ||
+          e?.code === "NOT_FOUND") {
+        return "máy chủ thư của tài khoản" + who + " chưa bật dịch vụ hMail " +
+               "AI (không có mail.<miền>/ai) — dịch vụ này chỉ dùng được với " +
+               "hộp thư trên máy chủ HQV; với tài khoản khác hãy chọn nhà " +
+               "cung cấp AI khác trong Cài đặt trợ lý";
+      }
+    }
     switch (e?.code) {
       case "no_key":
         return "chưa nhập API key — mở phần cài đặt trong bảng trợ lý";
@@ -1115,6 +1194,10 @@ var hMailAI = {
                "nhưng tài khoản chưa lưu mật khẩu trong hMail (" +
                (e.message || "") + "). Hãy nhận thư một lần và chọn " +
                "\"Ghi nhớ mật khẩu\", hoặc chọn dịch vụ khác trong cài đặt.";
+      case "no_ai_endpoint":
+        return "không xác định được máy chủ AI cho tài khoản " +
+               (e.email || "") + " — điền endpoint riêng trong Cài đặt trợ lý " +
+               "nếu máy chủ AI không nằm trên máy chủ thư.";
       case "local_off":
         return "AI trên máy chưa được kích hoạt";
       case "network":
@@ -1126,11 +1209,6 @@ var hMailAI = {
       case "NOT_FOUND":
         return `mô hình "${this.model()}" không còn khả dụng`;
       default:
-        if (e?.status === 401 && this.serviceDef().auth === "email") {
-          return "máy chủ hMail AI không chấp nhận đăng nhập của địa chỉ " +
-                 "này — kiểm tra mật khẩu hộp thư, hoặc tài khoản chưa " +
-                 "được mở dịch vụ";
-        }
         return e?.message || "lỗi không xác định";
     }
   },

@@ -334,7 +334,8 @@ var hMailTranslate = {
     if (!stored) {
       try {
         hMailAI.usageContext = { feature: "Dịch → " + lang.label,
-                                 subject: hdr.mime2DecodedSubject || "" };
+                                 subject: hdr.mime2DecodedSubject || "",
+                                 scope: { hdr } };
         if (nodes.length) {
           stored = await this.translateSegments(nodes, lang);
         }

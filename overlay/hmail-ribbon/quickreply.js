@@ -580,7 +580,8 @@ var hMailQuickReply = {
                        text: "Viết lại một phương án khác tốt hơn." });
         }
         hMailAI.usageContext = { feature: "Nhờ AI viết trả lời",
-                                 subject: hdr.mime2DecodedSubject || "" };
+                                 subject: hdr.mime2DecodedSubject || "",
+                                 scope: { hdr } };
         const reply = await hMailAI.ask(turns);
         turns.push({ role: "assistant", text: reply });
         draftText = String(reply).trim()
