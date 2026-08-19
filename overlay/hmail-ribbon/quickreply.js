@@ -92,6 +92,10 @@ var hMailQuickReply = {
       // A XUL vbox wrapper takes part in the box layout and gives the HTML
       // inside it a real height; an HTML child dropped straight into the
       // XUL column lays out at zero size.
+      // Mặc định Trạng thái thư lấy theo cài đặt, giống cửa sổ soạn thư.
+      if (this._track === undefined) {
+        this._track = this.trackDefault();
+      }
       const holder = doc.createXULElement("vbox");
       holder.id = this.ID + "-holder";
       const box = this.build(win, doc);
@@ -327,6 +331,19 @@ var hMailQuickReply = {
       this.say(win, this._replyAll ? "Sẽ gửi cho tất cả người nhận." : "");
       this.renderChips(win, doc);
     });
+    // Trả lời nhanh cũng là thư gửi đi: cần bật/tắt được Trạng thái thư
+    // ngay ở đây, không phải mở soạn thảo đầy đủ chỉ để tick một ô.
+    if (typeof hMailTrack !== "undefined") {
+      item("✓✓", this._track
+        ? "Trạng thái thư — đang bật, bấm để tắt" : "Trạng thái thư", () => {
+        this._track = !this._track;
+        this.say(win, this._track
+          ? "Thư trả lời này sẽ theo dõi được trạng thái (máy chủ chèn ảnh " +
+            "đếm lượt mở — người nhận bị đo)."
+          : "");
+        this.renderChips(win, doc);
+      });
+    }
     item("📎", "Đính kèm tệp…", () => this.pickAttachments(win, doc));
     item("✎", "Nhờ AI viết", () => this.openStudio(win, doc, box, input));
     item("⧉", "Mở soạn thảo đầy đủ", () => this.expand(win, input));
@@ -422,6 +439,13 @@ var hMailQuickReply = {
       c.appendChild(x);
       chips.appendChild(c);
     };
+
+    if (this._track) {
+      chip("mode", "Trạng thái thư", () => {
+        this._track = false;
+        this.renderChips(win, doc);
+      });
+    }
 
     if (this._replyAll) {
       chip("mode", "Trả lời tất cả", () => {
@@ -663,6 +687,20 @@ var hMailQuickReply = {
       // path stays mode-controlled.
       await this.fillReply(hdr, fields, true, this.identityFor(hdr));
       this.addAttachments(fields);
+      // Mã theo dõi phải nằm trong fields TRƯỚC khi initCompose dựng thư.
+      let trackRef = "";
+      let trackLocalId = "";
+      if (this._track && typeof hMailTrack !== "undefined") {
+        try {
+          trackRef = hMailTrack.newRef(win);
+          trackLocalId = hMailTrack.newLocalId(win);
+          fields.setHeader("X-HMail-Track", trackRef);
+          // Chỉ id nội bộ đi theo thư; mã theo dõi ở lại máy này.
+          fields.setHeader("X-HMail-Internal-Id", trackLocalId);
+        } catch (e) {
+          trackRef = "";
+        }
+      }
       params.composeFields = fields;
       params.type = Ci.nsIMsgCompType.ReplyAll;
       params.format = Ci.nsIMsgCompFormat.HTML;
@@ -756,6 +794,15 @@ var hMailQuickReply = {
    * identity, same threading headers — so the conversation stays intact and
    * the sent copy lands in the account's Sent folder.
    */
+  /** Mặc định bật theo pref hmail.track.enabled, như cửa sổ soạn thư. */
+  trackDefault() {
+    try {
+      return Services.prefs.getBoolPref("hmail.track.enabled", false);
+    } catch (e) {
+      return false;
+    }
+  },
+
   async send(win, input, replyAll) {
     // The armed mode counts as much as the caller's argument.
     replyAll = replyAll || this._replyAll;
@@ -840,9 +887,26 @@ var hMailQuickReply = {
       await compose.sendMsg(Ci.nsIMsgCompDeliverMode.Now, identity,
                             accountKey, msgWindow, null);
 
+      if (trackRef) {
+        try {
+          hMailTrack.remember({
+            ref: trackRef,
+            localId: trackLocalId,
+            at: Date.now(),
+            subject: hMailTrack.decodeText(fields.subject),
+            to: hMailTrack.prettyAddresses(fields.to),
+            toEmails: hMailTrack.emailsOf(fields.to),
+            cc: hMailTrack.prettyAddresses(fields.cc),
+            from: identity.email || "",
+            base: hMailTrack.baseFor(hdr.folder.server),
+          }).catch(() => {});
+        } catch (e) {}
+      }
+
       input.value = "";
       input.style.height = "auto";
       // The armed mode and the picked files belonged to this send.
+      this._track = false;
       this._replyAll = false;
       this._attachments = [];
       this.renderChips(win, input.ownerDocument);
@@ -897,3 +961,109 @@ var hMailQuickReply = {
     return send;
   },
 };
+
+
+// ---------------------------------------------------------------------------
+// Tự kiểm trả lời nhanh + Trạng thái thư (pref hmail.debug.qrtracktest =
+// "run"): chọn một thư trong Hộp thư đến của tài khoản HQV, bật cờ theo dõi,
+// gửi THẬT một câu trả lời qua đúng đường send() của thanh trả lời nhanh, rồi
+// kiểm tra mã có vào nhật ký và máy chủ có nhận mã đó không.
+(function hMailQuickReplyTrackSelfTest() {
+  let mode = "";
+  try {
+    mode = Services.prefs.getCharPref("hmail.debug.qrtracktest", "");
+  } catch (e) {}
+  if (mode !== "run") {
+    return;
+  }
+  Services.prefs.setCharPref("hmail.debug.qrtracktest", "running");
+  const report = text => {
+    try {
+      Services.prefs.setCharPref("hmail.debug.qrtracktest",
+                                 String(text).slice(0, 900));
+      Services.prefs.savePrefFile(null);
+    } catch (e) {}
+  };
+  setTimeout(async () => {
+    const win = Services.wm.getMostRecentWindow("mail:3pane");
+    const out = {};
+    try {
+      // Thư để trả lời: thư mới nhất do CHÍNH MÌNH gửi cho mình, để lượt tự
+      // kiểm không làm phiền người khác.
+      const me = "quyet@haoquangviet.com";
+      let target = null;
+      for (const server of MailServices.accounts.allServers) {
+        if (String(server.username).toLowerCase() !== me) {
+          continue;
+        }
+        const inbox = server.rootFolder
+          ?.getFolderWithFlags(Ci.nsMsgFolderFlags.Inbox);
+        if (!inbox) {
+          continue;
+        }
+        const hdrs = [...inbox.messages]
+          .filter(h => String(h.author || "").toLowerCase().includes(me))
+          .sort((a, b) => (b.dateInSeconds || 0) - (a.dateInSeconds || 0));
+        target = hdrs[0] || null;
+        break;
+      }
+      if (!target) {
+        report("err: khong tim thay thu cua chinh minh de tra loi");
+        return;
+      }
+      out.subject = String(target.mime2DecodedSubject || "").slice(0, 40);
+
+      // Giả lập đúng những gì thanh trả lời nhanh làm.
+      const before = (await hMailTrack.load()).length;
+      hMailQuickReply._track = true;
+      const input = { value: "Tu kiem Trang thai thu qua tra loi nhanh.",
+                      style: {}, ownerDocument: win.document };
+      hMailQuickReply.message = () => target;
+      // Ghi lại mọi lời báo + không để hộp hỏi "trả lời tất cả" chặn máy.
+      const says = [];
+      const origSay = hMailQuickReply.say;
+      hMailQuickReply.say = (w, text) => {
+        if (text) {
+          says.push(String(text).slice(0, 60));
+        }
+      };
+      const origChips = hMailQuickReply.renderChips;
+      hMailQuickReply.renderChips = () => {};
+      const origPrompt = Services.prompt.confirmEx;
+      Services.prompt.confirmEx = () => 1;
+      try {
+        await hMailQuickReply.send(win, input, false);
+      } finally {
+        hMailQuickReply.say = origSay;
+        hMailQuickReply.renderChips = origChips;
+        Services.prompt.confirmEx = origPrompt;
+      }
+      out.baoGi = says;
+
+      const list = await hMailTrack.load();
+      out.themVaoNhatKy = list.length - before;
+      const entry = list[list.length - 1];
+      out.ref = entry?.ref || "";
+      out.to = entry?.to || "";
+      out.trackTatSauKhiGui = hMailQuickReply._track === false;
+
+      // Máy chủ đã ghi nhận mã chưa (chờ vài nhịp cho hàng đợi).
+      let server = "";
+      for (const wait of [4000, 6000, 8000]) {
+        await new Promise(r => win.setTimeout(r, wait));
+        const status = await hMailTrack.fetchStatus(entry);
+        if (status && !status.unknown) {
+          server = (status.delivery_status || "?") +
+                   " opened=" + !!status.opened;
+          break;
+        }
+        server = "chua ghi nhan";
+      }
+      out.mayChu = server;
+      report(JSON.stringify(out));
+    } catch (e) {
+      out.err = String(e.message || e);
+      report(JSON.stringify(out));
+    }
+  }, 16000);
+})();

@@ -1529,6 +1529,26 @@ select.hmail-ai-field,
     text-align: center;
 }
 
+/* Thẻ chi tiết Trạng thái thư trong panel hMail AI. */
+.hmail-track-detail-state {
+    font-weight: 600;
+    margin: 4px 0 6px;
+}
+
+.hmail-track-detail-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 8px;
+}
+
+.hmail-track-detail .hmail-track-line {
+    padding: 2px 0 2px 12px;
+    font-size: 0.9em;
+    opacity: 0.9;
+    overflow-wrap: anywhere;
+}
+
 /* Thanh trạng thái theo dõi trên thư đã gửi (trong khung đọc thư). */
 .hmail-track-bar {
     display: flex;
