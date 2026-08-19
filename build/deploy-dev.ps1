@@ -37,8 +37,19 @@ if ($live) {
     if (-not (Get-Process hmail -ErrorAction SilentlyContinue)) { break }
     Start-Sleep -Seconds 1
   }
+}
+# Hồ sơ bật "chạy nền" (hmail.background.enabled) thì nút X chỉ thu nhỏ
+# xuống khay — chờ bao lâu cũng không thoát. Đường thoát thật là deep link,
+# bồi thêm một nhịp nữa trước khi bỏ cuộc.
+if (Get-Process hmail -ErrorAction SilentlyContinue) {
+  Write-Output "Vẫn còn chạy (chế độ nền?) — gọi lại hmail://quit…"
+  & "$dest\hmail.exe" -hmail-url "hmail://quit" 2>$null
+  for ($i = 0; $i -lt 60; $i++) {
+    if (-not (Get-Process hmail -ErrorAction SilentlyContinue)) { break }
+    Start-Sleep -Seconds 1
+  }
   if (Get-Process hmail -ErrorAction SilentlyContinue) {
-    throw "hMail không thoát trong 90 giây (đang bận?) — không deploy."
+    throw "hMail không thoát (đang bận?) — không deploy."
   }
 }
 

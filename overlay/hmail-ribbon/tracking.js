@@ -206,17 +206,77 @@ var hMailTrack = {
   // ------------------------------------- thanh trạng thái trên thư đã gửi
 
   /**
-   * Thư đang xem có được theo dõi không? Đọc phần đầu thư (mailinsight đã
-   * có bộ đọc có trần 256 KB) tìm header X-HMail-Track.
+   * Thư đang xem có được theo dõi không?
+   *
+   * Máy chủ ĐỔI header khi xử lý: mình gửi đi "X-HMail-Track: <mã>", bản
+   * lưu lại trong hộp Đã gửi (và bản người nhận thấy) mang
+   * "X-HMail-Track: opens,clicks" — tức là danh sách thứ máy chủ đã bật,
+   * KHÔNG còn mã. Vậy nên: header chỉ dùng để biết "thư này có theo dõi";
+   * còn mã để hỏi trạng thái thì lấy từ nhật ký trên máy (hmail-tracking.json).
+   *
+   * Trả { header, ref, applied }.
    */
-  async refOf(hdr) {
+  async trackInfo(hdr) {
+    const out = { header: "", ref: "", applied: "" };
     if (typeof hMailInsight === "undefined" || !hdr) {
-      return "";
+      return out;
     }
     try {
       const raw = await hMailInsight.raw(hdr, 64 * 1024);
       const headers = hMailInsight.headers(raw);
-      return hMailInsight.first(headers, "x-hmail-track").trim();
+      out.header = hMailInsight.first(headers, "x-hmail-track").trim();
+    } catch (e) {
+      return out;
+    }
+    if (!out.header) {
+      return out;
+    }
+    if (/^[A-Za-z0-9_-]{16,64}$/.test(out.header)) {
+      out.ref = out.header;
+    } else {
+      out.applied = out.header;
+    }
+    if (!out.ref) {
+      out.ref = await this.refFromLog(hdr);
+    }
+    return out;
+  },
+
+  /** Giữ lại tên cũ cho phần tự kiểm và mã gọi ngoài. */
+  async refOf(hdr) {
+    return (await this.trackInfo(hdr)).ref;
+  },
+
+  /**
+   * Dò mã trong nhật ký theo tiêu đề + người nhận + thời điểm gửi. Thư gửi
+   * hàng loạt cùng tiêu đề thì lấy bản gần giờ gửi nhất.
+   */
+  async refFromLog(hdr) {
+    try {
+      const subject = String(hdr.mime2DecodedSubject || hdr.subject || "")
+        .trim().toLowerCase();
+      const rcpt = String(hdr.recipients || "").toLowerCase();
+      const at = (hdr.dateInSeconds || 0) * 1000;
+      const entries = await this.load();
+      let best = null;
+      let bestGap = Infinity;
+      for (const entry of entries) {
+        const entrySubject = String(entry.subject || "").trim().toLowerCase();
+        if (entrySubject !== subject) {
+          continue;
+        }
+        const to = String(entry.to || "").toLowerCase();
+        if (to && rcpt && !to.split(/[,;]\s*/).some(a => a && rcpt.includes(a))) {
+          continue;
+        }
+        const gap = Math.abs((entry.at || 0) - at);
+        if (gap < bestGap) {
+          bestGap = gap;
+          best = entry;
+        }
+      }
+      // Cùng tiêu đề mà cách nhau quá 2 ngày thì coi như thư khác.
+      return best && bestGap < 2 * 24 * 3600 * 1000 ? best.ref : "";
     } catch (e) {
       return "";
     }
@@ -246,21 +306,32 @@ var hMailTrack = {
         if (!hdr) {
           return;
         }
-        const ref = await this.refOf(hdr);
-        if (!ref) {
+        const info = await this.trackInfo(hdr);
+        if (!info.header) {
           return;
         }
-        // Thư NHẬN được cũng mang header này — mã đó thuộc máy chủ của
-        // người gửi, hỏi máy chủ mình chỉ ra "không biết mã". Với thư nhận
-        // chỉ báo cho người dùng biết mình đang bị đo.
+        // Thư NHẬN được cũng mang header này — mã (nếu còn) thuộc máy chủ
+        // của người gửi, hỏi máy chủ mình chỉ ra "không biết mã". Với thư
+        // nhận chỉ báo cho người dùng biết mình đang bị đo.
         if (!this.isSent(hdr)) {
-          this.paintBar(win, ref, {
+          this.paintBar(win, info.ref, {
             text: "Người gửi có gắn mã theo dõi — họ biết được bạn đã mở " +
-                  "thư và bấm liên kết nào.",
+                  "thư" + (/click/i.test(info.applied || info.header)
+                            ? " và bấm liên kết nào." : "."),
             tone: "warn",
           });
           return;
         }
+        if (!info.ref) {
+          this.paintBar(win, "", {
+            text: "Đã gửi kèm theo dõi, nhưng máy này không còn giữ mã nên " +
+                  "không tra được trạng thái (nhật ký đã xoá hoặc thư gửi " +
+                  "từ máy khác).",
+            tone: "unknown",
+          });
+          return;
+        }
+        const ref = info.ref;
         const base = this.baseFor(hdr.folder?.server);
         this.paintBar(win, ref, { text: "Đang hỏi máy chủ…", tone: "wait" });
         const status = await this.fetchStatus({ ref, base });
@@ -428,6 +499,28 @@ var hMailTrack = {
     return { text, tone };
   },
 
+  /** Rút gọn user-agent thành tên thiết bị/trình duyệt cho người thường đọc. */
+  device(ua) {
+    const t = String(ua || "");
+    if (!t) {
+      return "";
+    }
+    const os = /Android/i.test(t) ? "Android"
+      : /iPhone|iPad|iOS/i.test(t) ? "iPhone/iPad"
+      : /Mac OS X|Macintosh/i.test(t) ? "macOS"
+      : /Windows/i.test(t) ? "Windows"
+      : /Linux/i.test(t) ? "Linux" : "";
+    const app = /GoogleImageProxy|Googlebot/i.test(t) ? "Gmail"
+      : /YahooMailProxy/i.test(t) ? "Yahoo Mail"
+      : /Outlook|Microsoft/i.test(t) ? "Outlook"
+      : /Thunderbird/i.test(t) ? "Thunderbird"
+      : /Edg\//i.test(t) ? "Edge"
+      : /Chrome/i.test(t) ? "Chrome"
+      : /Safari/i.test(t) ? "Safari"
+      : /Firefox/i.test(t) ? "Firefox" : "";
+    return [os, app].filter(Boolean).join(" ") || "thiết bị lạ";
+  },
+
   buildPanel(win) {
     const doc = win.document;
     const el = (t, c, x) => this.el(doc, t, c, x);
@@ -490,13 +583,21 @@ var hMailTrack = {
                   ? ` — ${new Date(d.at || d.time).toLocaleString("vi-VN")}`
                   : ""));
             }
+            // Máy chủ đặt tên trường là "event" (open/click).
             for (const ev of status?.events || []) {
-              const kind = { open: "Mở thư", click: "Bấm liên kết" }[ev.type] ||
-                           ev.type || "Sự kiện";
+              const name = ev.event || ev.type || "";
+              const kind = { open: "Mở thư", click: "Bấm liên kết" }[name] ||
+                           name || "Sự kiện";
+              const who = [ev.ip, this.device(ev.user_agent)]
+                .filter(Boolean).join(" · ");
               lines.push(`${kind}` + (ev.url ? ` → ${ev.url}` : "") +
                 (ev.at ? ` — ${new Date(ev.at).toLocaleString("vi-VN")}` : "") +
-                (ev.ip ? ` (${ev.ip})` : ""));
+                (who ? ` (${who})` : "") +
+                (ev.is_bot ? " — máy quét tự động, không phải người mở" : "") +
+                (ev.is_proxy ? " — qua máy chủ trung gian (Gmail, Outlook)"
+                             : ""));
             }
+            lines.reverse();
             if (lines.length) {
               const det = el("details", "hmail-track-details");
               det.appendChild(el("summary", null,
@@ -606,4 +707,108 @@ var hMailTrack = {
       report("err: " + (e.message || e));
     }
   }, 14000);
+})();
+
+// ---------------------------------------------------------------------------
+// Tự kiểm phần HIỂN THỊ (pref hmail.debug.trackbartest = "run"): tìm thư đã
+// gửi có header X-HMail-Track trong hộp Đã gửi, chạy đúng đường mà thanh
+// trạng thái dùng (refOf → fetchStatus → describe) rồi ghi kết quả ra pref.
+// Không đụng UI, không gửi thư — chỉ kiểm logic đọc và diễn giải.
+(function () {
+  let mode = "";
+  try {
+    mode = Services.prefs.getCharPref("hmail.debug.trackbartest", "");
+  } catch (e) {}
+  if (mode !== "run") {
+    return;
+  }
+  Services.prefs.setCharPref("hmail.debug.trackbartest", "running");
+  const report = text => {
+    try {
+      Services.prefs.setCharPref("hmail.debug.trackbartest",
+                                 String(text).slice(0, 900));
+      Services.prefs.savePrefFile(null);
+    } catch (e) {}
+  };
+  setTimeout(async () => {
+    const win = Services.wm.getMostRecentWindow("mail:3pane");
+    const lines = [];
+    try {
+      let found = null;
+      for (const acc of MailServices.accounts.accounts) {
+        const root = acc.incomingServer?.rootFolder;
+        if (!root) {
+          continue;
+        }
+        for (const folder of root.descendants) {
+          // Cả hộp Đã gửi lẫn Hộp thư đến: thư tự gửi cho mình cũng là
+          // "thư mình gửi" theo isSent(), và đó là ca kiểm nhanh nhất.
+          if (!(folder.flags & (Ci.nsMsgFolderFlags.SentMail |
+                                Ci.nsMsgFolderFlags.Inbox))) {
+            continue;
+          }
+          const hdrs = [...folder.messages]
+            .sort((a, b) => (b.dateInSeconds || 0) - (a.dateInSeconds || 0));
+          for (const hdr of hdrs.slice(0, 60)) {
+            const info = await hMailTrack.trackInfo(hdr);
+            if (!info.header) {
+              continue;
+            }
+            // Ưu tiên thư tra được mã (có trong nhật ký) để kiểm cả đường
+            // hỏi máy chủ, không dừng ở thư đầu tiên chỉ có header.
+            if (info.ref || !found) {
+              found = { hdr, ref: info.ref, info, folder };
+            }
+            if (info.ref) {
+              break;
+            }
+          }
+          if (found?.ref) {
+            break;
+          }
+        }
+        if (found?.ref) {
+          break;
+        }
+      }
+      if (!found) {
+        report("err: khong tim thay thu da gui co X-HMail-Track");
+        return;
+      }
+      lines.push("header=" + found.info.header + " applied=" +
+                 found.info.applied + " ref=" + (found.ref || "(khong co)"));
+      lines.push("subject=" + (found.hdr.mime2DecodedSubject || ""));
+      if (!found.ref) {
+        report("khong tra duoc ma | " + lines.join(" | "));
+        return;
+      }
+      lines.push("isSent=" + hMailTrack.isSent(found.hdr));
+      const base = hMailTrack.baseFor(found.folder.server);
+      lines.push("base=" + base);
+      const status = await hMailTrack.fetchStatus({ ref: found.ref, base },
+                                                  true);
+      const info = hMailTrack.describe(status);
+      lines.push("tone=" + info.tone);
+      lines.push("text=" + info.text);
+      lines.push("events=" + (status?.events || []).length +
+                 " delivery=" + (status?.delivery || []).length);
+      const ev = (status?.events || [])[0];
+      if (ev) {
+        lines.push("ev0=" + (ev.event || ev.type) + " " +
+                   hMailTrack.device(ev.user_agent));
+      }
+      // Vẽ thử thanh vào document thư đang mở (nếu có) để bắt lỗi DOM.
+      try {
+        hMailTrack.paintBar(win, found.ref, info, status);
+        const doc = hMailInsight.messageDocument(win);
+        lines.push("bar=" + (doc?.getElementById("hmail-track-bar")
+                              ? "da ve" : "khong co document thu"));
+      } catch (e) {
+        lines.push("bar err: " + (e.message || e));
+      }
+      report(lines.join(" | "));
+    } catch (e) {
+      report("err: " + (e.message || e) + " | " + lines.join(" | "));
+    }
+  }, 12000);
 })();

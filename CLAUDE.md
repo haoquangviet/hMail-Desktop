@@ -28,6 +28,11 @@
   app tử tế (CloseMainWindow, tương đương nút X), chép toàn bộ overlay, mở lại
   app không elevated. **Deploy xong LUÔN phải restart app** thì thay đổi mới
   hiện — file JS/CSS chép được khi app đang chạy nhưng chỉ nạp lúc khởi động.
+- Máy dev đang dùng hồ sơ **`D:\hMailData`** (không phải `%APPDATA%\Thunderbird`)
+  và hồ sơ đó bật `hmail.background.enabled` → **nút X / Alt+F4 / CloseMainWindow
+  chỉ thu nhỏ xuống khay, chờ mãi cũng không thoát**. Đường thoát tin được ở máy
+  này là `hmail.exe -hmail-url "hmail://quit"` (handler ghi lại mọi URL nhận
+  được vào pref `hmail.debug.cmdline` — soi ở đó khi nghi lệnh không tới nơi).
 - KHÔNG BAO GIỜ `Stop-Process -Force` với hmail — force-kill hỏng cache .msf;
   hộp thư ~70k thư sẽ phải đọc lại toàn bộ ở lần khởi động sau, người dùng thấy
   app "treo". `hmail://quit` hiện không tin được (backlog #7); đường tin được là
