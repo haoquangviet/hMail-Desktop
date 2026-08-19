@@ -884,12 +884,18 @@ var hMailTrack = {
       if (doc.getElementById("hmail-track-badge")) {
         return;
       }
-      // Chỗ của nó là mép PHẢI của dòng người gửi, tức ngay phía trên giờ
-      // gửi. Hàng đó là #headerSenderToolbarContainer và nó xếp
-      // flex-direction: row-reverse (class header-row-reverse) — con ĐẦU
-      // TIÊN nằm ngoài cùng bên phải, nên chèn vào đầu chứ không append.
-      const row = doc.getElementById("headerSenderToolbarContainer") ||
-                  doc.getElementById("expandedfromRow") ||
+      // Đặt ngay CẠNH GIỜ GỬI, trong chính hàng chứa giờ (#expandedtoRow,
+      // nơi có <time id="dateLabel"> nằm sát mép phải).
+      //
+      // Đã thử hai chỗ khác và đều hỏng, ghi lại để khỏi thử lại:
+      //   - thêm con vào #headerSenderToolbarContainer: hàng đó có
+      //     message-header-wrap nên cụm nút bị đẩy xuống dòng, huy hiệu
+      //     nhảy lên góc trái;
+      //   - ghim tuyệt đối vào mép phải #expandedfromRow: hàng người gửi
+      //     chỉ rộng bằng nội dung, mép phải của nó cách chỗ giờ hơn 450 px
+      //     nên huy hiệu đè lên tên người gửi.
+      const dateLabel = doc.getElementById("dateLabel");
+      const row = dateLabel?.parentNode ||
                   doc.getElementById("header-view-toolbar");
       if (!row) {
         return;
@@ -910,8 +916,8 @@ var hMailTrack = {
         (lines.length ? "\n\n" + lines.join("\n") : "") +
         "\n\nBấm để xem chi tiết trong hMail AI";
       badge.addEventListener("click", () => this.showDetail(win, shown));
-      if (row.id === "headerSenderToolbarContainer") {
-        row.insertBefore(badge, row.firstChild);
+      if (dateLabel && dateLabel.parentNode === row) {
+        row.insertBefore(badge, dateLabel);
       } else {
         row.appendChild(badge);
       }
@@ -1411,10 +1417,28 @@ var hMailTrack = {
         const log = await hMailTrack.load();
         lines.push("nhatKy=" + log.length + " adopted=" +
                    log.filter(e => e.adopted).length);
-        // Nhãn hiện trên huy hiệu + đóng tab tự kiểm lại như cũ.
+        // Nhãn + toạ độ thật: huy hiệu phải nằm TRÊN nhãn giờ và sát mép
+        // phải, không được rơi xuống dòng riêng.
         const badge = doc?.getElementById("hmail-track-badge");
         if (badge) {
-          lines.push("nhan=" + badge.getAttribute("label"));
+          lines.push("nhan=" + badge.textContent);
+          const b = badge.getBoundingClientRect();
+          const date = doc.getElementById("dateLabel");
+          const d = date?.getBoundingClientRect();
+          const row = doc.getElementById("expandedfromRow")
+            ?.getBoundingClientRect();
+          lines.push(`huyHieu=${Math.round(b.left)},${Math.round(b.top)} ` +
+                     `${Math.round(b.width)}x${Math.round(b.height)}`);
+          if (d) {
+            lines.push(`gio=${Math.round(d.left)},${Math.round(d.top)}`);
+            lines.push("cungHangVoiGio=" +
+                       (Math.abs(b.top - d.top) < b.height));
+            lines.push("cachGio=" + Math.round(d.left - b.right));
+          }
+          if (row) {
+            lines.push("trongDongNguoiGui=" +
+                       (b.top >= row.top - 2 && b.bottom <= row.bottom + 2));
+          }
         }
         try {
           const tabmail = win.document.getElementById("tabmail");

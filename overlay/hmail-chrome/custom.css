@@ -1537,9 +1537,9 @@ select.hmail-ai-field,
     align-items: center;
     gap: 5px;
     flex: 0 0 auto;
-    /* Hàng người gửi xếp row-reverse: huy hiệu là con đầu tiên nên nằm
-       ngoài cùng bên phải; chỉ cần chừa khoảng cách với hàng nút. */
-    margin: 0 0 0 8px !important;
+    /* Đứng cạnh giờ gửi: đẩy sát về phía giờ, chừa một khoảng nhỏ. */
+    margin: 0 8px 0 auto !important;
+    align-self: center;
     padding: 2px 9px !important;
     min-height: 0 !important;
     border: 1px solid color-mix(in srgb, CanvasText 14%, transparent) !important;
