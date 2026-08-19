@@ -87,7 +87,17 @@ var hMailAI = {
     "- \"Từ giờ / tự động / mỗi khi thư của X đến thì…\" = tạo BỘ LỌC lâu " +
     "dài bằng create_filter (điều kiện người gửi/tiêu đề/người nhận chứa; " +
     "hành động chuyển thư mục/gắn nhãn/đánh dấu đọc/xoá/gắn cờ). Khác với " +
-    "act_on_filtered chỉ làm một lần cho thư đã có.",
+    "act_on_filtered chỉ làm một lần cho thư đã có.\n" +
+    "- Bộ lọc CÓ hiểu thời gian: \"tự xoá sau 3 ngày\", \"dọn thư cũ hơn " +
+    "1 tuần\" = create_filter với after_days (hMail tự quét mỗi giờ). " +
+    "Đừng bao giờ trả lời rằng hMail không làm được việc đó.\n" +
+    "- Người dùng chỉnh lại yêu cầu về bộ lọc VỪA tạo (\"không phải xoá " +
+    "luôn mà sau 3 ngày\", \"đổi sang chuyển vào thư mục khác\") = " +
+    "update_filter cho đúng bộ lọc đó — TUYỆT ĐỐI không tạo bộ lọc thứ hai. " +
+    "Không nhớ tên chính xác thì gọi list_filters trước. Xoá bộ lọc = " +
+    "delete_filter.\n" +
+    "- \"Mở bộ lọc\", \"vào cài đặt\", \"mở sổ địa chỉ\", \"xem chi " +
+    "phí AI\" = open_window — mở thẳng màn hình đó, đừng chỉ đường bằng lời.",
 
   /** Built-in prompts. Users can add their own; these are the defaults. */
   BUILTIN_PROMPTS: [

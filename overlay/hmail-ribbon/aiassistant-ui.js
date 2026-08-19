@@ -79,6 +79,9 @@ Object.assign(hMailAI, {
     try {
       this.migrateConfig();
       this.watchMessageDisplay(win);
+      // Bộ lọc "sau N ngày" cần người quét lại hộp thư — Thunderbird chỉ
+      // chạy bộ lọc lúc thư đến (thư mới 0 ngày tuổi, không bao giờ khớp).
+      this.startAgedSweep(win);
       // The sidebar records whether it was open (hmail.sidebar.open, kept
       // by show/showNode/hide), but nothing ever read it back — so the
       // panel had to be reopened by hand after every restart.

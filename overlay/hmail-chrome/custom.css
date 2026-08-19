@@ -1175,6 +1175,21 @@ tr[data-properties~="unread"] .subject {
     color: var(--hmail-ai-ink) !important;
 }
 
+/* Các tab dùng lại nút .hmail-ai-btn (Theo dõi thư, Nhập dữ liệu…) nằm
+   NGOÀI .hmail-ai nên không thấy bảng màu: background-color của nút trỏ vào
+   biến chưa định nghĩa → nút trong suốt, chữ trắng trên nền trắng. Chỉ khai
+   báo BIẾN cho các gốc đó, không đụng nền/cỡ chữ của cả tab. */
+.hmail-import,
+.hmail-track {
+    --hmail-ai-accent: var(--hmail-accent, #0F6CBD);
+    --hmail-ai-surface: Canvas;
+    --hmail-ai-ink: CanvasText;
+    --hmail-ai-line: color-mix(in srgb, var(--hmail-ai-ink) 12%, transparent);
+    --hmail-ai-sunk: color-mix(in srgb, var(--hmail-ai-ink) 4%, var(--hmail-ai-surface));
+    --hmail-ai-lift: 0 1px 2px color-mix(in srgb, var(--hmail-ai-ink) 10%, transparent),
+                     0 4px 12px color-mix(in srgb, var(--hmail-ai-ink) 7%, transparent);
+}
+
 /* Panel background independent of the OS theme, when the user asks for it. */
 .hmail-ai.theme-light {
     --hmail-ai-surface: #ffffff;
