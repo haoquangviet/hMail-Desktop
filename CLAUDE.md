@@ -85,7 +85,14 @@
 - Version hiển thị: `hmail.version` (pref stamp lúc build) + `distribution.ini`
   cũng được stamp; màn Giới thiệu ghi bản hMail kèm "(Thunderbird X)" qua patch
   `aboutDialog.js` trong omni_tool.py.
-- Cài trên Mac qua SSH: coi chừng **đụng tên volume** — DMG cũ còn mount thì bản
+- **Cài trên Mac = một lệnh: `bash build/install-mac.sh <file.dmg>`** — thoát
+  app tử tế (AppleScript quit, hết cách thì SIGTERM; KHÔNG `kill -9`), chờ hết
+  tiến trình rồi mới `ditto`, mount vào mountpoint riêng nên không đụng tên
+  volume, in phiên bản + `spctl` rồi mở lại. Đè lên `/Applications` trong khi
+  bản cũ đang chạy là lý do macOS báo **"Một bản sao của hMail Desktop đã được
+  mở"**: bundle bị thay, macOS coi là app khác, bản mới đụng khoá hồ sơ còn
+  tiến trình cũ nằm lại nhiều ngày (đã thấy máy tích 4 tiến trình).
+- Cài trên Mac qua SSH bằng tay: coi chừng **đụng tên volume** — DMG cũ còn mount thì bản
   mới thành `/Volumes/hMail Desktop 1`; luôn kiểm tra `hdiutil info` trước khi
   `ditto`, và verify `hmail.js` version sau khi chép.
 - Phát hành: điền SHA-256 vào release notes (placeholder `@WIN_SHA@`/`@MAC_SHA@`),
