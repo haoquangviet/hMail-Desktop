@@ -1529,6 +1529,36 @@ select.hmail-ai-field,
     text-align: center;
 }
 
+/* Huy hiệu trạng thái ở cuối dòng người gửi (ngay trên giờ nhận). */
+.hmail-track-badge {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    display: inline-flex !important;
+    align-items: center;
+    gap: 5px;
+    flex: 0 0 auto;
+    margin: 0 0 0 auto !important;
+    padding: 2px 9px !important;
+    min-height: 0 !important;
+    border: 1px solid color-mix(in srgb, CanvasText 14%, transparent) !important;
+    border-radius: 999px !important;
+    background-color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 8%, Canvas) !important;
+    color: inherit !important;
+    font: inherit !important;
+    font-size: 0.85em !important;
+    white-space: nowrap;
+    cursor: pointer !important;
+}
+
+.hmail-track-badge:hover {
+    background-color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 16%, Canvas) !important;
+}
+
+.hmail-track-badge img {
+    width: 15px;
+    height: 15px;
+}
+
 /* Thẻ chi tiết Trạng thái thư trong panel hMail AI. */
 .hmail-track-detail-state {
     font-weight: 600;

@@ -649,7 +649,7 @@ var hMailTrack = {
                  tone: "warn" };
       }
       if (info.header && mine) {
-        return { kind: "sent", icon: "sent",
+        return { kind: "sent", icon: "sent", short: "Có theo dõi",
                  text: "Có theo dõi, nhưng máy này không giữ mã nên không " +
                        "tra được trạng thái",
                  tone: "unknown" };
@@ -668,8 +668,11 @@ var hMailTrack = {
     this.rememberState(ref, opened ? "opened"
                             : delivered ? "delivered" : "sent",
                        Number(msg.opens || 0));
+    const opens = Number(msg.opens || 0);
     return { kind: "sent", ref, status,
              icon: opened ? "opened" : delivered ? "delivered" : "sent",
+             short: opened ? (opens > 1 ? `Đã mở ${opens} lần` : "Đã mở")
+                    : delivered ? "Đã tới nơi" : "Đã gửi đi",
              text: seen.text, tone: seen.tone };
   },
 
@@ -809,22 +812,31 @@ var hMailTrack = {
       if (doc.getElementById("hmail-track-badge")) {
         return;
       }
-      const bar = doc.getElementById("header-view-toolbar");
-      if (!bar) {
+      // Chỗ của nó là cuối dòng NGƯỜI GỬI, tức ngay phía trên giờ nhận —
+      // nhìn một cái là thấy "thư này đã tới/đã mở" mà không chiếm chỗ của
+      // hàng nút Trả lời / Chuyển tiếp.
+      const row = doc.getElementById("expandedfromRow") ||
+                  doc.getElementById("header-view-toolbar");
+      if (!row) {
         return;
       }
-      const badge = doc.createXULElement("toolbarbutton");
+      const badge = doc.createElement("button");
       badge.id = "hmail-track-badge";
-      badge.className = "message-header-view-button toolbarbutton-1";
-      badge.setAttribute("image", this.icon(shown.icon || "sent"));
-      badge.setAttribute("label", shown.text);
+      badge.className = "hmail-track-badge";
+      badge.type = "button";
+      const img = doc.createElement("img");
+      img.src = this.icon(shown.icon || "sent");
+      img.alt = "";
+      badge.append(img,
+                   this.el(doc, "span", "hmail-track-badge-text",
+                           shown.short || shown.text));
       const lines = this.timelineLines(shown.status, 8);
-      badge.setAttribute("tooltiptext",
+      badge.title =
         `${this.ICON_TITLES[shown.icon] || ""}\n${shown.text}` +
         (lines.length ? "\n\n" + lines.join("\n") : "") +
-        "\n\nBấm để xem chi tiết trong hMail AI");
-      badge.addEventListener("command", () => this.showDetail(win, shown));
-      bar.appendChild(badge);
+        "\n\nBấm để xem chi tiết trong hMail AI";
+      badge.addEventListener("click", () => this.showDetail(win, shown));
+      row.appendChild(badge);
     } catch (e) {}
   },
 
