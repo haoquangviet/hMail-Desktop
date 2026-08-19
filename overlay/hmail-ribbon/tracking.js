@@ -512,21 +512,24 @@ var hMailTrack = {
     try {
       const raw = await hMailInsight.raw(hdr, 64 * 1024);
       const headers = hMailInsight.headers(raw);
-      out.header = hMailInsight.first(headers, "x-hmail-track").trim();
+      out.track = hMailInsight.first(headers, "x-hmail-track").trim();
       out.localId = hMailInsight.first(headers, "x-hmail-internal-id").trim();
-      if (out.localId) {
-        out.header = out.header || out.localId;
-      }
+      // "header" = tín hiệu thư này có theo dõi (cho các chỗ chỉ cần
+      // biết có/không). TUYỆT ĐỐI không dùng nó để nhận dạng ref: id nội
+      // bộ cũng 16+ ký tự nên từng bị nhầm là mã theo dõi, gọi
+      // /t/ref/<id nội bộ> ăn HTTP 400 và huy hiệu kẹt ở "Đã gửi".
+      out.header = out.track || out.localId;
     } catch (e) {
       return out;
     }
     if (!out.header) {
       return out;
     }
-    if (/^[A-Za-z0-9_-]{16,64}$/.test(out.header)) {
-      out.ref = out.header;
-    } else {
-      out.applied = out.header;
+    // Ref chỉ được lấy từ ĐÚNG header X-HMail-Track.
+    if (/^[A-Za-z0-9_-]{16,64}$/.test(out.track)) {
+      out.ref = out.track;
+    } else if (out.track) {
+      out.applied = out.track;
     }
     if (!out.ref && out.localId) {
       const list = await this.load();
@@ -1668,4 +1671,87 @@ var hMailTrack = {
       report("err: " + (e.message || e) + " | " + lines.join(" | "));
     }
   }, 12000);
+})();
+
+// ---------------------------------------------------------------------------
+// Chẩn đoán một thư cụ thể (pref hmail.debug.stucktest = "run:<mẩu tiêu đề>"):
+// tìm thư trong Hộp thư đến khớp tiêu đề, chạy từng chặng của statusFor và ghi
+// lại mọi giá trị trung gian — dùng khi huy hiệu hiện sai mà không rõ chặng nào.
+(function hMailStuckProbe() {
+  let mode = "";
+  try {
+    mode = Services.prefs.getCharPref("hmail.debug.stucktest", "");
+  } catch (e) {}
+  if (!mode.startsWith("run:")) {
+    return;
+  }
+  const want = mode.slice(4).toLowerCase();
+  Services.prefs.setCharPref("hmail.debug.stucktest", "running");
+  const report = text => {
+    try {
+      Services.prefs.setCharPref("hmail.debug.stucktest",
+                                 String(text).slice(0, 900));
+      Services.prefs.savePrefFile(null);
+    } catch (e) {}
+  };
+  setTimeout(async () => {
+    const out = { want };
+    try {
+      let hdr = null;
+      for (const acc of MailServices.accounts.accounts) {
+        const inbox = acc.incomingServer?.rootFolder
+          ?.getFolderWithFlags(Ci.nsMsgFolderFlags.Inbox);
+        if (!inbox) {
+          continue;
+        }
+        for (const h of inbox.messages) {
+          if (String(h.mime2DecodedSubject || "").toLowerCase()
+              .includes(want)) {
+            hdr = h;
+          }
+        }
+        if (hdr) {
+          break;
+        }
+      }
+      if (!hdr) {
+        report("err: khong thay thu");
+        return;
+      }
+      out.folder = hdr.folder.URI;
+      out.serverHost = hdr.folder.server?.hostName;
+      const info = await hMailTrack.trackInfo(hdr);
+      out.header = info.header;
+      out.localId = info.localId || "";
+      out.ref = info.ref || "";
+      out.mine = !!info.mine;
+      out.isSent = hMailTrack.isSent(hdr);
+      await hMailTrack.load();
+      const known = hMailTrack._cache?.find(e => e.ref === info.ref);
+      out.entryBase = known?.base || "(khong entry)";
+      const base = known?.base || hMailTrack.baseFor(hdr.folder?.server);
+      out.baseDung = base;
+      // fetch tay để thấy mã HTTP thật
+      if (info.ref && base) {
+        try {
+          const res = await fetch(`${base}/t/ref/${info.ref}`,
+                                  { headers: { Accept: "application/json" } });
+          out.http = res.status;
+          const data = await res.json().catch(() => null);
+          out.opened = data?.opened;
+          out.opens = data?.message?.opens;
+          out.dstat = data?.delivery_status;
+        } catch (e) {
+          out.fetchErr = String(e.message || e).slice(0, 120);
+        }
+      }
+      const shown = await hMailTrack.statusFor(null, hdr);
+      out.shown = shown ? { icon: shown.icon, short: shown.short,
+                            retry: !!shown.retry, tone: shown.tone } : null;
+      report(JSON.stringify(out));
+    } catch (e) {
+      out.err = String(e.message || e);
+      report(JSON.stringify(out));
+    }
+  }, 14000);
 })();
