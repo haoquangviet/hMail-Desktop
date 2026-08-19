@@ -707,7 +707,13 @@ var hMailTrack = {
         }
         const hdr = hMailInsight.selected(win);
         const key = hdr ? `${hdr.folder?.URI}#${hdr.messageKey}` : null;
-        const due = shown?.retry && Date.now() >= (shown.retryAt || 0);
+        // Huy hiệu không được đông cứng theo lần vẽ đầu: vẽ lúc chưa ai
+        // mở rồi người nhận mở SAU đó thì phải tự đổi — hỏi lại thư đang
+        // xem mỗi 60 giây (một GET nhẹ), hỏng mạng thì 10 giây thử lại.
+        const now = Date.now();
+        const due = shown &&
+          (shown.retry ? now >= (shown.retryAt || 0)
+                       : shown.kind === "sent" && now >= (shown.refreshAt || 0));
         if (key !== last || due) {
           last = key;
           shown = null;
@@ -716,8 +722,12 @@ var hMailTrack = {
           doc?.getElementById("hmail-track-badge")?.remove();
           if (hdr) {
             shown = await this.statusFor(win, hdr);
-            if (shown?.retry) {
-              shown.retryAt = Date.now() + 10 * 1000;
+            if (shown) {
+              if (shown.retry) {
+                shown.retryAt = Date.now() + 10 * 1000;
+              } else {
+                shown.refreshAt = Date.now() + 60 * 1000;
+              }
             }
             // Người dùng có thể đã chuyển thư khác trong lúc chờ mạng.
             if (last !== key) {
