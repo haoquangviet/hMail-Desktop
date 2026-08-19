@@ -303,7 +303,7 @@ Object.assign(hMailAI, {
             description: "filters = Bộ lọc thư; server_filters = lọc phía " +
                          "máy chủ; account_settings = Cài đặt tài khoản; " +
                          "settings = Tùy chọn; ai_settings = Cài đặt trợ " +
-                         "lý; ai_cost = Chi phí AI; tracking = Theo dõi thư; " +
+                         "lý; ai_cost = Chi phí AI; tracking = Trạng thái thư; " +
                          "quarantine = Thư bị giữ",
           },
         },
@@ -719,7 +719,7 @@ Object.assign(hMailAI, {
       tasks: ["Việc cần làm", () => space("tasksButton")],
       ai_settings: ["Cài đặt trợ lý", () => this.showSettings(win)],
       ai_cost: ["Chi phí AI", () => win.hMailAICost?.openTab(win)],
-      tracking: ["Theo dõi thư", () => win.hMailTrack?.openTab(win)],
+      tracking: ["Trạng thái thư", () => win.hMailTrack?.openTab(win)],
       quarantine: ["Thư bị giữ", () => win.hMailSpam?.openTab(win)],
       local_ai: ["AI trên máy", () => win.hMailLocalAIUI?.openTab(win)],
       automation: ["Tự động hoá AI", () => win.hMailFlowUI?.openTab(win)],

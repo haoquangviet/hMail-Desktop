@@ -10,7 +10,7 @@
  *   - Mã theo dõi là chuỗi ngẫu nhiên an toàn (crypto.randomUUID, 32 ký
  *     tự ≈128 bit): ai không có mã thì không tra được thư của người khác,
  *     mà máy chủ cũng không cần biết ai đang hỏi.
- *   - Chỉ bật khi người dùng chọn — nút "Theo dõi thư" trên ribbon soạn
+ *   - Chỉ bật khi người dùng chọn — nút "Trạng thái thư" trên ribbon soạn
  *     thư, tắt là thư đi như thường, không header, không dấu vết.
  *   - Nói thật về cách máy chủ đo: khi thư mang mã theo dõi, máy chủ chèn
  *     ảnh đếm lượt mở và viết lại liên kết để đếm lượt bấm (payload trả về
@@ -53,6 +53,55 @@ var hMailTrack = {
       await IOUtils.writeJSON(this.file(), this._cache);
     } catch (e) {
       Cu.reportError("hMail tracking: không ghi được nhật ký: " + e);
+    }
+  },
+
+  /**
+   * Danh sách địa chỉ email trong một trường người nhận, đã giải mã
+   * encoded-word. Tên hiển thị tiếng Việt đi qua SMTP thành
+   * "=?UTF-8?B?…?= <ai@do.com>" — lưu nguyên chuỗi đó vào nhật ký thì bảng
+   * theo dõi hiện ra một dãy ký tự vô nghĩa, và dò lại mã theo người nhận
+   * cũng trượt.
+   */
+  emailsOf(value) {
+    try {
+      return MailServices.headerParser
+        .parseEncodedHeader(String(value || ""), "UTF-8")
+        .map(a => String(a.email || "").toLowerCase())
+        .filter(Boolean);
+    } catch (e) {
+      return [];
+    }
+  },
+
+  /**
+   * Chữ trong header đã giải mã: tiêu đề tiếng Việt đi qua SMTP thành
+   * "=?UTF-8?B?S2nhu4NtIHRyYSB0aMawIA==?=", lưu và hiện nguyên như vậy thì
+   * bảng theo dõi toàn ký tự lạ.
+   */
+  decodeText(value) {
+    const text = String(value || "");
+    if (!/=\?/.test(text)) {
+      return text;
+    }
+    try {
+      return MailServices.mimeConverter.decodeMimeHeader(
+        text, "UTF-8", false, true) || text;
+    } catch (e) {
+      return text;
+    }
+  },
+
+  /** Chuỗi người nhận đọc được cho người dùng ("Quyết Trần <a@b.com>"). */
+  prettyAddresses(value) {
+    try {
+      const list = MailServices.headerParser
+        .parseEncodedHeader(String(value || ""), "UTF-8")
+        .map(a => a.name ? `${a.name} <${a.email}>` : a.email)
+        .filter(Boolean);
+      return list.length ? list.join(", ") : String(value || "");
+    } catch (e) {
+      return String(value || "");
     }
   },
 
@@ -156,7 +205,7 @@ var hMailTrack = {
         button.title = win._hmailTrackOn
           ? "Đang theo dõi: máy chủ ghi đường đi của thư, đếm lượt mở và " +
             "lượt bấm liên kết (có chèn ảnh đếm — người nhận bị đo)"
-          : "Theo dõi thư: biết thư đã tới chưa, đã mở chưa (máy chủ sẽ " +
+          : "Trạng thái thư: biết thư đã tới chưa, đã mở chưa (máy chủ sẽ " +
             "chèn ảnh đếm lượt mở vào thư)";
       }
     } catch (e) {}
@@ -195,12 +244,178 @@ var hMailTrack = {
     this.remember({
       ref,
       at: Date.now(),
-      subject: String(fields.subject || ""),
-      to: String(fields.to || ""),
-      cc: String(fields.cc || ""),
+      subject: this.decodeText(fields.subject),
+      to: this.prettyAddresses(fields.to),
+      toEmails: this.emailsOf(fields.to),
+      cc: this.prettyAddresses(fields.cc),
       from: String(who?.identity?.email || ""),
       base,
     }).catch(() => {});
+  },
+
+  // --------------------------------------------------- dấu tích trạng thái
+
+  /**
+   * Ba mức, đọc như ứng dụng nhắn tin: một tích = máy chủ đã nhận thư để
+   * gửi đi; hai tích = đã giao tới máy chủ người nhận; hai tích xanh = người
+   * nhận đã mở. SVG nhúng thẳng (data:) vì cột của Thunderbird cần một URL
+   * ảnh, còn file trong hồ sơ thì about:3pane không đọc được.
+   */
+  icon(kind) {
+    const grey = "#8a8a8f";
+    const blue = "#0F6CBD";
+    const one = c => `<path d="M3 8.6l3.2 3.2L13 5" fill="none" stroke="${c}" ` +
+                     `stroke-width="2" stroke-linecap="round" ` +
+                     `stroke-linejoin="round"/>`;
+    const two = c => one(c) +
+      `<path d="M7.8 11.8L9 13l4.8-6.4" fill="none" stroke="${c}" ` +
+      `stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    const body = kind === "opened" ? two(blue)
+      : kind === "delivered" ? two(grey) : one(grey);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" ` +
+                `height="16" viewBox="0 0 16 16">${body}</svg>`;
+    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  },
+
+  ICON_TITLES: {
+    sent: "Đã gửi đi, chờ máy chủ người nhận",
+    delivered: "Đã giao tới hộp thư người nhận",
+    opened: "Người nhận đã mở thư",
+  },
+
+  /**
+   * Trạng thái của một thư ĐỒNG BỘ — cột danh sách hỏi hàng nghìn dòng nên
+   * không được đọc thư hay gọi mạng: chỉ tra nhật ký đã nạp sẵn trong bộ
+   * nhớ, đối chiếu tiêu đề + người nhận + giờ gửi.
+   */
+  entryFor(hdr) {
+    const list = this._cache;
+    if (!list || !list.length || !hdr) {
+      return null;
+    }
+    try {
+      const id = String(hdr.messageId || "");
+      if (id) {
+        const byId = list.find(e => e.messageId === id);
+        if (byId) {
+          return byId;
+        }
+      }
+      const subject = this.decodeText(hdr.mime2DecodedSubject || hdr.subject)
+        .trim().toLowerCase();
+      if (!subject) {
+        return null;
+      }
+      const at = (hdr.dateInSeconds || 0) * 1000;
+      let best = null;
+      let bestGap = Infinity;
+      for (const entry of list) {
+        if (this.decodeText(entry.subject).trim().toLowerCase() !== subject) {
+          continue;
+        }
+        const gap = Math.abs((entry.at || 0) - at);
+        if (gap < bestGap) {
+          bestGap = gap;
+          best = entry;
+        }
+      }
+      return best && bestGap < 2 * 24 * 3600 * 1000 ? best : null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  /** Mức tích cho một thư, "" nếu thư không được theo dõi. */
+  iconFor(hdr) {
+    const entry = this.entryFor(hdr);
+    return entry ? (entry.state || "sent") : "";
+  },
+
+  textFor(hdr) {
+    const entry = this.entryFor(hdr);
+    return entry ? (this.ICON_TITLES[entry.state || "sent"] || "") : "";
+  },
+
+  COLUMN_ID: "hmailTrackCol",
+
+  /** Cột "Theo dõi" trong danh sách thư (about:3pane của cửa sổ này). */
+  addColumn(win) {
+    try {
+      const { ThreadPaneColumns } = ChromeUtils.importESModule(
+        "chrome://messenger/content/ThreadPaneColumns.mjs");
+      this._columns = ThreadPaneColumns;
+      if (ThreadPaneColumns.getCustomColumns()
+            .some(c => c.id === this.COLUMN_ID)) {
+        return;
+      }
+      ThreadPaneColumns.addCustomColumn(this.COLUMN_ID, {
+        name: "Trạng thái",
+        icon: true,
+        iconHeaderUrl: this.icon("delivered"),
+        iconCellDefinitions: [
+          { id: "sent", url: this.icon("sent"),
+            title: this.ICON_TITLES.sent, alt: "Đã gửi" },
+          { id: "delivered", url: this.icon("delivered"),
+            title: this.ICON_TITLES.delivered, alt: "Đã giao" },
+          { id: "opened", url: this.icon("opened"),
+            title: this.ICON_TITLES.opened, alt: "Đã mở" },
+        ],
+        iconCallback: hdr => this.iconFor(hdr),
+        textCallback: hdr => this.textFor(hdr),
+      });
+    } catch (e) {
+      Cu.reportError("hMail tracking column failed: " + e);
+    }
+  },
+
+  refreshColumn() {
+    try {
+      this._columns?.refreshCustomColumn(this.COLUMN_ID);
+    } catch (e) {}
+  },
+
+  /**
+   * Hỏi máy chủ trạng thái các thư đang theo dõi và ghi vào nhật ký, để cột
+   * danh sách (chạy đồng bộ) có cái mà hiện. Chỉ hỏi thư trong 14 ngày và
+   * chưa biết là đã mở — thư đã mở thì không đổi nữa.
+   */
+  async refreshStates(win, limit = 12) {
+    const list = await this.load();
+    const now = Date.now();
+    const due = list
+      .filter(e => e.ref && (now - (e.at || 0)) < 14 * 24 * 3600 * 1000)
+      .filter(e => e.state !== "opened")
+      .filter(e => (now - (e.checkedAt || 0)) > 4 * 60 * 1000)
+      .slice(-limit);
+    if (!due.length) {
+      return 0;
+    }
+    let changed = 0;
+    for (const entry of due) {
+      try {
+        const status = await this.fetchStatus(entry);
+        entry.checkedAt = Date.now();
+        if (!status || status.unknown) {
+          continue;
+        }
+        const msg = status.message || {};
+        const opened = status.opened || Number(msg.opens || 0) > 0;
+        const delivered = /deliver|relay|sent/i
+          .test(String(status.delivery_status || "")) ||
+          (status.delivery || []).length > 0;
+        const state = opened ? "opened" : delivered ? "delivered" : "sent";
+        if (state !== entry.state) {
+          changed++;
+        }
+        entry.state = state;
+        entry.opens = Number(msg.opens || 0);
+      } catch (e) {}
+    }
+    await this.save(list);
+    if (changed) {
+      this.refreshColumn();
+    }
+    return changed;
   },
 
   // ------------------------------------- thanh trạng thái trên thư đã gửi
@@ -225,6 +440,11 @@ var hMailTrack = {
       const raw = await hMailInsight.raw(hdr, 64 * 1024);
       const headers = hMailInsight.headers(raw);
       out.header = hMailInsight.first(headers, "x-hmail-track").trim();
+      const own = hMailInsight.first(headers, "x-hmail-ref").trim();
+      if (own) {
+        out.header = out.header || own;
+        out.own = own;
+      }
     } catch (e) {
       return out;
     }
@@ -235,6 +455,9 @@ var hMailTrack = {
       out.ref = out.header;
     } else {
       out.applied = out.header;
+    }
+    if (!out.ref && out.own && /^[A-Za-z0-9_-]{16,64}$/.test(out.own)) {
+      out.ref = out.own;
     }
     if (!out.ref) {
       out.ref = await this.refFromLog(hdr);
@@ -253,7 +476,16 @@ var hMailTrack = {
    */
   async refFromLog(hdr) {
     try {
-      const subject = String(hdr.mime2DecodedSubject || hdr.subject || "")
+      // Message-ID là khoá chắc nhất: đã gặp thư này một lần thì lần sau
+      // khỏi đoán theo tiêu đề nữa.
+      const id = String(hdr.messageId || "");
+      if (id) {
+        const byId = (await this.load()).find(e => e.messageId === id);
+        if (byId) {
+          return byId.ref;
+        }
+      }
+      const subject = this.decodeText(hdr.mime2DecodedSubject || hdr.subject)
         .trim().toLowerCase();
       const rcpt = String(hdr.recipients || "").toLowerCase();
       const at = (hdr.dateInSeconds || 0) * 1000;
@@ -261,12 +493,15 @@ var hMailTrack = {
       let best = null;
       let bestGap = Infinity;
       for (const entry of entries) {
-        const entrySubject = String(entry.subject || "").trim().toLowerCase();
+        const entrySubject = this.decodeText(entry.subject).trim().toLowerCase();
         if (entrySubject !== subject) {
           continue;
         }
-        const to = String(entry.to || "").toLowerCase();
-        if (to && rcpt && !to.split(/[,;]\s*/).some(a => a && rcpt.includes(a))) {
+        const want = (entry.toEmails && entry.toEmails.length)
+          ? entry.toEmails : this.emailsOf(entry.to);
+        const have = this.emailsOf(rcpt);
+        if (want.length && have.length &&
+            !want.some(a => have.includes(a))) {
           continue;
         }
         const gap = Math.abs((entry.at || 0) - at);
@@ -276,19 +511,38 @@ var hMailTrack = {
         }
       }
       // Cùng tiêu đề mà cách nhau quá 2 ngày thì coi như thư khác.
-      return best && bestGap < 2 * 24 * 3600 * 1000 ? best.ref : "";
+      if (!best || bestGap >= 2 * 24 * 3600 * 1000) {
+        return "";
+      }
+      // Ghi Message-ID lại để lần sau tra thẳng.
+      if (id && !best.messageId) {
+        best.messageId = id;
+        this.save(await this.load()).catch(() => {});
+      }
+      return best.ref;
     } catch (e) {
       return "";
     }
   },
 
-  /** Watcher cho cửa sổ 3-pane: thư nào có mã theo dõi thì hiện thanh. */
+  /**
+   * Watcher cho cửa sổ 3-pane.
+   *
+   * Header của about:message được DỰNG LẠI mỗi lần nạp thư, nên vẽ một lần
+   * là mất: mỗi nhịp phải kiểm tra huy hiệu còn đó không và gắn lại (cùng
+   * cách hMailAI.addHeaderButton làm). Trạng thái đã hỏi được thì nhớ theo
+   * thư, không hỏi lại máy chủ mỗi nhịp.
+   */
   initReader(win) {
     if (win._hmailTrackReader) {
       return;
     }
     win._hmailTrackReader = true;
+    this.addColumn(win);
+    // Nạp nhật ký để cột danh sách (chạy đồng bộ) có dữ liệu ngay.
+    this.load().then(() => this.refreshColumn()).catch(() => {});
     let last = null;
+    let shown = null;
     win.setInterval(async () => {
       try {
         if (win.performance.now() < 8000 ||
@@ -297,50 +551,29 @@ var hMailTrack = {
         }
         const hdr = hMailInsight.selected(win);
         const key = hdr ? `${hdr.folder?.URI}#${hdr.messageKey}` : null;
-        if (key === last) {
-          return;
+        if (key !== last) {
+          last = key;
+          shown = null;
+          const doc = hMailInsight.messageDocument(win);
+          doc?.getElementById("hmail-track-bar")?.remove();
+          doc?.getElementById("hmail-track-badge")?.remove();
+          if (hdr) {
+            shown = await this.statusFor(win, hdr);
+            // Người dùng có thể đã chuyển thư khác trong lúc chờ mạng.
+            if (last !== key) {
+              return;
+            }
+          }
         }
-        last = key;
-        const doc = hMailInsight.messageDocument(win);
-        doc?.getElementById("hmail-track-bar")?.remove();
-        if (!hdr) {
-          return;
-        }
-        const info = await this.trackInfo(hdr);
-        if (!info.header) {
-          return;
-        }
-        // Thư NHẬN được cũng mang header này — mã (nếu còn) thuộc máy chủ
-        // của người gửi, hỏi máy chủ mình chỉ ra "không biết mã". Với thư
-        // nhận chỉ báo cho người dùng biết mình đang bị đo.
-        if (!this.isSent(hdr)) {
-          this.paintBar(win, info.ref, {
-            text: "Người gửi có gắn mã theo dõi — họ biết được bạn đã mở " +
-                  "thư" + (/click/i.test(info.applied || info.header)
-                            ? " và bấm liên kết nào." : "."),
-            tone: "warn",
-          });
-          return;
-        }
-        if (!info.ref) {
-          this.paintBar(win, "", {
-            text: "Đã gửi kèm theo dõi, nhưng máy này không còn giữ mã nên " +
-                  "không tra được trạng thái (nhật ký đã xoá hoặc thư gửi " +
-                  "từ máy khác).",
-            tone: "unknown",
-          });
-          return;
-        }
-        const ref = info.ref;
-        const base = this.baseFor(hdr.folder?.server);
-        this.paintBar(win, ref, { text: "Đang hỏi máy chủ…", tone: "wait" });
-        const status = await this.fetchStatus({ ref, base });
-        // Người dùng có thể đã chuyển thư khác trong lúc chờ mạng.
-        if (last === key) {
-          this.paintBar(win, ref, this.describe(status), status);
+        if (shown) {
+          this.paintStatus(win, shown);
         }
       } catch (e) {}
     }, 1500);
+    // Trạng thái cho cột danh sách: hỏi máy chủ định kỳ, thưa thôi.
+    win.setTimeout(() => this.refreshStates(win).catch(() => {}), 20000);
+    win.setInterval(() => this.refreshStates(win).catch(() => {}),
+                    5 * 60 * 1000);
   },
 
   /** Thư nằm trong hộp Đã gửi (hoặc do chính mình gửi) chứ? */
@@ -362,6 +595,122 @@ var hMailTrack = {
     } catch (e) {
       return false;
     }
+  },
+
+  /** Thư này được theo dõi thế nào? Trả về mô tả để vẽ, hoặc null. */
+  async statusFor(win, hdr) {
+    const info = await this.trackInfo(hdr);
+    if (!info.header) {
+      return null;
+    }
+    if (!this.isSent(hdr)) {
+      return { kind: "incoming",
+               text: "Người gửi có gắn mã theo dõi — họ biết được bạn đã mở " +
+                     "thư" + (/click/i.test(info.applied || info.header)
+                              ? " và bấm liên kết nào." : "."),
+               tone: "warn" };
+    }
+    if (!info.ref) {
+      return { kind: "sent", icon: "sent",
+               text: "Có theo dõi, nhưng máy này không giữ mã nên không tra " +
+                     "được trạng thái",
+               tone: "unknown" };
+    }
+    const base = this.baseFor(hdr.folder?.server);
+    await this.adopt(hdr, info.ref, base);
+    const status = await this.fetchStatus({ ref: info.ref, base }, true);
+    const info2 = this.describe(status);
+    const msg = status?.message || {};
+    const opened = status?.opened || Number(msg.opens || 0) > 0;
+    const delivered = (status?.delivery || []).length > 0 ||
+      /deliver|relay|sent/i.test(String(status?.delivery_status || ""));
+    // Nhật ký cũng cập nhật theo, để cột danh sách khớp với thư đang mở.
+    this.rememberState(info.ref, opened ? "opened"
+                                : delivered ? "delivered" : "sent",
+                       Number(msg.opens || 0));
+    return { kind: "sent", ref: info.ref, status,
+             icon: opened ? "opened" : delivered ? "delivered" : "sent",
+             text: info2.text, tone: info2.tone };
+  },
+
+  /**
+   * Thư mang mã theo dõi nhưng chưa có trong nhật ký (gửi từ webmail, điện
+   * thoại, hay máy khác) thì nhận vào nhật ký khi người dùng mở nó — từ đó
+   * danh sách thư có dấu tích mà không phải đọc lại header.
+   */
+  async adopt(hdr, ref, base) {
+    try {
+      const list = await this.load();
+      const id = String(hdr.messageId || "");
+      const found = list.find(e => e.ref === ref ||
+                                   (id && e.messageId === id));
+      if (found) {
+        if (id && !found.messageId) {
+          found.messageId = id;
+          await this.save(list);
+        }
+        return;
+      }
+      list.push({
+        ref, base, messageId: id,
+        at: (hdr.dateInSeconds || 0) * 1000 || Date.now(),
+        subject: this.decodeText(hdr.mime2DecodedSubject || hdr.subject),
+        to: this.prettyAddresses(hdr.mime2DecodedRecipients || ""),
+        toEmails: this.emailsOf(hdr.mime2DecodedRecipients || ""),
+        cc: "",
+        from: this.prettyAddresses(hdr.mime2DecodedAuthor || ""),
+        adopted: true,
+      });
+      await this.save(list);
+      this.refreshColumn();
+    } catch (e) {}
+  },
+
+  /** Ghi mức trạng thái vào nhật ký (cột danh sách đọc từ đây). */
+  rememberState(ref, state, opens) {
+    this.load().then(list => {
+      const entry = list.find(e => e.ref === ref);
+      if (!entry || (entry.state === state && entry.opens === opens)) {
+        return;
+      }
+      entry.state = state;
+      entry.opens = opens;
+      entry.checkedAt = Date.now();
+      this.save(list).then(() => this.refreshColumn());
+    }).catch(() => {});
+  },
+
+  /** Vẽ (hoặc gắn lại) chỉ báo trạng thái cho thư đang mở. */
+  paintStatus(win, shown) {
+    try {
+      const doc = hMailInsight.messageDocument(win);
+      if (!doc) {
+        return;
+      }
+      if (shown.kind === "incoming") {
+        if (!doc.getElementById("hmail-track-bar")) {
+          this.paintBar(win, "", shown);
+        }
+        return;
+      }
+      if (doc.getElementById("hmail-track-badge")) {
+        return;
+      }
+      const bar = doc.getElementById("header-view-toolbar");
+      if (!bar) {
+        return;
+      }
+      const badge = doc.createXULElement("toolbarbutton");
+      badge.id = "hmail-track-badge";
+      badge.className = "message-header-view-button toolbarbutton-1";
+      badge.setAttribute("image", this.icon(shown.icon || "sent"));
+      badge.setAttribute("label", shown.text);
+      badge.setAttribute("tooltiptext",
+        `${this.ICON_TITLES[shown.icon] || ""}\n${shown.text}\n` +
+        "Bấm để mở bảng Trạng thái thư");
+      badge.addEventListener("command", () => this.openTab(win));
+      bar.appendChild(badge);
+    } catch (e) {}
   },
 
   paintBar(win, ref, info, status = null) {
@@ -432,14 +781,14 @@ var hMailTrack = {
         perTabPanel: "vbox",
         modes: { [self.TAB_MODE]: { type: self.TAB_MODE, maxTabs: 1 } },
         openTab(tab) {
-          tab.title = "Theo dõi thư";
+          tab.title = "Trạng thái thư";
           tab.panel.classList.add("hmail-import-tab");
           tab.panel.appendChild(self.buildPanel(win));
         },
         closeTab() {},
         saveTabState() {},
         showTab(tab) {
-          tab.title = "Theo dõi thư";
+          tab.title = "Trạng thái thư";
         },
         persistTab() {
           return null;
@@ -525,9 +874,9 @@ var hMailTrack = {
     const doc = win.document;
     const el = (t, c, x) => this.el(doc, t, c, x);
     const root = el("div", "hmail-import hmail-track");
-    root.appendChild(el("div", "hmail-import-title", "Theo dõi thư đã gửi"));
+    root.appendChild(el("div", "hmail-import-title", "Trạng thái thư đã gửi"));
     root.appendChild(el("div", "hmail-import-note",
-      "Những thư bạn gửi khi bật nút \"Theo dõi thư\" trong cửa sổ soạn " +
+      "Những thư bạn gửi khi bật nút \"Trạng thái thư\" trong cửa sổ soạn " +
       "thư. Máy chủ ghi lại đường đi của thư theo một mã ngẫu nhiên, đồng " +
       "thời chèn ảnh đếm lượt mở và viết lại liên kết để đếm lượt bấm — " +
       "nghĩa là người nhận CÓ bị đo. Chỉ dùng khi việc đó là hợp lệ với " +
@@ -547,8 +896,8 @@ var hMailTrack = {
       list.textContent = "";
       if (!entries.length) {
         list.appendChild(el("p", "hmail-spam-note",
-          "Chưa có thư nào được theo dõi. Khi soạn thư, bấm \"Theo dõi " +
-          "thư\" trên thanh lệnh trước khi gửi."));
+          "Chưa có thư nào được theo dõi. Khi soạn thư, bấm \"Trạng " +
+          "thái thư\" trên thanh lệnh trước khi gửi."));
         return;
       }
       for (const entry of entries) {
@@ -556,11 +905,13 @@ var hMailTrack = {
         const main = el("div", "hmail-spam-row-main");
         const head = el("div", "hmail-spam-row-head");
         head.append(
-          el("span", "hmail-spam-from", entry.subject || "(không tiêu đề)"),
+          el("span", "hmail-spam-from",
+             this.decodeText(entry.subject) || "(không tiêu đề)"),
           el("span", "hmail-spam-time",
              new Date(entry.at || 0).toLocaleString("vi-VN")));
         main.append(head,
-          el("div", "hmail-spam-subject", "Tới: " + (entry.to || "?")),
+          el("div", "hmail-spam-subject",
+             "Tới: " + (this.prettyAddresses(entry.to) || "?")),
           el("div", "hmail-spam-meta",
              "Từ " + (entry.from || "?") + " · mã " + entry.ref));
         const state = el("span", "hmail-spam-state");
@@ -618,7 +969,7 @@ var hMailTrack = {
 
     refresh.addEventListener("click", () => render(true));
     clear.addEventListener("click", async () => {
-      if (Services.prompt.confirm(win, "Theo dõi thư",
+      if (Services.prompt.confirm(win, "Trạng thái thư",
             "Xoá toàn bộ nhật ký theo dõi trên máy này? Máy chủ vẫn giữ dữ " +
             "liệu của nó.")) {
         await this.save([]);
@@ -675,6 +1026,12 @@ var hMailTrack = {
       fields.subject = "hMail tracking selftest " + ref.slice(0, 8);
       fields.body = "<p>Thu tu kiem tinh nang theo doi thu.</p>";
       fields.setHeader("X-HMail-Track", ref);
+      // Máy chủ CÓ QUYỀN gỡ X-HMail-Track khỏi bản thư đi (nó là header
+      // điều khiển, để lại là lộ mã cho người nhận). Gửi kèm một header
+      // riêng của hMail để bản lưu trong hộp Đã gửi còn đường lần ra mã;
+      // mất nốt cũng không sao — nhật ký trên máy và Message-ID vẫn khớp
+      // được, xem refFromLog().
+      fields.setHeader("X-HMail-Ref", ref);
       const params = Cc["@mozilla.org/messengercompose/composeparams;1"]
         .createInstance(Ci.nsIMsgComposeParams);
       params.composeFields = fields;
@@ -719,9 +1076,10 @@ var hMailTrack = {
   try {
     mode = Services.prefs.getCharPref("hmail.debug.trackbartest", "");
   } catch (e) {}
-  if (mode !== "run") {
+  if (mode !== "run" && mode !== "sent") {
     return;
   }
+  const sentOnly = mode === "sent";
   Services.prefs.setCharPref("hmail.debug.trackbartest", "running");
   const report = text => {
     try {
@@ -743,8 +1101,10 @@ var hMailTrack = {
         for (const folder of root.descendants) {
           // Cả hộp Đã gửi lẫn Hộp thư đến: thư tự gửi cho mình cũng là
           // "thư mình gửi" theo isSent(), và đó là ca kiểm nhanh nhất.
-          if (!(folder.flags & (Ci.nsMsgFolderFlags.SentMail |
-                                Ci.nsMsgFolderFlags.Inbox))) {
+          const wanted = sentOnly
+            ? Ci.nsMsgFolderFlags.SentMail
+            : (Ci.nsMsgFolderFlags.SentMail | Ci.nsMsgFolderFlags.Inbox);
+          if (!(folder.flags & wanted)) {
             continue;
           }
           const hdrs = [...folder.messages]
@@ -775,6 +1135,14 @@ var hMailTrack = {
         report("err: khong tim thay thu da gui co X-HMail-Track");
         return;
       }
+      lines.push("watcher=" + !!win._hmailTrackReader);
+      lines.push("folder=" + found.folder.prettyName);
+      try {
+        const raw = await hMailInsight.raw(found.hdr, 64 * 1024);
+        lines.push("rawBytes=" + raw.length);
+      } catch (e) {
+        lines.push("rawErr=" + (e.message || e));
+      }
       lines.push("header=" + found.info.header + " applied=" +
                  found.info.applied + " ref=" + (found.ref || "(khong co)"));
       lines.push("subject=" + (found.hdr.mime2DecodedSubject || ""));
@@ -797,14 +1165,35 @@ var hMailTrack = {
         lines.push("ev0=" + (ev.event || ev.type) + " " +
                    hMailTrack.device(ev.user_agent));
       }
-      // Vẽ thử thanh vào document thư đang mở (nếu có) để bắt lỗi DOM.
+      // Cột danh sách: đăng ký được chưa, và tra đồng bộ ra mức nào.
       try {
-        hMailTrack.paintBar(win, found.ref, info, status);
-        const doc = hMailInsight.messageDocument(win);
-        lines.push("bar=" + (doc?.getElementById("hmail-track-bar")
-                              ? "da ve" : "khong co document thu"));
+        hMailTrack.addColumn(win);
+        const { ThreadPaneColumns } = ChromeUtils.importESModule(
+          "chrome://messenger/content/ThreadPaneColumns.mjs");
+        lines.push("column=" + ThreadPaneColumns.getCustomColumns()
+          .some(c => c.id === hMailTrack.COLUMN_ID));
+        lines.push("iconTruoc=" + (hMailTrack.iconFor(found.hdr) || "(khong)"));
       } catch (e) {
-        lines.push("bar err: " + (e.message || e));
+        lines.push("column err: " + (e.message || e));
+      }
+      // Huy hiệu trong header thư (vẽ trên thư đang mở, nếu có).
+      try {
+        const shown = await hMailTrack.statusFor(win, found.hdr);
+        lines.push("shown=" + (shown ? shown.icon + "/" + shown.tone : "null"));
+        hMailTrack.paintStatus(win, shown);
+        const doc = hMailInsight.messageDocument(win);
+        lines.push("badge=" + (doc?.getElementById("hmail-track-badge")
+                                ? "da gan"
+                                : (doc ? "chua gan" : "khong co document thu")));
+        // Sau khi mở thư: nhật ký đã nhận thư này chưa, cột ra dấu gì.
+        await hMailTrack.refreshStates(win);
+        lines.push("iconSau=" + (hMailTrack.iconFor(found.hdr) || "(khong)"));
+        lines.push("textSau=" + (hMailTrack.textFor(found.hdr) || ""));
+        const log = await hMailTrack.load();
+        lines.push("nhatKy=" + log.length + " adopted=" +
+                   log.filter(e => e.adopted).length);
+      } catch (e) {
+        lines.push("badge err: " + (e.message || e));
       }
       report(lines.join(" | "));
     } catch (e) {

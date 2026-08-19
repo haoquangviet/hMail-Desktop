@@ -71,7 +71,7 @@ var hMailComposeRibbon = {
         {
           label: "hMail",
           buttons: [
-            { id: "c-track", label: "Theo dõi thư", icon: "track",
+            { id: "c-track", label: "Trạng thái thư", icon: "track",
               fn: win => win.hMailTrack?.toggle(win) },
             { id: "c-ai", label: "Trợ lý AI", icon: "ai",
               fn: win => win.hMailComposeAI.toggle(win) },
