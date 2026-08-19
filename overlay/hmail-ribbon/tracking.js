@@ -779,6 +779,15 @@ var hMailTrack = {
    */
   timelineLines(status, limit = 20) {
     const lines = [];
+    // Người nhận cùng miền với người gửi thì thư không đi đâu cả: máy chủ
+    // của mình giao thẳng vào hộp thư nội bộ. Gọi đó là "máy chủ người
+    // nhận" là sai — chính nó là máy chủ gửi.
+    const sender = String(status?.message?.sender || "").toLowerCase();
+    const homeDomain = sender.includes("@") ? sender.split("@")[1] : "";
+    const isLocal = who => {
+      const at = String(who || "").toLowerCase().split("@")[1] || "";
+      return !!homeDomain && at === homeDomain;
+    };
     const ROW = { sent: "máy chủ người nhận đã nhận",
                   delivered: "đã vào hộp thư", relayed: "đã chuyển tiếp",
                   queued: "đang chờ gửi", pending: "đang chuyển đi",
@@ -791,8 +800,11 @@ var hMailTrack = {
       // Mã trả lời của máy chủ người nhận ("250 OK …") cắt ngắn: đủ để
       // người kỹ thuật đối chiếu, không tràn dòng.
       const detail = String(d.status_detail || d.dsn_code || "").slice(0, 40);
-      lines.push(`${d.recipient || d.rcpt || d.to || "?"}: ` +
-        (ROW[state] || state || "") +
+      const who = d.recipient || d.rcpt || d.to || "?";
+      const label = /sent|deliver|relay/.test(state) && isLocal(who)
+        ? "đã vào hộp thư trên máy chủ của bạn (giao nội bộ)"
+        : (ROW[state] || state || "");
+      lines.push(`${who}: ${label}` +
         (when ? ` — ${new Date(when).toLocaleString("vi-VN")}` : "") +
         (detail ? ` [${detail}]` : ""));
     }
@@ -872,10 +884,12 @@ var hMailTrack = {
       if (doc.getElementById("hmail-track-badge")) {
         return;
       }
-      // Chỗ của nó là cuối dòng NGƯỜI GỬI, tức ngay phía trên giờ nhận —
-      // nhìn một cái là thấy "thư này đã tới/đã mở" mà không chiếm chỗ của
-      // hàng nút Trả lời / Chuyển tiếp.
-      const row = doc.getElementById("expandedfromRow") ||
+      // Chỗ của nó là mép PHẢI của dòng người gửi, tức ngay phía trên giờ
+      // gửi. Hàng đó là #headerSenderToolbarContainer và nó xếp
+      // flex-direction: row-reverse (class header-row-reverse) — con ĐẦU
+      // TIÊN nằm ngoài cùng bên phải, nên chèn vào đầu chứ không append.
+      const row = doc.getElementById("headerSenderToolbarContainer") ||
+                  doc.getElementById("expandedfromRow") ||
                   doc.getElementById("header-view-toolbar");
       if (!row) {
         return;
@@ -896,7 +910,11 @@ var hMailTrack = {
         (lines.length ? "\n\n" + lines.join("\n") : "") +
         "\n\nBấm để xem chi tiết trong hMail AI";
       badge.addEventListener("click", () => this.showDetail(win, shown));
-      row.appendChild(badge);
+      if (row.id === "headerSenderToolbarContainer") {
+        row.insertBefore(badge, row.firstChild);
+      } else {
+        row.appendChild(badge);
+      }
     } catch (e) {}
   },
 
@@ -1016,8 +1034,20 @@ var hMailTrack = {
     const rows = status.delivery || [];
     const ok = rows.filter(r =>
       /sent|deliver|relay/i.test(String(r.status || ""))).length;
+    const sender = String(msg.sender || "").toLowerCase();
+    const home = sender.includes("@") ? sender.split("@")[1] : "";
+    const outside = rows.filter(r => {
+      const at = String(r.recipient || r.rcpt || r.to || "")
+        .toLowerCase().split("@")[1] || "";
+      return !home || at !== home;
+    }).length;
     if (rows.length) {
       text += ` (${ok}/${rows.length} người nhận)`;
+      // Không có ai ngoài miền của mình thì đừng nói "máy chủ người nhận".
+      if (!outside && /máy chủ người nhận/i.test(text)) {
+        text = text.replace("Máy chủ người nhận đã nhận thư",
+                            "Đã vào hộp thư trên máy chủ của bạn");
+      }
     }
     const opens = Number(msg.opens || 0);
     if (status.opened || opens > 0) {
