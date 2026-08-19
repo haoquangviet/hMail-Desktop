@@ -297,17 +297,58 @@ var hMailTrack = {
     const two = c => one(c) +
       `<path d="M7.8 11.8L9 13l4.8-6.4" fill="none" stroke="${c}" ` +
       `stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
-    const body = kind === "opened" ? two(blue)
+    const red = "#D93025";
+    const cross = `<path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" ` +
+                  `stroke="${red}" stroke-width="2" ` +
+                  `stroke-linecap="round"/>`;
+    const body = kind === "failed" ? cross
+      : kind === "opened" ? two(blue)
       : kind === "delivered" ? two(grey) : one(grey);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" ` +
                 `height="16" viewBox="0 0 16 16">${body}</svg>`;
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
   },
 
+  /**
+   * Máy chủ trả về trạng thái giao THEO TỪNG NGƯỜI NHẬN:
+   *   { recipient, status, status_detail: "250 OK …", dsn_code,
+   *     queued_at, sent_at, delivered_at }
+   * cùng một delivery_status gộp. "sent" ở đây nghĩa là máy chủ người nhận
+   * đã nhận thư (trả 250) — với người dùng đó là "đã tới nơi"; còn
+   * "pending/queued" mới là mới rời máy mình.
+   */
+  DELIVERY_LABELS: {
+    pending: ["Đã gửi", "Đã rời máy chủ của bạn, đang chuyển đi", "sent"],
+    queued: ["Đã gửi", "Đang chờ gửi", "sent"],
+    sent: ["Đã tới nơi", "Máy chủ người nhận đã nhận thư", "delivered"],
+    relayed: ["Đã tới nơi", "Đã chuyển tới máy chủ người nhận", "delivered"],
+    delivered: ["Đã tới nơi", "Đã vào hộp thư người nhận", "delivered"],
+    deferred: ["Đang thử lại", "Máy chủ người nhận hoãn — sẽ thử lại", "sent"],
+    bounced: ["Bị trả lại", "Thư bị trả lại", "sent"],
+    failed: ["Gửi hỏng", "Gửi thất bại", "sent"],
+    rejected: ["Bị từ chối", "Máy chủ người nhận từ chối thư", "sent"],
+  },
+
+  deliveryOf(status) {
+    const state = String(status?.delivery_status || "").toLowerCase();
+    const hit = this.DELIVERY_LABELS[state];
+    if (hit) {
+      return { short: hit[0], text: hit[1], level: hit[2] };
+    }
+    // Không có trạng thái gộp thì suy từ các dòng giao của từng người nhận.
+    const rows = status?.delivery || [];
+    if (rows.some(r => /sent|deliver|relay/i.test(String(r.status || "")))) {
+      return { short: "Đã tới nơi", text: "Máy chủ người nhận đã nhận thư",
+               level: "delivered" };
+    }
+    return { short: "Đã gửi", text: "Đã nhận vào máy chủ", level: "sent" };
+  },
+
   ICON_TITLES: {
     sent: "Đã gửi đi, chờ máy chủ người nhận",
-    delivered: "Đã giao tới hộp thư người nhận",
+    delivered: "Máy chủ người nhận đã nhận thư",
     opened: "Người nhận đã mở thư",
+    failed: "Thư không tới được người nhận",
   },
 
   /**
@@ -386,6 +427,8 @@ var hMailTrack = {
             title: this.ICON_TITLES.delivered, alt: "Đã giao" },
           { id: "opened", url: this.icon("opened"),
             title: this.ICON_TITLES.opened, alt: "Đã mở" },
+          { id: "failed", url: this.icon("failed"),
+            title: this.ICON_TITLES.failed, alt: "Không gửi được" },
         ],
         iconCallback: hdr => this.iconFor(hdr),
         textCallback: hdr => this.textFor(hdr),
@@ -427,10 +470,11 @@ var hMailTrack = {
         }
         const msg = status.message || {};
         const opened = status.opened || Number(msg.opens || 0) > 0;
-        const delivered = /deliver|relay|sent/i
-          .test(String(status.delivery_status || "")) ||
-          (status.delivery || []).length > 0;
-        const state = opened ? "opened" : delivered ? "delivered" : "sent";
+        const delivered = this.deliveryOf(status).level === "delivered";
+        const broken = /bounce|fail|reject/i
+          .test(String(status.delivery_status || ""));
+        const state = broken ? "failed"
+          : opened ? "opened" : delivered ? "delivered" : "sent";
         if (state !== entry.state) {
           changed++;
         }
@@ -662,18 +706,23 @@ var hMailTrack = {
     const seen = this.describe(status);
     const msg = status?.message || {};
     const opened = status?.opened || Number(msg.opens || 0) > 0;
-    const delivered = (status?.delivery || []).length > 0 ||
-      /deliver|relay|sent/i.test(String(status?.delivery_status || ""));
+    const delivery = this.deliveryOf(status);
+    const delivered = delivery.level === "delivered";
+    const broken = seen.tone === "fail";
     // Nhật ký cũng cập nhật theo, để cột danh sách khớp với thư đang mở.
-    this.rememberState(ref, opened ? "opened"
+    this.rememberState(ref, broken ? "failed"
+                            : opened ? "opened"
                             : delivered ? "delivered" : "sent",
                        Number(msg.opens || 0));
     const opens = Number(msg.opens || 0);
+    // Hiện CẢ HAI mức: giao tới đâu rồi, và đã mở chưa.
+    const short = delivery.short +
+      (opened ? (opens > 1 ? ` · Đã mở ${opens} lần` : " · Đã mở") : "");
     return { kind: "sent", ref, status,
-             icon: opened ? "opened" : delivered ? "delivered" : "sent",
-             short: opened ? (opens > 1 ? `Đã mở ${opens} lần` : "Đã mở")
-                    : delivered ? "Đã tới nơi" : "Đã gửi đi",
-             text: seen.text, tone: seen.tone };
+             icon: broken ? "failed"
+                   : opened ? "opened"
+                   : delivered ? "delivered" : "sent",
+             short, text: seen.text, tone: seen.tone };
   },
 
   /**
@@ -730,11 +779,22 @@ var hMailTrack = {
    */
   timelineLines(status, limit = 20) {
     const lines = [];
+    const ROW = { sent: "máy chủ người nhận đã nhận",
+                  delivered: "đã vào hộp thư", relayed: "đã chuyển tiếp",
+                  queued: "đang chờ gửi", pending: "đang chuyển đi",
+                  deferred: "bị hoãn, sẽ thử lại", bounced: "bị trả lại",
+                  failed: "gửi thất bại", rejected: "bị từ chối" };
     for (const d of status?.delivery || []) {
-      const when = d.at || d.time || d.updated_at;
+      const state = String(d.status || d.state || "").toLowerCase();
+      const when = d.delivered_at || d.sent_at || d.queued_at ||
+                   d.at || d.time || d.updated_at;
+      // Mã trả lời của máy chủ người nhận ("250 OK …") cắt ngắn: đủ để
+      // người kỹ thuật đối chiếu, không tràn dòng.
+      const detail = String(d.status_detail || d.dsn_code || "").slice(0, 40);
       lines.push(`${d.recipient || d.rcpt || d.to || "?"}: ` +
-        `${d.status || d.state || ""}` +
-        (when ? ` — ${new Date(when).toLocaleString("vi-VN")}` : ""));
+        (ROW[state] || state || "") +
+        (when ? ` — ${new Date(when).toLocaleString("vi-VN")}` : "") +
+        (detail ? ` [${detail}]` : ""));
     }
     const events = [...(status?.events || [])].reverse();
     for (const ev of events) {
@@ -946,21 +1006,19 @@ var hMailTrack = {
     }
     const msg = status.message || {};
     const state = String(status.delivery_status || "").toLowerCase();
-    const map = {
-      delivered: ["Đã tới hộp thư người nhận", "ok"],
-      sent: ["Đã gửi đi", "sent"],
-      relayed: ["Đã chuyển tới máy chủ người nhận", "sent"],
-      pending: ["Đã nhận vào máy chủ, đang chuyển đi", "wait"],
-      queued: ["Đang chờ gửi", "wait"],
-      deferred: ["Máy chủ người nhận hoãn — sẽ thử lại", "wait"],
-      bounced: ["Bị trả lại", "fail"],
-      failed: ["Gửi thất bại", "fail"],
-      rejected: ["Bị từ chối", "fail"],
-    };
-    const hit = map[state] || [state ? `Trạng thái: ${state}` : "Đã ghi nhận",
-                               "unknown"];
-    let text = hit[0];
-    let tone = hit[1];
+    const delivery = this.deliveryOf(status);
+    const tones = { delivered: "ok", sent: "sent" };
+    let text = delivery.text;
+    let tone = /bounce|fail|reject/.test(state) ? "fail"
+      : /pending|queued|deferred/.test(state) ? "wait"
+      : (tones[delivery.level] || "unknown");
+    // Bao nhiêu người nhận đã nhận được: con số đáng tin hơn một chữ gộp.
+    const rows = status.delivery || [];
+    const ok = rows.filter(r =>
+      /sent|deliver|relay/i.test(String(r.status || ""))).length;
+    if (rows.length) {
+      text += ` (${ok}/${rows.length} người nhận)`;
+    }
     const opens = Number(msg.opens || 0);
     if (status.opened || opens > 0) {
       const when = msg.first_open_at
