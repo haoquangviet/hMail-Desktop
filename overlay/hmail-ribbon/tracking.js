@@ -121,7 +121,9 @@ var hMailTrack = {
    */
   baseFor(server) {
     const host = String(server?.hostName || "").trim();
-    return host ? `https://${host}` : "";
+    // Server ảo (Thư mục Hợp nhất "smart mailboxes", Local Folders) không
+    // phải máy chủ thư thật — hostname không có dấu chấm thì bỏ.
+    return host.includes(".") ? `https://${host}` : "";
   },
 
   /** Trạng thái của một mã theo dõi; null khi máy chủ chưa biết mã đó. */
@@ -529,6 +531,11 @@ var hMailTrack = {
     if (!out.ref && out.localId) {
       const list = await this.load();
       out.ref = list.find(e => e.localId === out.localId)?.ref || "";
+      if (!out.ref) {
+        // Id của thiết bị khác: lần ra ref qua bản lưu trong hộp Đã gửi.
+        out.ref = await this.resolveFromSent(hdr.folder?.server, out.localId,
+                                             (hdr.dateInSeconds || 0) * 1000);
+      }
       if (out.ref) {
         out.mine = true;
       }
@@ -537,6 +544,81 @@ var hMailTrack = {
       out.ref = await this.refFromLog(hdr);
     }
     return out;
+  },
+
+  /**
+   * Nhiều thiết bị: thư gửi từ máy khác (điện thoại, máy hMail thứ hai)
+   * mang X-HMail-Internal-Id của MÁY ĐÓ — nhật ký máy này không biết id.
+   * Nhưng bản lưu trong hộp Đã gửi là do chính thiết bị gửi tải lên, còn
+   * NGUYÊN X-HMail-Track (máy chủ chỉ gỡ ở bản thư đi). Vậy: quét hộp Đã
+   * gửi tìm thư mang đúng id đó, lấy ref, nhận vào nhật ký — từ đó máy
+   * này hiện trạng thái như thư của chính nó.
+   *
+   * Chạy BẤT ĐỒNG BỘ và tự kìm mình: chỉ quét thư quanh ngày gửi (±3
+   * ngày, tối đa 60 thư mới nhất), nhường main thread mỗi vài thư, và mỗi
+   * id chỉ thử lại sau 10 phút — mở đi mở lại một thư lạ không làm app
+   * quét hộp Đã gửi liên tục hay chậm việc hiện thư.
+   */
+  async resolveFromSent(server, localId, aroundMs) {
+    if (!server || !/^[A-Za-z0-9_-]{8,64}$/.test(String(localId || ""))) {
+      return "";
+    }
+    this._sentScan = this._sentScan || new Map();
+    const last = this._sentScan.get(localId) || 0;
+    if (Date.now() - last < 10 * 60 * 1000) {
+      return "";
+    }
+    this._sentScan.set(localId, Date.now());
+    try {
+      const root = server.rootFolder;
+      if (!root || typeof hMailInsight === "undefined") {
+        return "";
+      }
+      for (const folder of root.descendants) {
+        if (!(folder.flags & Ci.nsMsgFolderFlags.SentMail)) {
+          continue;
+        }
+        let hdrs = [...folder.messages]
+          .sort((a, b) => (b.dateInSeconds || 0) - (a.dateInSeconds || 0));
+        if (aroundMs) {
+          hdrs = hdrs.filter(h => Math.abs((h.dateInSeconds || 0) * 1000 -
+                                           aroundMs) < 3 * 24 * 3600 * 1000);
+        }
+        hdrs = hdrs.slice(0, 60);
+        let n = 0;
+        for (const h of hdrs) {
+          if (++n % 5 === 0) {
+            // Thư IMAP chưa offline phải tải qua mạng — nhường nhịp thở.
+            await new Promise(r => setTimeout(r, 50));
+          }
+          let headers;
+          try {
+            headers = hMailInsight.headers(
+              await hMailInsight.raw(h, 16 * 1024));
+          } catch (e) {
+            continue;
+          }
+          if (hMailInsight.first(headers, "x-hmail-internal-id").trim() !==
+              localId) {
+            continue;
+          }
+          const ref = hMailInsight.first(headers, "x-hmail-track").trim();
+          if (!/^[A-Za-z0-9_-]{16,64}$/.test(ref)) {
+            // Tìm thấy thư nhưng bản Đã gửi cũng không còn mã — chịu.
+            return "";
+          }
+          await this.adopt(h, ref, this.baseFor(server));
+          const list = await this.load();
+          const entry = list.find(e => e.ref === ref);
+          if (entry && !entry.localId) {
+            entry.localId = localId;
+            await this.save(list);
+          }
+          return ref;
+        }
+      }
+    } catch (e) {}
+    return "";
   },
 
   /** Giữ lại tên cũ cho phần tự kiểm và mã gọi ngoài. */
@@ -625,7 +707,8 @@ var hMailTrack = {
         }
         const hdr = hMailInsight.selected(win);
         const key = hdr ? `${hdr.folder?.URI}#${hdr.messageKey}` : null;
-        if (key !== last) {
+        const due = shown?.retry && Date.now() >= (shown.retryAt || 0);
+        if (key !== last || due) {
           last = key;
           shown = null;
           const doc = hMailInsight.messageDocument(win);
@@ -633,6 +716,9 @@ var hMailTrack = {
           doc?.getElementById("hmail-track-badge")?.remove();
           if (hdr) {
             shown = await this.statusFor(win, hdr);
+            if (shown?.retry) {
+              shown.retryAt = Date.now() + 10 * 1000;
+            }
             // Người dùng có thể đã chuyển thư khác trong lúc chờ mạng.
             if (last !== key) {
               return;
@@ -700,10 +786,22 @@ var hMailTrack = {
       }
       return null;
     }
-    const base = this.baseFor(hdr.folder?.server);
+    await this.load();
+    const known = this._cache?.find(e => e.ref === ref);
+    // Thư đang nằm trong Thư mục Hợp nhất / thư mục gộp thì server của
+    // folder có thể là server ảo — base ghi trong nhật ký đáng tin hơn.
+    const base = known?.base || this.baseFor(hdr.folder?.server);
     await this.adopt(hdr, ref, base);
     const status = await this.fetchStatus({ ref, base }, true);
     const seen = this.describe(status);
+    if (!status) {
+      // Mạng trượt một nhịp: hiện tạm "không hỏi được" nhưng KHÔNG được
+      // ghim — watcher sẽ hỏi lại (xem initReader), khỏi bắt người dùng
+      // đổi thư qua lại mới thấy trạng thái.
+      return { kind: "sent", ref, status: null, retry: true,
+               icon: "sent", short: "Đã gửi",
+               text: seen.text, tone: seen.tone };
+    }
     const msg = status?.message || {};
     const opened = status?.opened || Number(msg.opens || 0) > 0;
     const delivery = this.deliveryOf(status);
@@ -1278,6 +1376,111 @@ var hMailTrack = {
       report("sent ref=" + ref + " | " + out);
     } catch (e) {
       report("err: " + (e.message || e));
+    }
+  }, 14000);
+})();
+
+// ---------------------------------------------------------------------------
+// Tự kiểm liên thiết bị (pref hmail.debug.multidevtest = "run"): giả lập máy
+// thứ hai bằng cách XOÁ mọi entry của một thư đã gửi khỏi nhật ký (máy kia
+// gửi thì nhật ký máy này trống trơn như vậy), rồi đi đúng đường thật:
+// trackInfo đọc header -> chỉ còn id nội bộ -> resolveFromSent quét hộp Đã
+// gửi -> lấy lại ref -> nhật ký có entry mới. Kết quả ghi vào chính pref.
+(function hMailMultiDeviceSelfTest() {
+  let mode = "";
+  try {
+    mode = Services.prefs.getCharPref("hmail.debug.multidevtest", "");
+  } catch (e) {}
+  if (mode !== "run") {
+    return;
+  }
+  Services.prefs.setCharPref("hmail.debug.multidevtest", "running");
+  const report = text => {
+    try {
+      Services.prefs.setCharPref("hmail.debug.multidevtest",
+                                 String(text).slice(0, 900));
+      Services.prefs.savePrefFile(null);
+    } catch (e) {}
+  };
+  setTimeout(async () => {
+    const out = {};
+    try {
+      // Thư mồi: bản trong hộp Đã gửi còn đủ cả hai header.
+      let target = null;
+      let localId = "";
+      for (const acc of MailServices.accounts.accounts) {
+        const root = acc.incomingServer?.rootFolder;
+        if (!root) {
+          continue;
+        }
+        for (const folder of root.descendants) {
+          if (!(folder.flags & Ci.nsMsgFolderFlags.SentMail)) {
+            continue;
+          }
+          const hdrs = [...folder.messages]
+            .sort((a, b) => (b.dateInSeconds || 0) - (a.dateInSeconds || 0))
+            .slice(0, 40);
+          for (const h of hdrs) {
+            try {
+              const headers = hMailInsight.headers(
+                await hMailInsight.raw(h, 16 * 1024));
+              const id = hMailInsight.first(headers, "x-hmail-internal-id")
+                .trim();
+              const ref = hMailInsight.first(headers, "x-hmail-track").trim();
+              if (id && /^[A-Za-z0-9_-]{16,64}$/.test(ref)) {
+                target = h;
+                localId = id;
+                out.refThat = ref;
+                break;
+              }
+            } catch (e) {}
+          }
+          if (target) {
+            break;
+          }
+        }
+        if (target) {
+          break;
+        }
+      }
+      if (!target) {
+        report("err: khong co thu Da gui nao mang du internal-id + ref " +
+               "(gui mot thu co bat Trang thai thu roi chay lai)");
+        return;
+      }
+      // Giả lập máy thứ hai: quên sạch thư này.
+      const before = await hMailTrack.load();
+      const kept = before.filter(e =>
+        e.ref !== out.refThat &&
+        e.localId !== localId &&
+        e.messageId !== String(target.messageId || ""));
+      out.daXoa = before.length - kept.length;
+      await hMailTrack.save(kept);
+      hMailTrack._sentScan?.delete(localId);
+
+      // Gọi THẲNG đường quét (trackInfo trên chính bản Đã gửi sẽ đi tắt vì
+      // bản đó còn nguyên ref — máy thứ hai gặp bản INBOX đã bị gỡ ref,
+      // chỉ còn id nội bộ, và rơi vào đúng đường này).
+      const t0 = Date.now();
+      const found = await hMailTrack.resolveFromSent(
+        target.folder.server, localId, (target.dateInSeconds || 0) * 1000);
+      out.mat_ms = Date.now() - t0;
+      out.timLai = found === out.refThat;
+      const after = await hMailTrack.load();
+      const entry = after.find(e => e.ref === out.refThat);
+      out.nhatKyCoLai = !!entry;
+      out.coLocalId = entry?.localId === localId;
+      // Lần hai: nhật ký đã biết id — phải tra thẳng, không quét lại
+      // (resolveFromSent đang trong cửa 10 phút sẽ trả "" ngay).
+      const t1 = Date.now();
+      const list2 = await hMailTrack.load();
+      const hit2 = list2.find(e => e.localId === localId)?.ref || "";
+      out.lan2_ms = Date.now() - t1;
+      out.lan2 = hit2 === out.refThat;
+      report(JSON.stringify(out));
+    } catch (e) {
+      out.err = String(e.message || e);
+      report(JSON.stringify(out));
     }
   }, 14000);
 })();
