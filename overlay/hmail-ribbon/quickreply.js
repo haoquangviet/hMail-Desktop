@@ -687,20 +687,6 @@ var hMailQuickReply = {
       // path stays mode-controlled.
       await this.fillReply(hdr, fields, true, this.identityFor(hdr));
       this.addAttachments(fields);
-      // Mã theo dõi phải nằm trong fields TRƯỚC khi initCompose dựng thư.
-      let trackRef = "";
-      let trackLocalId = "";
-      if (this._track && typeof hMailTrack !== "undefined") {
-        try {
-          trackRef = hMailTrack.newRef(win);
-          trackLocalId = hMailTrack.newLocalId(win);
-          fields.setHeader("X-HMail-Track", trackRef);
-          // Chỉ id nội bộ đi theo thư; mã theo dõi ở lại máy này.
-          fields.setHeader("X-HMail-Internal-Id", trackLocalId);
-        } catch (e) {
-          trackRef = "";
-        }
-      }
       params.composeFields = fields;
       params.type = Ci.nsIMsgCompType.ReplyAll;
       params.format = Ci.nsIMsgCompFormat.HTML;
@@ -870,6 +856,20 @@ var hMailQuickReply = {
         return;
       }
       this.addAttachments(fields);
+      // Mã theo dõi phải nằm trong fields TRƯỚC khi initCompose dựng thư.
+      let trackRef = "";
+      let trackLocalId = "";
+      if (this._track && typeof hMailTrack !== "undefined") {
+        try {
+          trackRef = hMailTrack.newRef(win);
+          trackLocalId = hMailTrack.newLocalId(win);
+          fields.setHeader("X-HMail-Track", trackRef);
+          // Chỉ id nội bộ đi theo thư; mã theo dõi ở lại máy này.
+          fields.setHeader("X-HMail-Internal-Id", trackLocalId);
+        } catch (e) {
+          trackRef = "";
+        }
+      }
       params.composeFields = fields;
       params.type = replyAll ? Ci.nsIMsgCompType.ReplyAll
                              : Ci.nsIMsgCompType.ReplyToSender;
@@ -1029,14 +1029,19 @@ var hMailQuickReply = {
       };
       const origChips = hMailQuickReply.renderChips;
       hMailQuickReply.renderChips = () => {};
-      const origPrompt = Services.prompt.confirmEx;
-      Services.prompt.confirmEx = () => 1;
+      // Services.prompt là object đóng băng, không stub được — tắt hộp hỏi
+      // "trả lời tất cả" bằng pref mà send() vốn đã tôn trọng.
+      let warnBefore = true;
+      try {
+        warnBefore = Services.prefs.getBoolPref("hmail.quickreply.warnReplyAll");
+      } catch (e) {}
+      Services.prefs.setBoolPref("hmail.quickreply.warnReplyAll", false);
       try {
         await hMailQuickReply.send(win, input, false);
       } finally {
         hMailQuickReply.say = origSay;
         hMailQuickReply.renderChips = origChips;
-        Services.prompt.confirmEx = origPrompt;
+        Services.prefs.setBoolPref("hmail.quickreply.warnReplyAll", warnBefore);
       }
       out.baoGi = says;
 
