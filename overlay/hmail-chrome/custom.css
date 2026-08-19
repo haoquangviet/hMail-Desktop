@@ -1514,6 +1514,62 @@ select.hmail-ai-field,
     text-align: center;
 }
 
+/* Thanh trạng thái theo dõi trên thư đã gửi (trong khung đọc thư). */
+.hmail-track-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 7px 12px;
+    font-size: 0.86rem;
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 10%, transparent);
+    background-color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 8%, Canvas);
+}
+
+.hmail-track-bar[data-tone="ok"] {
+    background-color: color-mix(in srgb, #2E7D32 10%, Canvas);
+}
+
+.hmail-track-bar[data-tone="warn"] {
+    background-color: color-mix(in srgb, #C77700 12%, Canvas);
+}
+
+.hmail-track-bar[data-tone="fail"] {
+    background-color: color-mix(in srgb, #D93025 10%, Canvas);
+}
+
+.hmail-track-bar-title {
+    font-weight: 700;
+}
+
+.hmail-track-bar-details,
+.hmail-track-details {
+    flex-basis: 100%;
+    font-size: 0.82em;
+    opacity: 0.85;
+}
+
+.hmail-track-bar-row,
+.hmail-track-line {
+    padding: 2px 0 2px 14px;
+    overflow-wrap: anywhere;
+}
+
+.hmail-track-bar-link {
+    appearance: none !important;
+    -moz-appearance: none !important;
+    margin: 0 !important;
+    padding: 2px 10px !important;
+    min-height: 0 !important;
+    border-radius: 999px !important;
+    border: 1px solid color-mix(in srgb, CanvasText 20%, transparent) !important;
+    background-color: Canvas !important;
+    color: inherit !important;
+    font: inherit !important;
+    font-size: 0.85em !important;
+    cursor: pointer !important;
+}
+
 /* Nút "Theo dõi thư" khi đang bật: nền màu nhấn, thấy ngay là thư này
    sẽ được máy chủ ghi nhận. */
 .hmail-ribbon-button[data-id="c-track"][checked] {

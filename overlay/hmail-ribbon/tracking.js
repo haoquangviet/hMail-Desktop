@@ -74,14 +74,15 @@ var hMailTrack = {
   },
 
   /** Trạng thái của một mã theo dõi; null khi máy chủ chưa biết mã đó. */
-  async fetchStatus(entry) {
+  async fetchStatus(entry, withEvents = false) {
     const base = entry.base || "";
     if (!base || !entry.ref) {
       return null;
     }
+    const query = withEvents ? "" : "?events=0";
     for (const path of [`/t/ref/${entry.ref}`, `/t/s/${entry.ref}`]) {
       try {
-        const res = await fetch(`${base}${path}?events=0`, {
+        const res = await fetch(`${base}${path}${query}`, {
           method: "GET", headers: { Accept: "application/json" },
         });
         if (res.status === 404) {
@@ -200,6 +201,137 @@ var hMailTrack = {
       from: String(who?.identity?.email || ""),
       base,
     }).catch(() => {});
+  },
+
+  // ------------------------------------- thanh trạng thái trên thư đã gửi
+
+  /**
+   * Thư đang xem có được theo dõi không? Đọc phần đầu thư (mailinsight đã
+   * có bộ đọc có trần 256 KB) tìm header X-HMail-Track.
+   */
+  async refOf(hdr) {
+    if (typeof hMailInsight === "undefined" || !hdr) {
+      return "";
+    }
+    try {
+      const raw = await hMailInsight.raw(hdr, 64 * 1024);
+      const headers = hMailInsight.headers(raw);
+      return hMailInsight.first(headers, "x-hmail-track").trim();
+    } catch (e) {
+      return "";
+    }
+  },
+
+  /** Watcher cho cửa sổ 3-pane: thư nào có mã theo dõi thì hiện thanh. */
+  initReader(win) {
+    if (win._hmailTrackReader) {
+      return;
+    }
+    win._hmailTrackReader = true;
+    let last = null;
+    win.setInterval(async () => {
+      try {
+        if (win.performance.now() < 8000 ||
+            typeof hMailInsight === "undefined") {
+          return;
+        }
+        const hdr = hMailInsight.selected(win);
+        const key = hdr ? `${hdr.folder?.URI}#${hdr.messageKey}` : null;
+        if (key === last) {
+          return;
+        }
+        last = key;
+        const doc = hMailInsight.messageDocument(win);
+        doc?.getElementById("hmail-track-bar")?.remove();
+        if (!hdr) {
+          return;
+        }
+        const ref = await this.refOf(hdr);
+        if (!ref) {
+          return;
+        }
+        // Thư NHẬN được cũng mang header này — mã đó thuộc máy chủ của
+        // người gửi, hỏi máy chủ mình chỉ ra "không biết mã". Với thư nhận
+        // chỉ báo cho người dùng biết mình đang bị đo.
+        if (!this.isSent(hdr)) {
+          this.paintBar(win, ref, {
+            text: "Người gửi có gắn mã theo dõi — họ biết được bạn đã mở " +
+                  "thư và bấm liên kết nào.",
+            tone: "warn",
+          });
+          return;
+        }
+        const base = this.baseFor(hdr.folder?.server);
+        this.paintBar(win, ref, { text: "Đang hỏi máy chủ…", tone: "wait" });
+        const status = await this.fetchStatus({ ref, base });
+        // Người dùng có thể đã chuyển thư khác trong lúc chờ mạng.
+        if (last === key) {
+          this.paintBar(win, ref, this.describe(status), status);
+        }
+      } catch (e) {}
+    }, 1500);
+  },
+
+  /** Thư nằm trong hộp Đã gửi (hoặc do chính mình gửi) chứ? */
+  isSent(hdr) {
+    try {
+      const folder = hdr.folder;
+      if (folder?.getFlag?.(Ci.nsMsgFolderFlags.SentMail) ||
+          folder?.flags & Ci.nsMsgFolderFlags.SentMail) {
+        return true;
+      }
+      const from = String(hdr.author || "").toLowerCase();
+      for (const id of MailServices.accounts.allIdentities) {
+        const mail = String(id.email || "").toLowerCase();
+        if (mail && from.includes(mail)) {
+          return true;
+        }
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  },
+
+  paintBar(win, ref, info, status = null) {
+    try {
+      const doc = hMailInsight.messageDocument(win);
+      const host = doc?.getElementById("mail-notification-top") ||
+                   doc?.body?.firstElementChild;
+      if (!host) {
+        return;
+      }
+      doc.getElementById("hmail-track-bar")?.remove();
+      const el = (t, c, x) => this.el(doc, t, c, x);
+      const bar = el("div", "hmail-track-bar");
+      bar.id = "hmail-track-bar";
+      bar.dataset.tone = info.tone || "unknown";
+      bar.append(el("span", "hmail-track-bar-title", "Thư có theo dõi:"),
+                 el("span", "hmail-track-bar-text", info.text));
+      // Chi tiết từng người nhận, khi máy chủ đã có dữ liệu giao.
+      const rows = (status?.delivery || []).slice(0, 6);
+      if (rows.length) {
+        const details = el("details", "hmail-track-bar-details");
+        details.appendChild(el("summary", null,
+                               `Chi tiết ${rows.length} người nhận`));
+        for (const d of rows) {
+          const who = d.recipient || d.rcpt || d.to || "?";
+          const st = d.status || d.state || "";
+          const when = d.at || d.time || d.updated_at || "";
+          details.appendChild(el("div", "hmail-track-bar-row",
+            `${who}: ${st}` +
+            (when ? ` (${new Date(when).toLocaleString("vi-VN")})` : "")));
+        }
+        bar.appendChild(details);
+      }
+      if (info.tone !== "warn") {
+        const open = el("button", "hmail-track-bar-link", "Mở bảng theo dõi");
+        open.type = "button";
+        open.addEventListener("click", () => this.openTab(win));
+        bar.appendChild(open);
+      }
+      host.parentNode?.insertBefore(bar, host);
+    } catch (e) {}
   },
 
   // ------------------------------------------------------------- tab kết quả
@@ -343,12 +475,37 @@ var hMailTrack = {
         row.append(main, state);
         list.appendChild(row);
         if (fetchStatus) {
-          this.fetchStatus(entry).then(status => {
+          this.fetchStatus(entry, true).then(status => {
             const info = this.describe(status);
             state.textContent = info.text;
             state.dataset.status = info.tone === "ok" ? "delivered"
               : info.tone === "fail" ? "rejected"
               : info.tone === "wait" ? "deferred" : "other";
+            // Dòng thời gian: giao tới từng người nhận, rồi lượt mở/bấm.
+            const lines = [];
+            for (const d of status?.delivery || []) {
+              lines.push(`${d.recipient || d.rcpt || d.to || "?"}: ` +
+                `${d.status || d.state || ""}` +
+                (d.at || d.time
+                  ? ` — ${new Date(d.at || d.time).toLocaleString("vi-VN")}`
+                  : ""));
+            }
+            for (const ev of status?.events || []) {
+              const kind = { open: "Mở thư", click: "Bấm liên kết" }[ev.type] ||
+                           ev.type || "Sự kiện";
+              lines.push(`${kind}` + (ev.url ? ` → ${ev.url}` : "") +
+                (ev.at ? ` — ${new Date(ev.at).toLocaleString("vi-VN")}` : "") +
+                (ev.ip ? ` (${ev.ip})` : ""));
+            }
+            if (lines.length) {
+              const det = el("details", "hmail-track-details");
+              det.appendChild(el("summary", null,
+                                 `Dòng thời gian (${lines.length})`));
+              for (const line of lines) {
+                det.appendChild(el("div", "hmail-track-line", line));
+              }
+              main.appendChild(det);
+            }
           }).catch(() => {
             state.textContent = "Không hỏi được máy chủ";
           });

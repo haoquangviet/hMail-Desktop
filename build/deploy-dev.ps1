@@ -16,7 +16,7 @@ $isAdmin = ([Security.Principal.WindowsPrincipal](
 )).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
   Start-Process powershell -Verb RunAs -Wait -ArgumentList @(
-    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
   exit
 }
 
