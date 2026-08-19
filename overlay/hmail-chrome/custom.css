@@ -783,6 +783,7 @@ tr[data-properties~="unread"] .subject {
 .hmail-ribbon-button[data-icon="settings"]  .hmail-ribbon-icon { background-image: url("Icons/settings.svg"); }
 .hmail-ribbon-button[data-icon="extention"] .hmail-ribbon-icon { background-image: url("Icons/extention.svg"); }
 .hmail-ribbon-button[data-icon="image"]     .hmail-ribbon-icon { background-image: url("Icons/image.svg"); }
+.hmail-ribbon-button[data-icon="track"]     .hmail-ribbon-icon { background-image: url("Icons/track.svg"); }
 .hmail-ribbon-button[data-icon="spellcheck"] .hmail-ribbon-icon { background-image: url("Icons/spellcheck.svg"); }
 .hmail-ribbon-button[data-icon="signature"] .hmail-ribbon-icon { background-image: url("Icons/signature.svg"); }
 .hmail-ribbon-button[data-icon="more"]      .hmail-ribbon-icon { background-image: url("Icons/more.svg"); }
@@ -1511,6 +1512,13 @@ select.hmail-ai-field,
     font-size: 0.72em;
     opacity: 0.5;
     text-align: center;
+}
+
+/* Nút "Theo dõi thư" khi đang bật: nền màu nhấn, thấy ngay là thư này
+   sẽ được máy chủ ghi nhận. */
+.hmail-ribbon-button[data-id="c-track"][checked] {
+    background-color: color-mix(in srgb, var(--hmail-accent, #0F6CBD) 16%, Canvas) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hmail-accent, #0F6CBD) 45%, transparent);
 }
 
 /* Phạm vi đăng nhập hMail AI services: hai lựa chọn dạng thẻ. */

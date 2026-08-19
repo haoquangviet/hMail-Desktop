@@ -71,6 +71,8 @@ var hMailComposeRibbon = {
         {
           label: "hMail",
           buttons: [
+            { id: "c-track", label: "Theo dõi thư", icon: "track",
+              fn: win => win.hMailTrack?.toggle(win) },
             { id: "c-ai", label: "Trợ lý AI", icon: "ai",
               fn: win => win.hMailComposeAI.toggle(win) },
             { id: "c-merge", label: "Gửi hàng loạt", icon: "contact",
@@ -93,7 +95,10 @@ var hMailComposeRibbon = {
       }
       const ribbon = this.build(win, doc);
       toolbox.parentNode.insertBefore(ribbon, toolbox.nextSibling);
-      win.setTimeout(() => this.updateState(win, doc), 800);
+      win.setTimeout(() => {
+        this.updateState(win, doc);
+        win.hMailTrack?.reflect(win);
+      }, 800);
       doc.addEventListener("click", () => this.updateState(win, doc), true);
     } catch (e) {
       Cu.reportError("hMail compose ribbon failed: " + e);

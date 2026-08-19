@@ -119,6 +119,8 @@ var hMailRibbon = {
               fn: win => win.MsgFilters() },
             { id: "quick-filter", label: "Lọc nhanh", icon: "search",
               cmd: "cmd_toggleQuickFilterBar" },
+            { id: "track-tab", label: "Theo dõi thư", icon: "track",
+              fn: win => win.hMailTrack?.openTab(win) },
           ],
         },
         {
