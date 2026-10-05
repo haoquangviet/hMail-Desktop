@@ -50,7 +50,7 @@ var hMailImport = {
         [self.TAB_MODE]: { type: self.TAB_MODE, maxTabs: 1 },
       },
       openTab(tab) {
-        tab.title = "Nhập từ Outlook";
+        tab.title = "Nhập dữ liệu";
         tab.panel.classList.add("hmail-import-tab");
         tab.panel.appendChild(self.buildPanel(win));
       },
@@ -64,7 +64,7 @@ var hMailImport = {
       },
       saveTabState() {},
       showTab(tab) {
-        tab.title = "Nhập từ Outlook";
+        tab.title = "Nhập dữ liệu";
       },
       persistTab() {
         return null;
@@ -118,12 +118,13 @@ var hMailImport = {
     const root = el("div", "hmail-import hmail-ai");
     root.id = "hmail-import-panel";
 
-    root.appendChild(el("div", "hmail-import-title", "Nhập dữ liệu từ Outlook"));
+    root.appendChild(el("div", "hmail-import-title", "Nhập dữ liệu"));
     root.appendChild(el("div", "hmail-ai-hint",
       "Chọn tệp dữ liệu Outlook (.pst — tệp .ost chưa được hỗ trợ, hãy " +
-      "xuất ra .pst trước). hMail chỉ đọc tệp, không " +
-      "sửa gì trong đó, và thư được đưa vào một nhánh thư mục mới nên dữ " +
-      "liệu sẵn có không bị đụng tới."));
+      "xuất ra .pst trước), hoặc bấm “Nhập từ Windows Live Mail” để mang " +
+      "cả cây thư mục .eml của Windows Live Mail sang. hMail chỉ đọc, không " +
+      "sửa gì trong dữ liệu gốc, và thư được đưa vào một nhánh thư mục mới " +
+      "nên dữ liệu sẵn có không bị đụng tới."));
 
     // Source ---------------------------------------------------------------
     const pick = el("div", "hmail-ai-row");
@@ -133,12 +134,31 @@ var hMailImport = {
     path.readOnly = true;
     const browse = el("button", "hmail-ai-btn", "Chọn tệp…");
     browse.addEventListener("click", () => this.browse(win));
-    pick.append(path, browse);
+    const wlm = el("button", "hmail-ai-btn", "Nhập từ Windows Live Mail");
+    wlm.addEventListener("click", () => this.pickWlm(win));
+    pick.append(path, browse, wlm);
     root.appendChild(pick);
 
     const found = el("div", "hmail-import-found");
     found.id = "hmail-import-found";
     root.appendChild(found);
+
+    // Chỉ hiện khi nhập từ Windows Live Mail: WLM không cho đọc lại trạng
+    // thái đọc/chưa đọc từ .eml, nên để người dùng chọn.
+    const readRow = el("div", "hmail-ai-row");
+    readRow.id = "hmail-import-wlm-readrow";
+    readRow.hidden = true;
+    const readLabel = el("label", "hmail-ai-hint");
+    const readBox = el("input");
+    readBox.type = "checkbox";
+    readBox.id = "hmail-import-wlm-read";
+    readBox.checked = true;
+    readBox.style.marginInlineEnd = "6px";
+    readLabel.append(readBox, doc.createTextNode(
+      "Đánh dấu tất cả thư nhập là đã đọc (Windows Live Mail không cho đọc " +
+      "lại trạng thái đọc/chưa đọc từ tệp .eml)."));
+    readRow.appendChild(readLabel);
+    root.appendChild(readRow);
 
     const status = el("div", "hmail-ai-status", "");
     status.id = "hmail-import-status";
@@ -535,11 +555,20 @@ var hMailImport = {
 
     try {
       if (this.handle) {
-        hMailPst.close(this.handle);
+        this.source?.close(this.handle);
         this.handle = null;
       }
-      this.handle = await hMailPst.open(path);
-      this.tree = hMailPst.folders(this.handle);
+      // Nguồn hiện tại: tệp .pst của Outlook. Panel dùng chung this.source
+      // (open/folders/messages/close) nên Windows Live Mail — cùng giao diện
+      // qua hMailWlm — tái dụng toàn bộ cây thư mục, chống trùng, tiến trình.
+      this.source = hMailPst;
+      this.sourceName = "Outlook";
+      this._rootSegment = undefined;
+      const base = path.split(/[\\/]/).pop().replace(/\.(pst|ost)$/i, "");
+      this._importRoot = `Outlook — ${base}`;
+      doc.getElementById("hmail-import-wlm-readrow").hidden = true;
+      this.handle = await this.source.open(path);
+      this.tree = this.source.folders(this.handle);
       this.showTree(win);
       const total = this.countAll(this.tree);
       this.notify(win, `Đọc được ${total.toLocaleString("vi-VN")} thư trong ` +
@@ -548,6 +577,70 @@ var hMailImport = {
       doc.getElementById("hmail-import-start").hidden = false;
     } catch (e) {
       this.notify(win, "Không đọc được tệp: " + (e.message || e));
+    }
+  },
+
+  /**
+   * Nhập từ Windows Live Mail: mở tab, tự dò store mặc định, không thấy thì
+   * cho chọn thư mục store bằng tay.
+   */
+  async pickWlm(win) {
+    this.openTab(win);
+    const def = hMailWlm.defaultStore();
+    if (def && await hMailWlm.exists(def)) {
+      await this.loadWlm(win, def);
+    } else {
+      this.browseWlm(win);
+    }
+  },
+
+  browseWlm(win) {
+    const picker = Cc["@mozilla.org/filepicker;1"]
+      .createInstance(Ci.nsIFilePicker);
+    picker.init(win.browsingContext,
+                "Chọn thư mục store của Windows Live Mail",
+                Ci.nsIFilePicker.modeGetFolder);
+    picker.open(result => {
+      if (result === Ci.nsIFilePicker.returnOK && picker.file) {
+        this.loadWlm(win, picker.file.path);
+      }
+    });
+  },
+
+  async loadWlm(win, root) {
+    const doc = win.document;
+    doc.getElementById("hmail-import-path").value = root;
+    this.notify(win, "Đang quét Windows Live Mail…", "busy");
+    doc.getElementById("hmail-import-tree").textContent = "";
+    try {
+      if (this.handle) {
+        this.source?.close(this.handle);
+        this.handle = null;
+      }
+      this.source = hMailWlm;
+      this.sourceName = "Windows Live Mail";
+      this._importRoot = "Windows Live Mail";
+      this._rootSegment = undefined;
+      const markRead =
+        doc.getElementById("hmail-import-wlm-read")?.checked !== false;
+      this.handle = await this.source.open(root, { markRead });
+      this.tree = this.source.folders(this.handle);
+      const total = this.countAll(this.tree);
+      if (!total) {
+        this.notify(win,
+          "Không thấy tệp .eml nào trong thư mục này. Hãy trỏ tới thư mục " +
+          "store của Windows Live Mail (thường là " +
+          "…\\AppData\\Local\\Microsoft\\Windows Live Mail).");
+        return;
+      }
+      this.showTree(win);
+      this.notify(win, `Đọc được ${total.toLocaleString("vi-VN")} thư trong ` +
+                       `${this.countFolders(this.tree)} thư mục.`);
+      doc.getElementById("hmail-import-dest-row").hidden = false;
+      doc.getElementById("hmail-import-wlm-readrow").hidden = false;
+      doc.getElementById("hmail-import-start").hidden = false;
+    } catch (e) {
+      this.notify(win, "Không đọc được Windows Live Mail: " + (e.message || e));
     }
   },
 
@@ -796,7 +889,7 @@ var hMailImport = {
       return;
     }
 
-    if (await this.outlookRunning()) {
+    if (this.source === hMailPst && await this.outlookRunning()) {
       this.notify(win,
         "Outlook đang mở và sẽ giữ chặt tệp dữ liệu. Hãy đóng Outlook " +
         "rồi bấm Bắt đầu nhập lại.");
@@ -807,14 +900,19 @@ var hMailImport = {
     doc.getElementById("hmail-import-start").hidden = true;
     doc.getElementById("hmail-import-stop").hidden = false;
 
-    const label = doc.getElementById("hmail-import-path").value
-      .split("\\").pop().replace(/\.(pst|ost)$/i, "");
+    // Trạng thái đọc cho WLM lấy ngay lúc nhập (người dùng có thể vừa đổi ô
+    // chọn sau khi quét).
+    if (this.handle && "markRead" in this.handle) {
+      this.handle.markRead =
+        doc.getElementById("hmail-import-wlm-read")?.checked !== false;
+    }
+    const importRoot = this._importRoot || "Nhập dữ liệu";
     const total = folders.reduce((s, f) => s + (f.messageCount || 0), 0);
     let done = 0;
     let failed = 0;
     let lastTick = 0;
     this.running = true;
-    hMailBusy.start("import-pst", "Nhập thư từ Outlook",
+    hMailBusy.start("import-pst", `Nhập thư từ ${this.sourceName}`,
                     "Số thư đã nhập vẫn giữ nguyên; lần chạy sau sẽ bỏ qua chúng.");
     hMailBusy.onStop("import-pst", () => {
       this.cancelled = true;
@@ -823,8 +921,7 @@ var hMailImport = {
     this.notify(win, "Đang chuẩn bị thư mục…", total ? 0 : "busy");
 
     try {
-      const root = await this.ensureFolder(server.rootFolder,
-                                           `Outlook — ${label}`);
+      const root = await this.ensureFolder(server.rootFolder, importRoot);
 
       const folderErrors = [];
       for (const node of folders) {
@@ -854,8 +951,8 @@ var hMailImport = {
         } catch (e) {}
 
         try {
-        for await (const message of hMailPst.messages(this.handle,
-                                                      node.path)) {
+        for await (const message of this.source.messages(this.handle,
+                                                         node.path)) {
           if (this.cancelled) {
             break;
           }
@@ -916,7 +1013,7 @@ var hMailImport = {
         ? `Đã dừng ở ${done.toLocaleString("vi-VN")} thư. Chạy lại sẽ tự bỏ ` +
           `qua những thư đã nhập.`
         : `Xong. Nhập ${(done - failed).toLocaleString("vi-VN")} thư vào ` +
-          `"Outlook — ${label}"` +
+          `"${importRoot}"` +
           (failed || errors
             ? `, bỏ qua ${failed + errors} thư không đọc được`
             : "") +

@@ -97,9 +97,16 @@ var hMailComposeRibbon = {
       toolbox.parentNode.insertBefore(ribbon, toolbox.nextSibling);
       win.setTimeout(() => {
         this.updateState(win, doc);
+        this.updateOverflow(win, doc);
         win.hMailTrack?.reflect(win);
       }, 800);
+      // Ngay khi layout ổn định (trước mốc 800ms) đã gập cho gọn, để không
+      // thấy hàng nút tràn ngang một nhịp lúc mở cửa sổ.
+      win.setTimeout(() => this.updateOverflow(win, doc), 0);
       doc.addEventListener("click", () => this.updateState(win, doc), true);
+      // Cửa sổ soạn thư co giãn tự do — tính lại overflow mỗi lần đổi bề rộng,
+      // đúng như ribbon chính (ribbon.js) vẫn làm.
+      win.addEventListener("resize", () => this.updateOverflow(win, doc));
     } catch (e) {
       Cu.reportError("hMail compose ribbon failed: " + e);
     }
@@ -136,6 +143,8 @@ var hMailComposeRibbon = {
             (button.size === "large" ? " large" : " small"));
           b.dataset.icon = button.icon || "";
           b.dataset.id = button.id;
+          // Nhãn phẳng cho menu "···" (xem ghi chú trong ribbon.js).
+          b.dataset.label = button.label.replace(/\n/g, " ");
           if (button.cmd) {
             b.dataset.cmd = button.cmd;
           }
@@ -190,6 +199,85 @@ var hMailComposeRibbon = {
 
     root.appendChild(panes);
     return root;
+  },
+
+  /**
+   * Cửa sổ hẹp không đủ chỗ cho mọi nhóm nút. Ẩn các nhóm không vừa và đưa
+   * chúng vào nút "···" — y như ribbon chính. Ribbon soạn thư chỉ có một
+   * pane và không có cụm ghim nên đơn giản hơn.
+   */
+  updateOverflow(win, doc) {
+    const root = doc.getElementById(this.ID);
+    const pane = root?.querySelector(".hmail-ribbon-pane.selected");
+    if (!pane) {
+      return;
+    }
+
+    let overflow = pane.querySelector(".hmail-ribbon-overflow");
+    if (!overflow) {
+      overflow = doc.createElementNS(
+        "http://www.w3.org/1999/xhtml", "button");
+      overflow.className = "hmail-ribbon-overflow";
+      overflow.title = "Lệnh khác";
+      overflow.textContent = "···";
+      // Không cướp focus khỏi editor (giống các nút lệnh khác trong ribbon).
+      overflow.addEventListener("mousedown", e => e.preventDefault());
+      overflow.addEventListener(
+        "click", () => this.showOverflow(win, doc, pane, overflow));
+      pane.appendChild(overflow);
+    }
+
+    const groups = [...pane.querySelectorAll(".hmail-ribbon-group")];
+    for (const g of groups) {
+      g.hidden = false;
+    }
+    overflow.hidden = true;
+
+    // Ngân sách: bề rộng pane trừ chỗ dành cho nút "···" và chút đệm.
+    const budget = () => pane.clientWidth - 48;
+    const used = () => groups.reduce(
+      (sum, g) => sum + (g.hidden ? 0 : g.getBoundingClientRect().width), 0);
+
+    // Cắt từ cuối cho tới khi vừa; luôn giữ nhóm đầu (cụm Gửi).
+    for (let i = groups.length - 1; i >= 1; i--) {
+      if (used() <= budget()) {
+        break;
+      }
+      groups[i].hidden = true;
+      overflow.hidden = false;
+    }
+  },
+
+  showOverflow(win, doc, pane, anchor) {
+    let popup = doc.getElementById("hmail-compose-ribbon-overflow-popup");
+    if (!popup) {
+      popup = doc.createXULElement("menupopup");
+      popup.id = "hmail-compose-ribbon-overflow-popup";
+      (doc.getElementById("mainPopupSet") || doc.documentElement)
+        .appendChild(popup);
+    }
+    while (popup.firstChild) {
+      popup.firstChild.remove();
+    }
+
+    for (const group of pane.querySelectorAll(".hmail-ribbon-group[hidden]")) {
+      if (popup.hasChildNodes()) {
+        popup.appendChild(doc.createXULElement("menuseparator"));
+      }
+      for (const b of group.querySelectorAll(".hmail-ribbon-button")) {
+        if (b.hidden) {
+          continue;
+        }
+        const item = doc.createXULElement("menuitem");
+        item.setAttribute("label", b.dataset.label || b.textContent.trim());
+        if (b.hasAttribute("disabled")) {
+          item.setAttribute("disabled", "true");
+        }
+        item.addEventListener("command", () => b.click());
+        popup.appendChild(item);
+      }
+    }
+    popup.openPopup(anchor, "after_end", 0, 0, false, false);
   },
 
   /** Grey out what the composer says is unavailable, as the menus do. */

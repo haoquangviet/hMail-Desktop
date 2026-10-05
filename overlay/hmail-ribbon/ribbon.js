@@ -410,6 +410,9 @@ var hMailRibbon = {
           buttons: [
             { id: "import-outlook", label: "Nhập từ\nOutlook", icon: "import",
               size: "large", fn: win => win.hMailImport.openTab(win) },
+            { id: "import-wlm", label: "Nhập từ\nWindows Live Mail",
+              icon: "import", size: "large",
+              fn: win => win.hMailImport.pickWlm(win) },
             { id: "import-other", label: "Nhập hồ sơ khác", icon: "import",
               fn: openImport("app") },
             { id: "import-contacts", label: "Nhập danh bạ", icon: "contact",
@@ -549,6 +552,11 @@ var hMailRibbon = {
       if (btn.cmd) {
         b.dataset.cmd = btn.cmd;
       }
+
+      // Nhãn phẳng (thay "\n" bằng dấu cách) để menu "···" hiển thị đúng —
+      // b.textContent nối các span dòng lại KHÔNG có khoảng trắng ("Nhập
+      // từ\nOutlook" → "Nhập từOutlook").
+      b.dataset.label = btn.label.replace(/\n/g, " ");
 
       const icon = el("span", "hmail-ribbon-icon");
       const label = el("span", "hmail-ribbon-label");
@@ -801,7 +809,7 @@ var hMailRibbon = {
       }
       for (const b of group.querySelectorAll(".hmail-ribbon-button")) {
         const item = doc.createXULElement("menuitem");
-        item.setAttribute("label", b.textContent.trim());
+        item.setAttribute("label", b.dataset.label || b.textContent.trim());
         if (b.hasAttribute("disabled")) {
           item.setAttribute("disabled", "true");
         }
