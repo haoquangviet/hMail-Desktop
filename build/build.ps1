@@ -1,4 +1,4 @@
-# MIT License — Copyright (c) 2026 HQV Software
+﻿# MIT License — Copyright (c) 2026 HQV Software
 # build.ps1 — reproducible build of hMail Desktop from the pinned official
 # Mozilla Thunderbird release (see UPSTREAM.md). Windows PowerShell 5.1+.
 #
@@ -8,7 +8,7 @@
 #
 param(
     [string]$Version      = "0.1.1",
-    [string]$TbVersion    = "140.13.0esr",
+    [string]$TbVersion    = "140.17.0esr",
     [string]$Locale       = "vi",
     [string]$Arch         = "win64",
     [switch]$SkipDownload,
@@ -117,6 +117,35 @@ $actual = (Get-FileHash -Algorithm SHA256 -Path $SetupPath).Hash.ToLower()
 if ($expected -ne $actual) { throw "SHA-256 mismatch! expected=$expected actual=$actual" }
 Log "SHA-256 OK: $actual"
 Log "(record this hash in UPSTREAM.md if not yet pinned)"
+
+# ------------------------------------------- 2b. cảnh báo bản ghim đã cũ chưa
+# UPSTREAM.md ghim CHÍNH XÁC một bản Thunderbird (xác minh SHA-256 ở trên) —
+# chủ đích, không phải quên cập nhật: patch omni.ja (omni_tool.py) nhắm vào
+# nội dung cụ thể của đúng bản đó, nhảy bản tự động có thể âm thầm vá sai mà
+# không ai biết. Nhưng bản ghim cũ quá thì bỏ lỡ security fix của Mozilla —
+# đây chỉ IN CẢNH BÁO, không tự đổi gì; người build tự quyết có bump không.
+# Không chặn build nếu mạng lỗi/Mozilla đổi định dạng trang.
+try {
+    $tbMajor = ($TbVersion -replace '^(\d+)\..*$', '$1')
+    $listing = Invoke-WebRequest -Uri "https://archive.mozilla.org/pub/thunderbird/releases/" `
+                                  -UseBasicParsing -TimeoutSec 8
+    $versions = [regex]::Matches($listing.Content, "$tbMajor(?:\.\d+){1,2}esr(?=/)") |
+                ForEach-Object { $_.Value }
+    if ($versions) {
+        $latest = $versions |
+            Sort-Object { [version]($_ -replace 'esr$', '') } |
+            Select-Object -Last 1
+        if ($latest -and $latest -ne $TbVersion) {
+            Log ("CẢNH BÁO: đang ghim $TbVersion, nhưng ESR $tbMajor mới nhất " +
+                 "trên archive.mozilla.org là $latest. Có thể đã bỏ lỡ vài bản " +
+                 "vá bảo mật — cân nhắc bump TbVersion (xem UPSTREAM.md).")
+        } else {
+            Log "Bản ghim $TbVersion đã là ESR $tbMajor mới nhất."
+        }
+    }
+} catch {
+    Log "Không kiểm tra được bản ESR mới nhất (bỏ qua, không chặn build): $_"
+}
 
 # ---------------------------------------------------------------- 3. extract
 $Extracted = Join-Path $Work "extracted"
