@@ -971,7 +971,7 @@ var hMailAI = {
    * both ways so the rest of the assistant does not care which service is in
    * use.
    */
-  async call(contents, { tools } = {}) {
+  async call(contents, { tools, system = null } = {}) {
     // Answered here, before any talk of keys: nothing about the on-device
     // model involves an account.
     if (this.provider() === "local") {
@@ -982,8 +982,8 @@ var hMailAI = {
       throw Object.assign(new Error("chưa có API key"), { code: "no_key" });
     }
     return this.provider() === "openai"
-      ? this.callOpenAICompatible(contents, tools, key)
-      : this.callGemini(contents, tools, key);
+      ? this.callOpenAICompatible(contents, tools, key, system)
+      : this.callGemini(contents, tools, key, system);
   },
 
   async fetchJSON(url, options) {
@@ -1058,7 +1058,7 @@ var hMailAI = {
     return [{ text }];
   },
 
-  async callGemini(contents, tools, key) {
+  async callGemini(contents, tools, key, system = null) {
     let base = this.endpoint().replace(/\/+$/, "");
     let model = this.model();
     const headers = { "Content-Type": "application/json" };
@@ -1093,8 +1093,12 @@ var hMailAI = {
             `?key=${encodeURIComponent(key)}`;
     }
     const payload = { contents };
-    if (this.SYSTEM_PROMPT) {
-      payload.systemInstruction = { parts: [{ text: this.SYSTEM_PROMPT }] };
+    // system != null (kể cả chuỗi rỗng) = lời gọi tự đặt system prompt
+    // riêng (vd. trợ lý trong trình soạn thư) — KHÔNG dùng prompt agentic
+    // mặc định, vốn bảo model "hãy GỌI công cụ" và khiến nó in JSON.
+    const sysG = system != null ? system : this.SYSTEM_PROMPT;
+    if (sysG) {
+      payload.systemInstruction = { parts: [{ text: sysG }] };
     }
     if (tools) {
       payload.tools = tools;
@@ -1110,7 +1114,7 @@ var hMailAI = {
     return body?.candidates?.[0]?.content?.parts || [];
   },
 
-  async callOpenAICompatible(contents, tools, key) {
+  async callOpenAICompatible(contents, tools, key, system = null) {
     // Gemini "contents" -> OpenAI "messages".
     //
     // A system message goes first. Gemini infers the register from the
@@ -1171,8 +1175,9 @@ var hMailAI = {
 
     // System prompt o dau danh sach — day la yeu to giup DeepSeek / model yeu
     // tra loi sat de va dung dinh dang hon han.
-    if (this.SYSTEM_PROMPT) {
-      messages.unshift({ role: "system", content: this.SYSTEM_PROMPT });
+    const sysO = system != null ? system : this.SYSTEM_PROMPT;
+    if (sysO) {
+      messages.unshift({ role: "system", content: sysO });
     }
 
     const payload = { model: this.model(), messages };
@@ -1237,7 +1242,7 @@ var hMailAI = {
    *
    * `onAction` is called with a human-readable line for each action performed.
    */
-  async ask(turns, { win = null, onAction = null, allowActions = false } = {}) {
+  async ask(turns, { win = null, onAction = null, allowActions = false, system = null } = {}) {
     const contents = turns.map(t => ({
       role: t.role === "assistant" ? "model" : "user",
       parts: [{ text: t.text }],
@@ -1252,7 +1257,7 @@ var hMailAI = {
     let acted = false;
 
     for (let round = 0; round < 4; round++) {
-      const parts = await this.call(contents, { tools });
+      const parts = await this.call(contents, { tools, system });
 
       // Keep the model's own parts, not just the functionCall inside them.
       // Gemini attaches a thoughtSignature to each call and refuses the next

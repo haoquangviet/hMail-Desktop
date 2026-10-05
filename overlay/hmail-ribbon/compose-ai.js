@@ -18,6 +18,21 @@ var hMailComposeAI = {
   WIDTH_PREF: "hmail.ai.composeWidth",
   BUTTON_ID: "hmail-compose-ai-button",
 
+  // System prompt RIÊNG cho trợ lý trong trình soạn thư. Prompt agentic mặc
+  // định của hMailAI bảo model "khi được nhờ trả lời thư thì GỌI công cụ
+  // compose_reply (to/subject/body)" — nhưng ở đây không có công cụ nào được
+  // cấp, nên model bắt chước bằng cách IN JSON đó ra dạng văn bản. Đặt system
+  // prompt gọn, chỉ-văn-bản để chặn từ gốc.
+  COMPOSE_SYSTEM:
+    "Bạn là trợ lý soạn thảo bên trong trình soạn thư của hMail. Nhiệm vụ " +
+    "duy nhất là sinh VĂN BẢN nội dung theo yêu cầu (nội dung thư trả lời, " +
+    "đoạn viết lại, bản dịch…). Quy tắc: (1) CHỈ trả về văn bản thuần của nội " +
+    "dung đó — TUYỆT ĐỐI không trả về JSON, không bọc trong khối mã, không " +
+    "thêm nhãn to/subject/body. (2) Không thêm lời dẫn, không thêm dòng tiêu " +
+    "đề trừ khi được yêu cầu rõ. (3) Ở đây bạn KHÔNG có công cụ nào; đừng mô " +
+    "tả hay gọi công cụ — chỉ viết nội dung. (4) Viết bằng đúng ngôn ngữ được " +
+    "yêu cầu; khi viết tiếng Việt phải CÓ DẤU đầy đủ, đúng chính tả.",
+
   /**
    * `scope` says what the model is given: "draft" is what the user has
    * written so far (the quoted message is stripped out), "quote" is the
@@ -381,7 +396,11 @@ var hMailComposeAI = {
       let reply = await hMailAI.ask([{
         role: "user",
         text: `${action.prompt}\n\n---\n${context}`,
-      }]);
+      }], { system: this.COMPOSE_SYSTEM });
+      // Lớp phòng thủ: model của HQV còn đổi, nếu vẫn lỡ trả JSON hình dạng
+      // công cụ thì bóc lấy body (và định tuyến subject) thay vì dội nguyên
+      // chuỗi JSON vào thân thư.
+      reply = this.unwrapReply(win, reply);
       reply = this.captureSubject(win, reply);
       this.show(win, reply, !!action.quick);
       this.notify(win, hMailAI.usageLine());
@@ -396,6 +415,43 @@ var hMailComposeAI = {
     } catch (e) {
       this.notify(win, "Lỗi: " + hMailAI.explain(e));
     }
+  },
+
+  /**
+   * Model đôi khi in ra JSON hình dạng công cụ compose_reply
+   * (```json {"to","subject","body"} ```) thay vì viết thẳng nội dung. Bóc
+   * nó ra: lấy `body` làm nội dung, đưa `subject` vào ô Tiêu đề nếu đang
+   * trống, bỏ `to`. Nếu chỉ bọc trong khối mã ``` (không phải JSON công cụ)
+   * thì gỡ dấu ``` để không chèn nguyên fence vào thư.
+   */
+  unwrapReply(win, text) {
+    const s = String(text || "").trim();
+    const fence = /^```[^\n]*\n([\s\S]*?)\n?```$/.exec(s);
+    const inner = fence ? fence[1].trim() : s;
+    if (inner.startsWith("{")) {
+      let obj = null;
+      try {
+        obj = JSON.parse(inner);
+      } catch (e) {
+        obj = null;
+      }
+      if (obj && typeof obj === "object" && typeof obj.body === "string") {
+        const subject = typeof obj.subject === "string"
+          ? obj.subject.trim() : "";
+        if (subject) {
+          try {
+            const field = win.document.getElementById("msgSubject");
+            if (field && !field.value.trim()) {
+              field.value = subject;
+              field.dispatchEvent(new win.Event("input", { bubbles: true }));
+              this.notify(win, `Đã điền tiêu đề: ${subject}`);
+            }
+          } catch (e) {}
+        }
+        return obj.body;
+      }
+    }
+    return fence ? inner : s;
   },
 
   /**
